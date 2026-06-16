@@ -21,16 +21,33 @@ async function getToken(force = false): Promise<string> {
   return cachedToken as string;
 }
 
-// `route` is everything after `?api=` — e.g. "today", "sleep&days=30".
-export async function fetchApi<T>(route: string): Promise<T> {
-  const call = async (token: string) =>
-    fetch(`${SB_URL}/functions/v1/health-dashboard?api=${route}`, {
-      headers: { apikey: SB_ANON, Authorization: `Bearer ${token}` },
-    });
+async function authedFetch(path: string, init?: RequestInit): Promise<Response> {
+  const mk = (t: string): HeadersInit => ({ apikey: SB_ANON, Authorization: `Bearer ${t}`, ...(init?.headers || {}) });
+  let res = await fetch(`${SB_URL}${path}`, { ...init, headers: mk(await getToken()) });
+  if (res.status === 401) res = await fetch(`${SB_URL}${path}`, { ...init, headers: mk(await getToken(true)) });
+  return res;
+}
 
-  let res = await call(await getToken());
-  if (res.status === 401) res = await call(await getToken(true)); // refresh once
+// ---- health-dashboard (read API) ----
+export async function fetchApi<T>(route: string): Promise<T> {
+  const res = await authedFetch(`/functions/v1/health-dashboard?api=${route}`);
   if (!res.ok) throw new Error(`Couldn't load data (${res.status})`);
+  return res.json();
+}
+
+// ---- health-actions (read + write API) ----
+export async function actionGet<T>(route: string): Promise<T> {
+  const res = await authedFetch(`/functions/v1/health-actions?api=${route}`);
+  if (!res.ok) throw new Error(`Couldn't load (${res.status})`);
+  return res.json();
+}
+export async function actionPost<T>(route: string, body: unknown): Promise<T> {
+  const res = await authedFetch(`/functions/v1/health-actions?api=${route}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
   return res.json();
 }
 
@@ -39,12 +56,8 @@ export function useApi<T>(route: string) {
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
-    fetchApi<T>(route)
-      .then((d) => alive && setData(d))
-      .catch((e) => alive && setError(e.message));
-    return () => {
-      alive = false;
-    };
+    fetchApi<T>(route).then((d) => alive && setData(d)).catch((e) => alive && setError(e.message));
+    return () => { alive = false; };
   }, [route]);
   return { data, error };
 }
