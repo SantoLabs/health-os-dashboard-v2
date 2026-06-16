@@ -105,3 +105,53 @@ html, body {
   .app { padding-top: 28px; }
   .bottomnav { max-width: 480px; margin: 0 auto; border-radius: 16px 16px 0 0; }
 }
+
+/* ---- Train / shared screen components ---- */
+.app a { color: inherit; text-decoration: none; }
+
+.insights { display: flex; flex-direction: column; gap: 8px; }
+.insight-line { display: flex; gap: 8px; font-size: 13px; line-height: 1.45; }
+.insight-line .dot { color: var(--muted); }
+
+.stats-row {
+  display: flex; gap: 10px; overflow-x: auto; margin-bottom: 12px;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.stats-row::-webkit-scrollbar { display: none; }
+.stat { flex: 1 0 auto; min-width: 96px; margin-bottom: 0; text-align: left; }
+.stat-num { font-size: 24px; font-weight: 700; }
+.stat-of { font-size: 15px; font-weight: 600; color: var(--muted); }
+.stat-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+.list { display: flex; flex-direction: column; gap: 10px; }
+.session { padding: 0; margin-bottom: 0; overflow: hidden; }
+.session-head {
+  width: 100%; background: none; border: 0; color: var(--text);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; cursor: pointer; text-align: left;
+}
+.session-title { font-size: 14px; font-weight: 600; }
+.session-meta { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text); }
+.chev { color: var(--muted); transition: transform 0.15s; }
+.chev.open { transform: rotate(180deg); }
+
+.exlist { border-top: 1px solid var(--line); padding: 8px 16px 12px; }
+.exrow { display: flex; justify-content: space-between; padding: 5px 0; font-size: 12px; }
+.ex-title { color: #cbd5e1; }
+
+.cardio-row { display: flex; align-items: center; gap: 12px; margin-bottom: 0; padding: 12px 16px; }
+.cardio-ic { font-size: 20px; }
+.cardio-main { flex: 1; }
+
+.pill { font-size: 10px; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--line); }
+.pill.ok { color: #34d399; border-color: #14532d; }
+.pill.warn { color: #fbbf24; border-color: #78350f; }
+.pill.bad { color: #f87171; border-color: #7f1d1d; }
+
+.muscles { display: flex; flex-direction: column; gap: 12px; }
+.muscle-row { display: flex; flex-direction: column; gap: 6px; }
+.muscle-top { display: flex; align-items: center; justify-content: space-between; }
+.muscle-name { font-size: 13px; text-transform: capitalize; }
+.muscle-right { display: flex; align-items: center; gap: 8px; }
+.track { height: 6px; background: var(--card2); border-radius: 999px; overflow: hidden; }
+.fill { height: 100%; background: linear-gradient(90deg, #2563eb, #38bdf8); border-radius: 999px; }
