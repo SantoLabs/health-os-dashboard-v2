@@ -61,3 +61,17 @@ export function useApi<T>(route: string) {
   }, [route]);
   return { data, error };
 }
+
+// ---- health-coach (AI coach) ----
+export async function coachAsk(
+  question: string,
+  history: { role: string; content: string }[],
+): Promise<{ ok: boolean; answer?: string; error?: string }> {
+  const res = await authedFetch(`/functions/v1/health-coach`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question, history }),
+  });
+  if (!res.ok) throw new Error(`Coach unavailable (${res.status})`);
+  return res.json();
+}
