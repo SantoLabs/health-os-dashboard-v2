@@ -75,3 +75,19 @@ export async function coachAsk(
   if (!res.ok) throw new Error(`Coach unavailable (${res.status})`);
   return res.json();
 }
+
+// ---- health-plan (AI training plan) ----
+export async function planGet<T>(): Promise<T> {
+  const res = await authedFetch(`/functions/v1/health-plan?api=plan`);
+  if (!res.ok) throw new Error(`Couldn't load plan (${res.status})`);
+  return res.json();
+}
+export async function planPost<T>(action: string, body: unknown = {}): Promise<T> {
+  const res = await authedFetch(`/functions/v1/health-plan?api=${action}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  return res.json();
+}
