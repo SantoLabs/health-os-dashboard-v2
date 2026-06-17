@@ -9,6 +9,7 @@ const ITEMS = [
   { href: "/more/medical", icon: "🩺", label: "Medical", desc: "Bloodwork & markers" },
   { href: "/more/schedule", icon: "📅", label: "Schedule", desc: "Training & events" },
   { href: "/more/ask", icon: "💬", label: "Ask Health AI", desc: "Chat with your data" },
+  { href: "/more/mind", icon: "🧘", label: "Mind", desc: "Meditation & focus" },
   { href: "/more/profile", icon: "⚙️", label: "Profile", desc: "Targets & settings" },
 
 ];
