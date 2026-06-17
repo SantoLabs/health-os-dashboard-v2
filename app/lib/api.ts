@@ -91,3 +91,19 @@ export async function planPost<T>(action: string, body: unknown = {}): Promise<T
   if (!res.ok) throw new Error(`Request failed (${res.status})`);
   return res.json();
 }
+
+// ---- health-mind (meditation / focus) ----
+export async function mindGet<T>(): Promise<T> {
+  const res = await authedFetch(`/functions/v1/health-mind`);
+  if (!res.ok) throw new Error(`Couldn't load (${res.status})`);
+  return res.json();
+}
+export async function mindPost<T>(action: string, body: unknown): Promise<T> {
+  const res = await authedFetch(`/functions/v1/health-mind?api=${action}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  return res.json();
+}
