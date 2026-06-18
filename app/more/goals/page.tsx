@@ -50,66 +50,6 @@ function awayPill(days: number | null) {
   return <span className={`pill ${cls}`}>{txt}</span>;
 }
 
-// ---- Month calendar ----
-function MonthCalendar({ goals }: { goals: UGoal[] }) {
-  const now = new Date();
-  const [cur, setCur] = useState({ y: now.getFullYear(), m: now.getMonth() });
-  const [sel, setSel] = useState<number | null>(null);
-
-  const first = new Date(cur.y, cur.m, 1);
-  const startDow = first.getDay();
-  const daysInMonth = new Date(cur.y, cur.m + 1, 0).getDate();
-  const title = first.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-
-  const byDay: Record<number, UGoal[]> = {};
-  for (const g of goals) {
-    if (!g.target_date) continue;
-    const d = new Date(g.target_date + "T00:00:00");
-    if (d.getFullYear() === cur.y && d.getMonth() === cur.m) (byDay[d.getDate()] = byDay[d.getDate()] || []).push(g);
-  }
-  const cells: (number | null)[] = [];
-  for (let i = 0; i < startDow; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-
-  const prev = () => { setSel(null); setCur((c) => (c.m === 0 ? { y: c.y - 1, m: 11 } : { y: c.y, m: c.m - 1 })); };
-  const next = () => { setSel(null); setCur((c) => (c.m === 11 ? { y: c.y + 1, m: 0 } : { y: c.y, m: c.m + 1 })); };
-  const isToday = (d: number) => now.getFullYear() === cur.y && now.getMonth() === cur.m && now.getDate() === d;
-  const selGoals = sel != null ? byDay[sel] || [] : [];
-
-  return (
-    <section className="card cal">
-      <div className="cal-head">
-        <button className="cal-nav" onClick={prev}>‹</button>
-        <span className="cal-title">{title}</span>
-        <button className="cal-nav" onClick={next}>›</button>
-      </div>
-      <div className="cal-grid cal-dow">
-        {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => <span key={i} className="cal-dowc">{d}</span>)}
-      </div>
-      <div className="cal-grid">
-        {cells.map((d, i) => {
-          if (d == null) return <span key={i} className="cal-cell empty" />;
-          const has = byDay[d];
-          return (
-            <button key={i} className={`cal-cell${has ? " has" : ""}${isToday(d) ? " today" : ""}${sel === d ? " sel" : ""}`}
-              onClick={() => setSel(sel === d ? null : d)} disabled={!has}>
-              {d}
-              {has && <span className="cal-dot" />}
-            </button>
-          );
-        })}
-      </div>
-      {selGoals.length > 0 && (
-        <div className="cal-day-goals">
-          {selGoals.map((g) => (
-            <div key={g.id} className="cal-gline"><span>{tEmoji(g.goal_type)}</span><span>{g.label}</span></div>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
 type SortKey = "date" | "priority" | "status" | "type";
 
 export default function GoalsPage() {
@@ -223,8 +163,6 @@ export default function GoalsPage() {
 
   return (
     <Screen title="Goals & Body" back="/more" error={error} loading={!data && !error}>
-      {goals && <MonthCalendar goals={active} />}
-
       {bc && (
         <>
           <h2 className="section-title">Body composition</h2>
