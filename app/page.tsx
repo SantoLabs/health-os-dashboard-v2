@@ -83,7 +83,7 @@ export default function TodayPage() {
   const { data, error } = useApi<Today>("today");
 
   return (
-    <Screen title="Health OS" sub={data?.date} error={error} loading={!data && !error}>
+    <Screen title="Today" error={error} loading={!data && !error}>
       {data && (
         <>
           <section className="card readiness">
