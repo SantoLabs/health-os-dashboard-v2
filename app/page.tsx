@@ -134,11 +134,6 @@ export default function TodayPage() {
             ))}
           </section>
 
-          {data.last_synced && (
-            <div className="synced subtle tiny">
-              Last synced {new Date(data.last_synced).toLocaleString()}
-            </div>
-          )}
         </>
       )}
     </Screen>
