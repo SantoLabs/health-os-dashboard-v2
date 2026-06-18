@@ -2,6 +2,7 @@
 
 import { ReactNode } from "react";
 import Link from "next/link";
+import RefreshButton from "./RefreshButton";
 
 export function Screen({
   title,
@@ -33,7 +34,10 @@ export function Screen({
           <div className="brand">{title}</div>
           {sub && <div className="subtle">{sub}</div>}
         </div>
-        <div className="badge">v2 &middot; preview</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <RefreshButton />
+          <div className="badge">v2 &middot; preview</div>
+        </div>
       </header>
 
       {loading && <div className="muted center pad">Loading&hellip;</div>}
