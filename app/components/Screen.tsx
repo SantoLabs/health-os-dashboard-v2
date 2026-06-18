@@ -1,7 +1,6 @@
 "use client";
 
 import { ReactNode } from "react";
-import Link from "next/link";
 import RefreshButton from "./RefreshButton";
 
 export function Screen({
@@ -9,36 +8,31 @@ export function Screen({
   sub,
   error,
   loading,
-  back,
   children,
 }: {
   title: string;
   sub?: string;
   error?: string | null;
   loading?: boolean;
-  back?: string;
+  back?: string; // accepted for backward-compat; intentionally not rendered
   children?: ReactNode;
 }) {
   return (
     <div className="app">
-      {back && (
-        <Link
-          href={back}
-          style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--muted)", fontSize: 13, marginBottom: 10 }}
-        >
-          &lsaquo; Back
-        </Link>
-      )}
       <header className="topbar">
-        <div>
-          <div className="brand">{title}</div>
-          {sub && <div className="subtle">{sub}</div>}
+        <div className="brand-wrap">
+          <span className="brand-logo" aria-hidden>🏃</span>
+          <span className="brand">Health OS</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <RefreshButton />
-          <div className="badge">v2 &middot; preview</div>
-        </div>
+        <RefreshButton />
       </header>
+
+      {title && (
+        <h1 className="page-title">
+          {title}
+          {sub ? <span className="page-sub"> · {sub}</span> : null}
+        </h1>
+      )}
 
       {loading && <div className="muted center pad">Loading&hellip;</div>}
       {error && (
