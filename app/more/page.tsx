@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Screen } from "../components/Screen";
+import { logout } from "../lib/auth";
 
 const ITEMS = [
   { href: "/more/nutrition", icon: "🍽️", label: "Nutrition", desc: "Daily fuel targets" },
@@ -34,6 +35,9 @@ export default function MorePage() {
           </Link>
         ))}
       </section>
+      <button type="button" className="btn btn-ghost" style={{ marginTop: 16 }} onClick={logout}>
+        Log out
+      </button>
     </Screen>
   );
 }
