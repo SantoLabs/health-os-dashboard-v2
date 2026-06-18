@@ -49,3 +49,17 @@
   display: inline-block; animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---- on-demand sync progress bar ---- */
+.sync-overlay {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+  background: var(--card); border-bottom: 1px solid var(--line);
+}
+.sync-bar { height: 3px; width: 100%; background: var(--card2); overflow: hidden; }
+.sync-bar-fill { height: 100%; background: #22c55e; transition: width 0.6s ease; }
+.sync-status {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 12px; color: var(--muted); padding: 6px 14px;
+  max-width: 480px; margin: 0 auto;
+}
+.sync-pct { font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
