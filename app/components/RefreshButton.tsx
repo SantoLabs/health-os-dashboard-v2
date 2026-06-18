@@ -5,24 +5,44 @@ import { triggerSync, getLastSynced } from "../lib/api";
 
 const COOLDOWN_MS = 5 * 60 * 1000;
 const LAST_KEY = "hos_last_sync";
-const EST_MS = 110_000; // typical end-to-end sync time
-const MAX_MS = 180_000; // give up polling after this, reload anyway
+const EST_MS = 110_000;
+const MAX_MS = 180_000;
+
+function fmt(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  try {
+    return d
+      .toLocaleString("en-GB", {
+        timeZone: "Asia/Kolkata",
+        day: "2-digit", month: "short",
+        hour: "numeric", minute: "2-digit", hour12: true,
+      })
+      .replace(",", "");
+  } catch {
+    return d.toISOString();
+  }
+}
 
 export default function RefreshButton() {
   const [phase, setPhase] = useState<"idle" | "syncing" | "done" | "cooldown">("idle");
-  const [left, setLeft] = useState(0); // cooldown seconds remaining
-  const [pct, setPct] = useState(0); // progress %
-  const [msg, setMsg] = useState(""); // status caption
+  const [left, setLeft] = useState(0);
+  const [pct, setPct] = useState(0);
+  const [msg, setMsg] = useState("");
+  const [synced, setSynced] = useState<string | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const clearTimers = () => { timers.current.forEach(clearTimeout); timers.current = []; };
 
-  // restore cooldown on mount; clean up timers on unmount
+  // initial: restore cooldown + load last-synced time
   useEffect(() => {
     const last = Number(localStorage.getItem(LAST_KEY) || 0);
     const rem = COOLDOWN_MS - (Date.now() - last);
     if (rem > 0) { setPhase("cooldown"); setLeft(Math.ceil(rem / 1000)); }
-    return clearTimers;
+    let alive = true;
+    getLastSynced().then((s) => { if (alive) setSynced(s); }).catch(() => {});
+    return () => { alive = false; clearTimers(); };
   }, []);
 
   // cooldown countdown
@@ -34,9 +54,9 @@ export default function RefreshButton() {
   }, [phase, left]);
 
   function stageMsg(elapsed: number): string {
-    if (elapsed < 4000) return "Starting sync…";
-    if (elapsed < 25000) return "Pulling Garmin data…";
-    if (elapsed < 70000) return "Processing metrics…";
+    if (elapsed < 4000) return "Starting…";
+    if (elapsed < 25000) return "Pulling Garmin…";
+    if (elapsed < 70000) return "Processing…";
     return "Almost done…";
   }
 
@@ -45,22 +65,18 @@ export default function RefreshButton() {
     setPct(100);
     setMsg("Synced ✓");
     setPhase("done");
-    timers.current.push(setTimeout(() => window.location.reload(), 1100));
+    timers.current.push(setTimeout(() => window.location.reload(), 1000));
   }
 
   async function onClick() {
     if (phase !== "idle") return;
     clearTimers();
-    setPhase("syncing");
-    setPct(5);
-    setMsg("Starting sync…");
+    setPhase("syncing"); setPct(6); setMsg("Starting…");
     try {
       const before = await getLastSynced();
       await triggerSync();
       localStorage.setItem(LAST_KEY, String(Date.now()));
       const start = Date.now();
-
-      // animate progress asymptotically toward ~92% over the expected window
       const tick = () => {
         const elapsed = Date.now() - start;
         const target = Math.min(92, 8 + (elapsed / EST_MS) * 84);
@@ -69,8 +85,6 @@ export default function RefreshButton() {
         timers.current.push(setTimeout(tick, 900));
       };
       tick();
-
-      // poll for fresh data; complete as soon as last_synced advances
       const poll = async () => {
         if (Date.now() - start > MAX_MS) { finish(); return; }
         const now = await getLastSynced();
@@ -89,19 +103,15 @@ export default function RefreshButton() {
   const label =
     phase === "syncing" ? "Syncing…" :
     phase === "done" ? "Synced ✓" :
-    phase === "cooldown" ? `Synced · ${mmss}` : "↻ Refresh";
-
+    phase === "cooldown" ? `↻ ${mmss}` : "↻ Refresh";
   const showBar = phase === "syncing" || phase === "done";
 
   return (
-    <>
+    <div className="refresh-col">
       {showBar && (
-        <div className="sync-overlay" role="status" aria-live="polite">
-          <div className="sync-bar"><div className="sync-bar-fill" style={{ width: `${pct}%` }} /></div>
-          <div className="sync-status">
-            <span>{msg}</span>
-            <span className="sync-pct">{pct}%</span>
-          </div>
+        <div className="sync-mini" title={msg} role="status" aria-live="polite">
+          <div className="sync-mini-track"><div className="sync-mini-fill" style={{ width: `${pct}%` }} /></div>
+          <span className="sync-mini-pct">{pct}%</span>
         </div>
       )}
       <button
@@ -114,6 +124,9 @@ export default function RefreshButton() {
         {phase === "syncing" && <span className="spin" aria-hidden />}
         {label}
       </button>
-    </>
+      <div className="last-synced">
+        {synced ? `Synced ${synced}` : "Not synced yet"}
+      </div>
+    </div>
   );
 }
