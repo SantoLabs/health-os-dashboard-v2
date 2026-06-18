@@ -73,6 +73,24 @@ export default function NutritionPage() {
   const [estimate, setEstimate] = useState<Estimate | null>(null);
   const [logging, setLogging] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [waterBusy, setWaterBusy] = useState(false);
+
+  async function addWater(ml: number) {
+    if (waterBusy) return;
+    setWaterBusy(true);
+    try {
+      const res = await actionPost<{ ok: boolean; day: Day }>("nutrition_log", { water_ml: ml, meal_type: "water", description: "Water", source: "manual" });
+      if (res.day) setDay(res.day);
+    } catch { /* ignore */ } finally { setWaterBusy(false); }
+  }
+  async function undoWater(id: string) {
+    if (waterBusy) return;
+    setWaterBusy(true);
+    try {
+      const res = await actionPost<{ ok: boolean; day: Day }>("nutrition_delete", { id });
+      if (res.day) setDay(res.day);
+    } catch { /* ignore */ } finally { setWaterBusy(false); }
+  }
 
   const load = useCallback(async () => {
     try { setDay(await actionGet<Day>("nutrition")); }
@@ -116,6 +134,12 @@ export default function NutritionPage() {
   }
 
   const t = day?.targets, tot = day?.totals;
+  const waterEntries = (day?.meals || []).filter((m) => m.meal_type === "water");
+  const foodMeals = (day?.meals || []).filter((m) => m.meal_type !== "water");
+  const waterTargetMl = t?.water?.n != null ? (t.water.n <= 20 ? t.water.n * 1000 : t.water.n) : null;
+  const waterMl = tot?.water ?? 0;
+  const waterPct = waterTargetMl ? Math.max(0, Math.min(1, waterMl / waterTargetMl)) : 0;
+  const lastWater = waterEntries.length ? waterEntries[waterEntries.length - 1] : null;
 
   return (
     <Screen title="Nutrition" back="/more" error={error} loading={!day && !error}>
@@ -130,6 +154,29 @@ export default function NutritionPage() {
             <MacroBar label="Carbs" have={tot.carbs} target={t.carbs?.n ?? null} unit="g" />
             <MacroBar label="Fats" have={tot.fats} target={t.fats?.n ?? null} unit="g" />
             <MacroBar label="Fiber" have={tot.fiber} target={t.fiber?.n ?? null} unit="g" />
+          </section>
+
+          <section className="card">
+            <div className="lever-top">
+              <span>💧 Water <strong>{(waterMl / 1000).toFixed(2)}L</strong>{waterTargetMl ? <span className="subtle"> / {(waterTargetMl / 1000).toFixed(1)}L</span> : null}</span>
+              {waterTargetMl && waterMl >= waterTargetMl ? <span className="pill ok">Goal hit 💧</span> : null}
+            </div>
+            <div className="track" style={{ marginTop: 8 }}><div className="fill" style={{ width: `${waterPct * 100}%`, background: "#38bdf8" }} /></div>
+            <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
+              {[250, 500, 1000].map((ml) => (
+                <button key={ml} onClick={() => addWater(ml)} disabled={waterBusy}
+                  style={{ padding: "9px 14px", borderRadius: 999, border: "1px solid rgba(56,189,248,0.4)", background: "rgba(56,189,248,0.12)", color: "#7dd3fc", fontWeight: 600, fontSize: 13, cursor: waterBusy ? "default" : "pointer" }}>
+                  + {ml < 1000 ? `${ml}ml` : "1L"}
+                </button>
+              ))}
+              {lastWater && (
+                <button onClick={() => undoWater(lastWater.id)} disabled={waterBusy}
+                  style={{ marginLeft: "auto", padding: "9px 12px", borderRadius: 999, border: "1px solid rgba(255,255,255,0.12)", background: "transparent", color: "var(--muted)", fontSize: 13, cursor: waterBusy ? "default" : "pointer" }}>
+                  ↩ Undo
+                </button>
+              )}
+            </div>
+            <div className="subtle tiny mt8">{waterEntries.length} log{waterEntries.length === 1 ? "" : "s"} today · a glass ≈ 250ml, a bottle ≈ 500ml–1L.</div>
           </section>
 
           <h2 className="section-title">Quick log</h2>
@@ -177,12 +224,12 @@ export default function NutritionPage() {
             )}
           </section>
 
-          <h2 className="section-title">Today{day.meals.length ? ` · ${day.meals.length}` : ""}</h2>
-          {day.meals.length === 0 ? (
+          <h2 className="section-title">Today{foodMeals.length ? ` · ${foodMeals.length}` : ""}</h2>
+          {foodMeals.length === 0 ? (
             <div className="card subtle tiny">Nothing logged yet. Add your first meal above ↑</div>
           ) : (
             <section className="list">
-              {day.meals.map((m) => (
+              {foodMeals.map((m) => (
                 <div key={m.id} className="card" style={{ marginBottom: 0, display: "flex", alignItems: "center", gap: 10 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.description || m.meal_type || "Meal"}</div>
