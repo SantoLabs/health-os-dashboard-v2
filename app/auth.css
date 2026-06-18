@@ -133,3 +133,49 @@
 .goal-row { display: flex; align-items: center; gap: 12px; width: 100%; background: none; border: 0; color: var(--text); text-align: left; cursor: pointer; padding: 14px 16px; }
 .chev-edit { color: var(--muted); font-size: 14px; flex: none; }
 .pad { padding: 12px; } .center { text-align: center; }
+
+/* ---- Goals v2 (P2.3 expanded) ---- */
+.cal { padding: 12px 14px; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.cal-title { font-size: 14px; font-weight: 600; }
+.cal-nav { background: var(--card2); border: 1px solid var(--line); color: var(--text); width: 30px; height: 30px; border-radius: 8px; font-size: 17px; cursor: pointer; line-height: 1; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.cal-dow { margin-bottom: 4px; }
+.cal-dowc { text-align: center; font-size: 10px; color: var(--muted); padding: 2px 0; }
+.cal-cell { position: relative; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--text); background: none; border: 0; border-radius: 8px; cursor: default; }
+.cal-cell.empty { visibility: hidden; }
+.cal-cell.has { background: var(--card2); cursor: pointer; font-weight: 600; }
+.cal-cell.today { box-shadow: inset 0 0 0 1.5px var(--muted); }
+.cal-cell.sel { background: #2563eb; color: #fff; }
+.cal-dot { position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; border-radius: 999px; background: #34d399; }
+.cal-cell.sel .cal-dot { background: #fff; }
+.cal-day-goals { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.cal-gline { display: flex; gap: 8px; font-size: 12.5px; }
+
+.chip-row { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.chip { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); }
+.st-todo { color: #94a3b8; } .st-prog { color: #60a5fa; border-color: rgba(96,165,250,0.4); } .st-done { color: #34d399; border-color: rgba(52,211,153,0.4); }
+.fo-low { color: #94a3b8; } .fo-med { color: #a78bfa; } .fo-high { color: #fb923c; border-color: rgba(251,146,60,0.4); }
+
+.type-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.type-btn { display: flex; flex-direction: column; align-items: center; gap: 2px; background: var(--card2); border: 1px solid var(--line); border-radius: 10px; padding: 7px 9px; cursor: pointer; color: var(--text); min-width: 52px; }
+.type-btn.active { border-color: #2563eb; background: rgba(37,99,235,0.14); }
+.type-cap { font-size: 9px; color: var(--muted); }
+
+.seg { display: inline-flex; gap: 2px; padding: 3px; background: var(--card2); border: 1px solid var(--line); border-radius: 10px; flex-wrap: wrap; }
+.seg-opt { background: none; border: 0; color: var(--muted); font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+.seg-opt.active { background: var(--card); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+.seg-sm .seg-opt { padding: 5px 10px; font-size: 11px; }
+.g-field-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+.sort-row { display: flex; align-items: center; gap: 8px; margin: 0 4px 10px; }
+
+.goal-inline-edit, .bf-edit { display: inline-flex; align-items: center; gap: 6px; }
+.goal-inline-edit { background: none; border: 0; color: var(--muted); font-size: 12px; cursor: pointer; }
+.bf-input { width: 64px; padding: 6px 8px; }
+.btn-mini { width: auto; margin-top: 0; padding: 6px 10px; font-size: 12px; }
+
+.done-card { opacity: 0.92; }
+.done-text { color: #34d399; }
+.removed-card { opacity: 0.7; }
+.struck { text-decoration: line-through; color: var(--muted); }
+.goal-row.static { cursor: default; }
