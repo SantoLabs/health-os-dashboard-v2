@@ -64,14 +64,6 @@ export default function SleepPage() {
     <Screen title="Sleep" error={error} loading={!data && !error}>
       {data && (
         <>
-          <div style={{ marginBottom: 12 }}>
-            <div className="seg seg-sm">
-              {[7, 30, 90].map((d) => (
-                <button key={d} className={d === days ? "seg-opt active" : "seg-opt"} onClick={() => setDays(d)}>{d}d</button>
-              ))}
-            </div>
-          </div>
-
           {/* Last night hero */}
           <section className="card sleep-hero">
             <div className="sleep-score" style={{ ["--c" as string]: data.latest.score >= 75 ? "#34d399" : data.latest.score >= 50 ? "#fbbf24" : "#f87171" }}>
@@ -101,8 +93,15 @@ export default function SleepPage() {
             <div className="hyp-axis subtle tiny"><span>{hm(data.latest.bed)}</span><span>{hm(data.latest.wake)}</span></div>
           </section>
 
-          {/* Averages */}
-          <h2 className="section-title">{days}-day averages</h2>
+          {/* Averages — window toggle controls everything below */}
+          <div className="section-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "18px 0 8px" }}>
+            <h2 className="section-title" style={{ margin: 0 }}>{days}-day averages</h2>
+            <div className="seg seg-sm">
+              {[7, 30, 90].map((d) => (
+                <button key={d} className={d === days ? "seg-opt active" : "seg-opt"} onClick={() => setDays(d)}>{d}d</button>
+              ))}
+            </div>
+          </div>
           <section className="stats-row">
             <div className="card stat"><div className="stat-num">{data.averages.total_h}<span className="stat-of">h</span></div><div className="stat-label">avg sleep</div></div>
             <div className="card stat"><div className="stat-num">{data.averages.score}</div><div className="stat-label">avg score</div></div>
