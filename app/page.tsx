@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useApi, actionGet, fetchApi } from "./lib/api";
+import { useApi, actionGet, fetchApi, dashPost } from "./lib/api";
 import { Screen } from "./components/Screen";
 
 type Goal = { id: string; label: string; when_text?: string; target_date: string | null; days_away: number | null };
@@ -54,7 +54,22 @@ type Today = {
   date: string; score: number; label: string; verdict: string;
   training: string; nutrition: string; factors: Factor[];
   vo2max?: number; sleep_nudge?: string; last_synced?: string;
+  data_through?: string; checkin?: { feeling_score: number } | null;
 };
+
+const MOODS = [
+  { v: 1, emoji: "😖", label: "Rough" },
+  { v: 2, emoji: "😕", label: "Meh" },
+  { v: 3, emoji: "😐", label: "OK" },
+  { v: 4, emoji: "🙂", label: "Good" },
+  { v: 5, emoji: "😄", label: "Great" },
+];
+function freshDate(iso?: string): string {
+  if (!iso) return "";
+  const d = new Date(iso.length <= 10 ? iso + "T00:00:00" : iso);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
 
 type Pt = { date: string; v: number | null };
 type SleepPt = { date: string; total: number | null };
@@ -143,6 +158,18 @@ export default function TodayPage() {
   const { data, error } = useApi<Today>("today");
   const [trends, setTrends] = useState<Trends | null>(null);
   const [open, setOpen] = useState<number | null>(null);
+  const [mood, setMood] = useState<number | null>(null);
+  const [moodBusy, setMoodBusy] = useState(false);
+
+  useEffect(() => { if (data?.checkin?.feeling_score != null) setMood(data.checkin.feeling_score); }, [data]);
+
+  async function pickMood(v: number) {
+    if (moodBusy) return;
+    setMood(v); setMoodBusy(true);
+    try { await dashPost("checkin", { feeling_score: v }); }
+    catch { /* keep optimistic value */ }
+    finally { setMoodBusy(false); }
+  }
 
   useEffect(() => {
     let alive = true;
@@ -165,6 +192,31 @@ export default function TodayPage() {
           </section>
 
           <RaceCountdown />
+
+          <section className="card">
+            <div className="subtle" style={{ fontSize: 13, marginBottom: 10 }}>How are you feeling today?</div>
+            <div style={{ display: "flex", gap: 6, justifyContent: "space-between" }}>
+              {MOODS.map((m) => {
+                const on = mood === m.v;
+                return (
+                  <button key={m.v} onClick={() => pickMood(m.v)} disabled={moodBusy} aria-label={m.label}
+                    style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "8px 2px", borderRadius: 12, cursor: moodBusy ? "default" : "pointer",
+                      border: on ? "1px solid #6366f1" : "1px solid rgba(255,255,255,0.08)", background: on ? "rgba(99,102,241,0.16)" : "rgba(255,255,255,0.03)",
+                      opacity: on || mood == null ? 1 : 0.55, transition: "all .12s" }}>
+                    <span style={{ fontSize: 22, lineHeight: 1 }}>{m.emoji}</span>
+                    <span className="tiny" style={{ color: on ? "#a5b4fc" : "var(--muted)" }}>{m.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          {data.data_through && (
+            <div className="subtle tiny" style={{ textAlign: "center", margin: "2px 0 -2px" }}>
+              Data through {freshDate(data.data_through)}
+              {data.last_synced ? ` · synced ${freshDate(data.last_synced)}` : ""}
+            </div>
+          )}
 
           <h2 className="section-title">Your plan today</h2>
           <section className="row2">
