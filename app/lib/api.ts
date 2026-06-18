@@ -24,8 +24,8 @@ async function getToken(force = false): Promise<string> {
 
 async function authedFetch(path: string, init?: RequestInit): Promise<Response> {
   const mk = (t: string): HeadersInit => ({ apikey: SB_ANON, Authorization: `Bearer ${t}`, ...(init?.headers || {}) });
-  let res = await fetch(`${SB_URL}${path}`, { ...init, headers: mk(await getToken()) });
-  if (res.status === 401) res = await fetch(`${SB_URL}${path}`, { ...init, headers: mk(await getToken(true)) });
+  let res = await fetch(`${SB_URL}${path}`, { cache: "no-store", ...init, headers: mk(await getToken()) });
+  if (res.status === 401) res = await fetch(`${SB_URL}${path}`, { cache: "no-store", ...init, headers: mk(await getToken(true)) });
   return res;
 }
 
