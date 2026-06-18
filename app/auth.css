@@ -179,3 +179,9 @@
 .removed-card { opacity: 0.7; }
 .struck { text-decoration: line-through; color: var(--muted); }
 .goal-row.static { cursor: default; }
+
+/* ---- Today interactive mini-chart (P2.1) ---- */
+.mini-chart-wrap { margin-top: 10px; }
+.mini-chart { width: 100%; height: 64px; display: block; touch-action: none; cursor: crosshair; }
+.mini-chart-cap { margin-top: 4px; text-align: right; }
+.factor-nudge { margin-top: 8px; font-size: 12.5px; font-weight: 600; }
