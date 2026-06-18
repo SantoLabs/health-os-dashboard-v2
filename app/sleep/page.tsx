@@ -1,6 +1,7 @@
 "use client";
 
-import { useApi } from "../lib/api";
+import { useState, useEffect } from "react";
+import { useApi, actionGet } from "../lib/api";
 import { Screen } from "../components/Screen";
 
 type Seg = { stage: string; mins: number };
@@ -38,14 +39,39 @@ const dayLetter = (d: string) => new Date(d + "T00:00:00").toLocaleDateString(un
 const hoursColor = (v: number) => (v < 6 ? "#f87171" : v < 7 ? "#fbbf24" : "#34d399");
 
 export default function SleepPage() {
-  const { data, error } = useApi<Sleep>("sleep&days=30");
+  const [days, setDays] = useState(30);
+  const { data, error } = useApi<Sleep>(`sleep&days=${days}`);
+  const [targetHr, setTargetHr] = useState<number | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    actionGet<{ target_hour?: number }>("bedtime_goal")
+      .then((d) => { if (alive && d?.target_hour != null) setTargetHr(Number(d.target_hour)); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
 
   const last14 = <T,>(a: T[]) => a.slice(-14);
+  // bedtime hours are stored on a 21→30 scale (9pm → 6am); map to 0–100% of the strip.
+  const bedLeft = (v: number) => Math.min(100, Math.max(0, ((v - 21) / 9) * 100));
+  const hrClock = (v: number) => {
+    let h = Math.floor(v) % 24; const m = Math.round((v - Math.floor(v)) * 60);
+    const ap = h < 12 ? "a" : "p"; const h12 = h % 12 === 0 ? 12 : h % 12;
+    return `${h12}:${String(m).padStart(2, "0")}${ap}`;
+  };
 
   return (
     <Screen title="Sleep" error={error} loading={!data && !error}>
       {data && (
         <>
+          <div style={{ marginBottom: 12 }}>
+            <div className="seg seg-sm">
+              {[7, 30, 90].map((d) => (
+                <button key={d} className={d === days ? "seg-opt active" : "seg-opt"} onClick={() => setDays(d)}>{d}d</button>
+              ))}
+            </div>
+          </div>
+
           {/* Last night hero */}
           <section className="card sleep-hero">
             <div className="sleep-score" style={{ ["--c" as string]: data.latest.score >= 75 ? "#34d399" : data.latest.score >= 50 ? "#fbbf24" : "#f87171" }}>
@@ -76,7 +102,7 @@ export default function SleepPage() {
           </section>
 
           {/* Averages */}
-          <h2 className="section-title">30-day averages</h2>
+          <h2 className="section-title">{days}-day averages</h2>
           <section className="stats-row">
             <div className="card stat"><div className="stat-num">{data.averages.total_h}<span className="stat-of">h</span></div><div className="stat-label">avg sleep</div></div>
             <div className="card stat"><div className="stat-num">{data.averages.score}</div><div className="stat-label">avg score</div></div>
@@ -94,13 +120,29 @@ export default function SleepPage() {
             </div>
             <div className="bedstrip">
               {["9p", "11p", "1a", "3a", "5a"].map((t) => <span key={t} className="bedtick subtle tiny">{t}</span>)}
-              {last14(data.series.bedtime).map((p, i) =>
-                p.v == null ? null : (
-                  <div key={i} className="beddot" style={{ left: `${Math.min(100, Math.max(0, ((p.v - 21) / 9) * 100))}%` }} title={p.label} />
-                )
+              {targetHr != null && (
+                <div title={`target ${hrClock(targetHr)}`}
+                  style={{ position: "absolute", left: `${bedLeft(targetHr)}%`, top: 2, bottom: 16, width: 2, marginLeft: -1, background: "#34d399", opacity: 0.65, borderRadius: 2, zIndex: 1 }} />
               )}
+              {(() => {
+                const bd = last14(data.series.bedtime);
+                let lastIdx = -1;
+                for (let i = bd.length - 1; i >= 0; i--) { if (bd[i].v != null) { lastIdx = i; break; } }
+                return bd.map((p, i) =>
+                  p.v == null ? null : (
+                    <div key={i} className="beddot" title={`${p.label}${i === lastIdx ? " · last night" : ""}`}
+                      style={i === lastIdx
+                        ? { left: `${bedLeft(p.v)}%`, background: "#22d3ee", width: 11, height: 11, boxShadow: "0 0 0 3px rgba(34,211,238,0.25)", zIndex: 2 }
+                        : { left: `${bedLeft(p.v)}%` }} />
+                  )
+                );
+              })()}
             </div>
-            <div className="subtle tiny mt8">Tightening this into a 30-min window is your highest-leverage sleep fix.</div>
+            <div className="subtle tiny mt8">
+              {targetHr != null
+                ? <><span style={{ color: "#34d399" }}>▮</span> target {hrClock(targetHr)} · <span style={{ color: "#22d3ee" }}>●</span> last night. Tightening into a 30-min window is your highest-leverage fix.</>
+                : <>Tightening this into a 30-min window is your highest-leverage sleep fix.</>}
+            </div>
           </section>
 
           {/* Hours per night */}
