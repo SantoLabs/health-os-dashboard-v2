@@ -119,3 +119,17 @@
 .range-seg { display: flex; width: max-content;  gap: 2px; padding: 3px; background: var(--card2); border: 1px solid var(--line); border-radius: 999px; margin: 0 auto 14px; }
 .range-opt { background: none; border: 0; color: var(--muted); font-size: 13px; font-weight: 600; padding: 6px 18px; border-radius: 999px; cursor: pointer; }
 .range-opt.active { background: var(--card); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+
+/* ---- Goals editor (P2.3) ---- */
+.btn-danger { background: rgba(248,113,113,0.12); border-color: rgba(248,113,113,0.40); color: #f87171; }
+.btn-add { background: var(--card2); border: 1px solid var(--line); color: var(--text); font-size: 13px; font-weight: 600; padding: 6px 13px; border-radius: 999px; cursor: pointer; }
+.goal-form { display: flex; flex-direction: column; gap: 10px; }
+.goal-card .goal-form { padding: 14px 16px; }
+.g-input { width: 100%; background: var(--card2); border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 11px 12px; font-size: 15px; box-sizing: border-box; }
+.g-input::placeholder { color: var(--muted); }
+.goal-form-row { display: flex; align-items: center; gap: 8px; }
+.goal-form-row .btn { width: auto; margin-top: 0; flex: 0 0 auto; padding: 9px 16px; font-size: 14px; }
+.goal-card { padding: 0; }
+.goal-row { display: flex; align-items: center; gap: 12px; width: 100%; background: none; border: 0; color: var(--text); text-align: left; cursor: pointer; padding: 14px 16px; }
+.chev-edit { color: var(--muted); font-size: 14px; flex: none; }
+.pad { padding: 12px; } .center { text-align: center; }
