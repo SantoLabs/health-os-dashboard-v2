@@ -16,6 +16,7 @@ type UGoal = {
   id: string; label: string; when_text?: string; target_date: string | null;
   goal_type: string; status: string; focus: string; deleted: boolean;
   created_at: string; updated_at: string; days_away: number | null; source?: string;
+  completed_at?: string | null; early_days?: number | null;
 };
 
 const TYPE_META: Record<string, { emoji: string; label: string }> = {
@@ -50,6 +51,19 @@ function awayPill(days: number | null) {
   return <span className={`pill ${cls}`}>{txt}</span>;
 }
 
+// Smart "finished early / late vs target" marker for completed goals.
+function completedMarker(g: UGoal): { text: string; cls: string } | null {
+  if (g.early_days == null) return null;
+  const n = Math.abs(g.early_days);
+  const dW = n === 1 ? "day" : "days";
+  if (g.early_days > 0) {
+    const flavor = g.early_days >= 14 ? "smashed it" : g.early_days >= 4 ? "ahead of plan" : "early";
+    return { text: `🎯 ${n} ${dW} early — ${flavor}`, cls: "ok" };
+  }
+  if (g.early_days < 0) return { text: `${n} ${dW} past target — done is done`, cls: "warn" };
+  return { text: "🎯 right on the day", cls: "ok" };
+}
+
 type SortKey = "date" | "priority" | "status" | "type";
 
 export default function GoalsPage() {
@@ -65,6 +79,7 @@ export default function GoalsPage() {
   const [form, setForm] = useState({ label: "", target_date: "", goal_type: "race", status: "not_started", focus: "medium" });
   const [busy, setBusy] = useState(false);
   const [sort, setSort] = useState<SortKey>("date");
+  const [confirmPurge, setConfirmPurge] = useState<string | null>(null);
 
   // editable body-fat goal
   const [bfEdit, setBfEdit] = useState(false);
@@ -217,20 +232,27 @@ export default function GoalsPage() {
         <>
           <h2 className="section-title">Completed 🎉</h2>
           <section className="list">
-            {done.map((g) => (
+            {done.map((g) => {
+              const mk = completedMarker(g);
+              return (
               <div key={g.id} className="card goal-card done-card">
                 {editing === g.id ? EditForm : (
                   <button className="goal-row" onClick={() => startEdit(g)}>
                     <span className="cardio-ic">🥳</span>
                     <div className="cardio-main">
                       <div className="session-title done-text">{tEmoji(g.goal_type)} {g.label}</div>
-                      <div className="subtle tiny">{fmtDate(g.target_date)} · done</div>
+                      <div className="subtle tiny">
+                        {g.completed_at ? `Completed ${fmtDate(g.completed_at)}` : "Completed"}
+                        {g.target_date ? ` · target ${fmtDate(g.target_date)}` : ""}
+                      </div>
+                      {mk && <div className="chip-row" style={{ marginTop: 6 }}><span className={`pill ${mk.cls}`}>{mk.text}</span></div>}
                     </div>
                     <span className="chev-edit">✎</span>
                   </button>
                 )}
               </div>
-            ))}
+              );
+            })}
           </section>
         </>
       )}
@@ -241,14 +263,40 @@ export default function GoalsPage() {
           <section className="list">
             {removed.map((g) => (
               <div key={g.id} className="card goal-card removed-card">
-                <div className="goal-row static">
-                  <span className="cardio-ic">{tEmoji(g.goal_type)}</span>
-                  <div className="cardio-main">
-                    <div className="session-title struck">{g.label}</div>
-                    <div className="subtle tiny">{fmtDate(g.target_date)}</div>
+                {confirmPurge === g.id ? (
+                  <div className="goal-row static" style={{ alignItems: "flex-start" }}>
+                    <span className="cardio-ic">🗑</span>
+                    <div className="cardio-main">
+                      <div className="session-title">Permanently remove “{g.label}”?</div>
+                      <div className="subtle tiny">This deletes it for good — it can’t be restored.</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexShrink: 0 }}>
+                      <button onClick={() => { setConfirmPurge(null); act("goal_purge", g.id); }} disabled={busy}
+                        style={{ background: "#ef4444", border: "none", color: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                        Yes, delete
+                      </button>
+                      <button onClick={() => setConfirmPurge(null)} disabled={busy}
+                        style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.18)", color: "var(--muted)", borderRadius: 8, padding: "5px 11px", fontSize: 12, cursor: "pointer" }}>
+                        No
+                      </button>
+                    </div>
                   </div>
-                  <button className="btn-add" onClick={() => act("goal_restore", g.id)} disabled={busy}>↺ Restore</button>
-                </div>
+                ) : (
+                  <div className="goal-row static">
+                    <span className="cardio-ic">{tEmoji(g.goal_type)}</span>
+                    <div className="cardio-main">
+                      <div className="session-title struck">{g.label}</div>
+                      <div className="subtle tiny">{fmtDate(g.target_date)}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexShrink: 0 }}>
+                      <button className="btn-add" onClick={() => act("goal_restore", g.id)} disabled={busy}>↺ Restore</button>
+                      <button onClick={() => setConfirmPurge(g.id)} disabled={busy}
+                        style={{ background: "transparent", border: "1px solid rgba(248,113,113,0.4)", color: "#f87171", borderRadius: 999, padding: "4px 12px", fontSize: 13, cursor: "pointer" }}>
+                        🗑 Remove
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </section>
