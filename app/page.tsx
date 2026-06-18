@@ -211,13 +211,6 @@ export default function TodayPage() {
             </div>
           </section>
 
-          {data.data_through && (
-            <div className="subtle tiny" style={{ textAlign: "center", margin: "2px 0 -2px" }}>
-              Data through {freshDate(data.data_through)}
-              {data.last_synced ? ` · synced ${freshDate(data.last_synced)}` : ""}
-            </div>
-          )}
-
           <h2 className="section-title">Your plan today</h2>
           <section className="row2">
             <div className="card mini">
@@ -261,6 +254,13 @@ export default function TodayPage() {
               );
             })}
           </section>
+
+          {data.data_through && (
+            <div className="subtle tiny" style={{ textAlign: "center", margin: "10px 0 2px", opacity: 0.7 }}>
+              Data through {freshDate(data.data_through)}
+              {data.last_synced ? ` · synced ${freshDate(data.last_synced)}` : ""}
+            </div>
+          )}
         </>
       )}
     </Screen>
