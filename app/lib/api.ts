@@ -36,6 +36,16 @@ export async function fetchApi<T>(route: string): Promise<T> {
   return res.json();
 }
 
+export async function dashPost<T>(route: string, body: unknown): Promise<T> {
+  const res = await authedFetch(`/functions/v1/health-dashboard?api=${route}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  return res.json();
+}
+
 // ---- on-demand sync (Refresh button) ----
 export async function triggerSync(): Promise<unknown> {
   const res = await authedFetch(`/functions/v1/trigger-garmin-sync`, {
