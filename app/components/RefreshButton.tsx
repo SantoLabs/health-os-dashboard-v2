@@ -8,21 +8,23 @@ const LAST_KEY = "hos_last_sync";
 const EST_MS = 110_000;
 const MAX_MS = 180_000;
 
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+function ordinal(n: number): string {
+  const v = n % 100;
+  const s = v >= 11 && v <= 13 ? "th" : ["th","st","nd","rd"][n % 10] || "th";
+  return `${n}${s}`;
+}
+// Render an ISO/UTC timestamp as compact IST, e.g. "18th June, 11:52"
 function fmt(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "";
-  try {
-    return d
-      .toLocaleString("en-GB", {
-        timeZone: "Asia/Kolkata",
-        day: "2-digit", month: "short",
-        hour: "numeric", minute: "2-digit", hour12: true,
-      })
-      .replace(",", "");
-  } catch {
-    return d.toISOString();
-  }
+  const ist = new Date(d.getTime() + 5.5 * 3600000);
+  const day = ist.getUTCDate();
+  const mon = MONTHS[ist.getUTCMonth()];
+  const hh = String(ist.getUTCHours()).padStart(2, "0");
+  const mm = String(ist.getUTCMinutes()).padStart(2, "0");
+  return `${ordinal(day)} ${mon}, ${hh}:${mm}`;
 }
 
 export default function RefreshButton() {
@@ -35,7 +37,6 @@ export default function RefreshButton() {
 
   const clearTimers = () => { timers.current.forEach(clearTimeout); timers.current = []; };
 
-  // initial: restore cooldown + load last-synced time
   useEffect(() => {
     const last = Number(localStorage.getItem(LAST_KEY) || 0);
     const rem = COOLDOWN_MS - (Date.now() - last);
@@ -45,7 +46,6 @@ export default function RefreshButton() {
     return () => { alive = false; clearTimers(); };
   }, []);
 
-  // cooldown countdown
   useEffect(() => {
     if (phase !== "cooldown") return;
     if (left <= 0) { setPhase("idle"); return; }
@@ -125,7 +125,8 @@ export default function RefreshButton() {
         {label}
       </button>
       <div className="last-synced">
-        {synced ? `Synced ${synced}` : "Not synced yet"}
+        <span className="ls-label">Last synced</span>
+        <span className="ls-value">{synced ? fmt(synced) : "—"}</span>
       </div>
     </div>
   );
