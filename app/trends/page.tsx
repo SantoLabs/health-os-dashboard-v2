@@ -5,6 +5,7 @@ import { useApi } from "../lib/api";
 import { Screen } from "../components/Screen";
 
 type Pt = { date: string; v: number | null };
+type SleepPt = { date: string; total: number | null };
 type Trends = {
   days: number;
   weight: Pt[];
@@ -12,6 +13,7 @@ type Trends = {
   hrv: Pt[];
   steps: Pt[];
   acwr: Pt[];
+  sleep: SleepPt[];
   summary: { avg_hrv: number; avg_steps: number; avg_sleep_h: number; avg_readiness: number };
   interpretation: Record<string, string>;
 };
@@ -116,11 +118,22 @@ const lastVal = (pts: Pt[]): number | undefined => {
   return undefined;
 };
 
+const RANGES = [7, 30, 90];
+
 export default function TrendsPage() {
-  const { data, error } = useApi<Trends>("trends");
+  const [days, setDays] = useState(30);
+  const { data, error } = useApi<Trends>(`trends&days=${days}`);
+  const sleepHours: Pt[] = data ? data.sleep.map((s) => ({ date: s.date, v: s.total != null ? Math.round((s.total / 60) * 10) / 10 : null })) : [];
 
   return (
-    <Screen title="Trends" sub={data ? `last ${data.days} days` : undefined} error={error} loading={!data && !error}>
+    <Screen title="Trends" error={error} loading={!data && !error}>
+      <section className="range-seg">
+        {RANGES.map((r) => (
+          <button key={r} className={r === days ? "range-opt active" : "range-opt"} onClick={() => setDays(r)}>
+            {r}d
+          </button>
+        ))}
+      </section>
       {data && (
         <>
           <section className="stats-row">
@@ -134,6 +147,9 @@ export default function TrendsPage() {
 
           <h2 className="section-title">Body</h2>
           <MetricCard title="Weight" latest={lastVal(data.weight)?.toFixed(1)} unit="kg" series={data.weight} color="#38bdf8" note={data.interpretation.weight} fmt={(v) => `${v.toFixed(1)}kg`} />
+
+          <h2 className="section-title">Sleep</h2>
+          <MetricCard title="Sleep duration" latest={lastVal(sleepHours)?.toFixed(1)} unit="h" series={sleepHours} color="#60a5fa" note={data.interpretation.sleep} band={[7, 9]} fmt={(v) => `${v.toFixed(1)}h`} />
 
           <h2 className="section-title">Recovery</h2>
           <MetricCard title="Readiness" latest={lastVal(data.readiness)?.toString()} series={data.readiness} color="#34d399" note={data.interpretation.readiness} fmt={(v) => `${Math.round(v)}`} />
