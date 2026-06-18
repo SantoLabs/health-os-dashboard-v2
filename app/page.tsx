@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useApi, actionGet, fetchApi } from "./lib/api";
 import { Screen } from "./components/Screen";
 
@@ -46,12 +46,8 @@ function RaceCountdown() {
 }
 
 type Factor = {
-  emoji: string;
-  label: string;
-  value: string;
-  detail?: string;
-  impact?: "positive" | "negative" | "neutral" | string;
-  note?: string;
+  emoji: string; label: string; value: string;
+  detail?: string; impact?: "positive" | "negative" | "neutral" | string; note?: string;
 };
 
 type Today = {
@@ -62,37 +58,84 @@ type Today = {
 
 type Pt = { date: string; v: number | null };
 type SleepPt = { date: string; total: number | null };
-type Trends = { sleep: SleepPt[]; hrv: Pt[]; steps: Pt[]; acwr: Pt[] };
+type Trends = { sleep: SleepPt[]; hrv: Pt[]; steps: Pt[]; acwr: Pt[]; debt: Pt[]; vo2max: Pt[] };
 
 function scoreColor(s: number): string { return s >= 75 ? "#34d399" : s >= 50 ? "#fbbf24" : "#f87171"; }
 function impactColor(i?: string): string { return i === "positive" ? "#34d399" : i === "negative" ? "#f87171" : "#94a3b8"; }
 
-// Map a factor to a recent numeric series (oldest→newest) for the sparkline.
-function seriesFor(label: string, t: Trends | null): { data: number[]; unit: string } | null {
+type Ser = { pts: Pt[]; unit: string; betterUp: boolean | null };
+
+// Map a factor to a recent dated series for the interactive chart.
+function seriesFor(label: string, t: Trends | null): Ser | null {
   if (!t) return null;
-  const clean = (xs: (number | null)[]) => xs.filter((x): x is number => x != null);
-  const take = (a: number[], unit: string) => (a.length >= 4 ? { data: a.slice(-14), unit } : null);
+  const take = (pts: Pt[], unit: string, betterUp: boolean | null): Ser | null => {
+    const clean = (pts || []).filter((p) => p.v != null);
+    return clean.length >= 4 ? { pts: clean.slice(-14), unit, betterUp } : null;
+  };
   const l = label.toLowerCase();
-  if (l.startsWith("sleep") && !l.includes("debt")) return take(clean(t.sleep.map((s) => (s.total != null ? Math.round((s.total / 60) * 10) / 10 : null))), "h");
-  if (l.includes("hrv")) return take(clean(t.hrv.map((p) => p.v)), "ms");
-  if (l.includes("steps")) return take(clean(t.steps.map((p) => p.v)), "");
-  if (l.includes("training load")) return take(clean(t.acwr.map((p) => p.v)), "");
+  if (l.includes("debt")) return take(t.debt, "m", false);
+  if (l.startsWith("vo")) return take(t.vo2max, "", true);
+  if (l.startsWith("sleep")) return take(t.sleep.map((s) => ({ date: s.date, v: s.total != null ? Math.round((s.total / 60) * 10) / 10 : null })), "h", true);
+  if (l.includes("hrv")) return take(t.hrv, "ms", true);
+  if (l.includes("steps")) return take(t.steps, "", true);
+  if (l.includes("training load")) return take(t.acwr, "", null);
   return null;
 }
 
-function Spark({ data, color }: { data: number[]; color: string }) {
-  const w = 240, h = 42, pad = 5;
-  const min = Math.min(...data), max = Math.max(...data), span = max - min || 1, n = data.length;
-  const x = (i: number) => pad + (i / (n - 1)) * (w - 2 * pad);
-  const y = (v: number) => h - pad - ((v - min) / span) * (h - 2 * pad);
-  const d = data.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
-  const area = `${d} L${x(n - 1).toFixed(1)} ${h - pad} L${x(0).toFixed(1)} ${h - pad} Z`;
+// Short trend-aware nudge from the series direction + current impact.
+function nudgeFor(s: Ser, impact?: string): string | null {
+  const vals = s.pts.map((p) => p.v as number);
+  if (vals.length < 4 || s.betterUp == null) return null;
+  const mid = Math.floor(vals.length / 2);
+  const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
+  const delta = mean(vals.slice(mid)) - mean(vals.slice(0, mid));
+  const rng = Math.max(...vals) - Math.min(...vals) || 1;
+  const norm = delta / rng, eps = 0.08;
+  const dir = norm > eps ? 1 : norm < -eps ? -1 : 0;
+  const improving = dir !== 0 && ((s.betterUp && dir > 0) || (!s.betterUp && dir < 0));
+  const worsening = dir !== 0 && !improving;
+  const pos = impact === "positive", neg = impact === "negative";
+  if (improving) return pos ? "Great and still improving — keep it up. 👍" : "Heading the right way — keep the momentum going.";
+  if (worsening) return neg ? "Slipping lately — worth a focused reset." : "Solid for now, but drifting — keep an eye on it.";
+  return pos ? "Holding steady in a good place. 👍" : neg ? "Stuck low — a small change could nudge this up." : "Flat and stable this fortnight.";
+}
+
+function fmtDay(iso: string) { return new Date(iso + "T00:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short" }); }
+
+function MiniChart({ pts, color, unit }: { pts: Pt[]; color: string; unit: string }) {
+  const w = 260, h = 64, pad = 6, padB = 14;
+  const vals = pts.map((p) => p.v as number);
+  const min = Math.min(...vals), max = Math.max(...vals), span = max - min || 1, n = vals.length;
+  const X = (i: number) => pad + (i / (n - 1)) * (w - 2 * pad);
+  const Y = (v: number) => (h - padB) - ((v - min) / span) * ((h - padB) - pad);
+  const d = vals.map((v, i) => `${i === 0 ? "M" : "L"}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`).join(" ");
+  const area = `${d} L${X(n - 1).toFixed(1)} ${h - padB} L${X(0).toFixed(1)} ${h - padB} Z`;
+  const [act, setAct] = useState<number | null>(null);
+  const ref = useRef<SVGSVGElement>(null);
+  const at = (clientX: number) => {
+    const el = ref.current; if (!el) return;
+    const r = el.getBoundingClientRect();
+    const rel = ((clientX - r.left) / r.width) * w;
+    let i = Math.round((rel - pad) / ((w - 2 * pad) / (n - 1)));
+    i = Math.max(0, Math.min(n - 1, i)); setAct(i);
+  };
+  const cur = act ?? n - 1;
   return (
-    <svg className="spark" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
-      <path d={area} fill={color} opacity="0.12" stroke="none" />
-      <path d={d} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-      <circle cx={x(n - 1)} cy={y(data[n - 1])} r="2.8" fill={color} />
-    </svg>
+    <div className="mini-chart-wrap">
+      <svg ref={ref} className="mini-chart" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none"
+        onMouseMove={(e) => at(e.clientX)} onMouseLeave={() => setAct(null)}
+        onTouchStart={(e) => at(e.touches[0].clientX)} onTouchMove={(e) => at(e.touches[0].clientX)} onTouchEnd={() => setAct(null)}>
+        <path d={area} fill={color} opacity="0.12" stroke="none" />
+        <path d={d} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        {act != null && <line x1={X(act)} y1={pad} x2={X(act)} y2={h - padB} stroke={color} strokeWidth="1" opacity="0.45" />}
+        <circle cx={X(cur)} cy={Y(vals[cur])} r="3" fill={color} />
+      </svg>
+      <div className="mini-chart-cap subtle tiny">
+        {act != null
+          ? <span style={{ color }}><strong>{vals[act]}{unit}</strong> · {fmtDay(pts[act].date)}</span>
+          : <>Last {n} days · {vals[0]}{unit} → {vals[n - 1]}{unit}</>}
+      </div>
+    </div>
   );
 }
 
@@ -143,6 +186,7 @@ export default function TodayPage() {
               const isOpen = open === i;
               const col = impactColor(f.impact);
               const ser = isOpen ? seriesFor(f.label, trends) : null;
+              const nudge = ser ? nudgeFor(ser, f.impact) : null;
               return (
                 <div className={isOpen ? "card factor-row open" : "card factor-row"} key={i}>
                   <button className="factor-head" onClick={() => setOpen(isOpen ? null : i)}>
@@ -157,12 +201,8 @@ export default function TodayPage() {
                     <div className="factor-detail">
                       {f.detail && <div className="subtle tiny">{f.detail}</div>}
                       {f.note && <div className="factor-note">{f.note}</div>}
-                      {ser && <Spark data={ser.data} color={col} />}
-                      {ser && (
-                        <div className="spark-cap subtle tiny">
-                          Last {ser.data.length} days · {ser.data[0]}{ser.unit} → {ser.data[ser.data.length - 1]}{ser.unit}
-                        </div>
-                      )}
+                      {ser && <MiniChart pts={ser.pts} color={col} unit={ser.unit} />}
+                      {nudge && <div className="factor-nudge" style={{ color: col }}>{nudge}</div>}
                     </div>
                   )}
                 </div>
