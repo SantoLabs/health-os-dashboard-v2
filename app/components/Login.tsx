@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { loginPassword, loginDemo, loginGoogle } from "../lib/auth";
+import { loginPassword, loginGoogle } from "../lib/auth";
 
 export default function Login({ onAuthed }: { onAuthed: () => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState<"" | "pw" | "demo">("");
+  const [busy, setBusy] = useState<"" | "pw">("");
   const [err, setErr] = useState<string | null>(null);
 
   async function doPassword(e: React.FormEvent) {
@@ -18,18 +18,6 @@ export default function Login({ onAuthed }: { onAuthed: () => void }) {
       onAuthed();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Sign-in failed");
-      setBusy("");
-    }
-  }
-
-  async function doDemo() {
-    setErr(null);
-    setBusy("demo");
-    try {
-      await loginDemo();
-      onAuthed();
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Couldn't open the demo account");
       setBusy("");
     }
   }
@@ -71,13 +59,6 @@ export default function Login({ onAuthed }: { onAuthed: () => void }) {
             {busy === "pw" ? "Signing in…" : "Sign in"}
           </button>
         </form>
-
-        <button type="button" className="btn btn-ghost" onClick={doDemo} disabled={busy !== ""}>
-          {busy === "demo" ? "Opening…" : "Try the demo account"}
-        </button>
-        <div className="subtle tiny" style={{ textAlign: "center", marginTop: 10 }}>
-          The demo is shared & read-only — fine to pass around.
-        </div>
       </div>
     </div>
   );
