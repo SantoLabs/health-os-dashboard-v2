@@ -1,24 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { SB_URL, SB_ANON, DEMO_EMAIL, DEMO_PASSWORD } from "../config";
-
-let cachedToken: string | null = null;
-let tokenExp = 0; // epoch seconds
+import { SB_URL, SB_ANON } from "../config";
+import { getStoredSession, refreshSession, clearSession } from "./auth";
 
 async function getToken(force = false): Promise<string> {
+  const s = getStoredSession();
+  if (!s) throw new Error("Not signed in");
   const now = Date.now() / 1000;
-  if (!force && cachedToken && now < tokenExp - 60) return cachedToken;
-  const r = await fetch(`${SB_URL}/auth/v1/token?grant_type=password`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", apikey: SB_ANON },
-    body: JSON.stringify({ email: DEMO_EMAIL, password: DEMO_PASSWORD }),
-  });
-  if (!r.ok) throw new Error(`Auth failed (${r.status})`);
-  const j = await r.json();
-  cachedToken = j.access_token;
-  tokenExp = j.expires_at || now + (j.expires_in || 3600);
-  return cachedToken as string;
+  if (!force && now < s.expires_at - 60) return s.access_token;
+  if (s.refresh_token) {
+    try {
+      const ns = await refreshSession(s.refresh_token);
+      return ns.access_token;
+    } catch {
+      clearSession();
+      if (typeof window !== "undefined") window.location.reload();
+      throw new Error("Session expired");
+    }
+  }
+  return s.access_token;
 }
 
 async function authedFetch(path: string, init?: RequestInit): Promise<Response> {
@@ -33,6 +34,25 @@ export async function fetchApi<T>(route: string): Promise<T> {
   const res = await authedFetch(`/functions/v1/health-dashboard?api=${route}`);
   if (!res.ok) throw new Error(`Couldn't load data (${res.status})`);
   return res.json();
+}
+
+// ---- on-demand sync (Refresh button) ----
+export async function triggerSync(): Promise<unknown> {
+  const res = await authedFetch(`/functions/v1/trigger-garmin-sync`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ run_type: "daily_manual" }),
+  });
+  if (!res.ok) throw new Error(`Couldn't start a refresh (${res.status})`);
+  return res.json();
+}
+export async function getLastSynced(): Promise<string | null> {
+  try {
+    const t = await fetchApi<{ last_synced?: string }>("today");
+    return t.last_synced || null;
+  } catch {
+    return null;
+  }
 }
 
 // ---- health-actions (read + write API) ----
