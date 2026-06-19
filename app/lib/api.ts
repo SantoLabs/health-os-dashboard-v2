@@ -106,19 +106,44 @@ export async function coachAsk(
   return res.json();
 }
 
-// ---- health-plan (AI training plan) ----
-export async function planGet<T>(): Promise<T> {
-  const res = await authedFetch(`/functions/v1/health-plan?api=plan`);
-  if (!res.ok) throw new Error(`Couldn't load plan (${res.status})`);
+// ---- health-plan (Schedule: AI plan + calendar + history) ----
+// GET week (optionally a past/future week via Monday-anchored week_start).
+export async function planWeek<T>(weekStart?: string): Promise<T> {
+  const q = weekStart ? `&week_start=${encodeURIComponent(weekStart)}` : "";
+  const res = await authedFetch(`/functions/v1/health-plan?api=week${q}`);
+  if (!res.ok) throw new Error(`Couldn't load your week (${res.status})`);
   return res.json();
 }
-export async function planPost<T>(action: string, body: unknown = {}): Promise<T> {
-  const res = await authedFetch(`/functions/v1/health-plan?api=${action}`, {
+// GET a date range (sessions + normalized calendar events) for the month grid + agenda.
+export async function planRange<T>(from: string, to: string): Promise<T> {
+  const res = await authedFetch(
+    `/functions/v1/health-plan?api=range&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+  );
+  if (!res.ok) throw new Error(`Couldn't load the calendar (${res.status})`);
+  return res.json();
+}
+// GET planned-vs-completed windows (week / 15d / 30d) + streaks + weekly bars.
+export async function planHistory<T>(): Promise<T> {
+  const res = await authedFetch(`/functions/v1/health-plan?api=history`);
+  if (!res.ok) throw new Error(`Couldn't load history (${res.status})`);
+  return res.json();
+}
+// POST an action (generate / complete / skip / commit / uncommit / session_save /
+// session_delete / event_save / event_delete). Pass weekStart to act on a non-current week.
+export async function planPost<T>(action: string, body: unknown = {}, weekStart?: string): Promise<T> {
+  const q = weekStart ? `&week_start=${encodeURIComponent(weekStart)}` : "";
+  const res = await authedFetch(`/functions/v1/health-plan?api=${action}${q}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  return res.json();
+}
+// Back-compat: original single-call current-week fetch (kept for any older callers).
+export async function planGet<T>(): Promise<T> {
+  const res = await authedFetch(`/functions/v1/health-plan?api=week`);
+  if (!res.ok) throw new Error(`Couldn't load plan (${res.status})`);
   return res.json();
 }
 
