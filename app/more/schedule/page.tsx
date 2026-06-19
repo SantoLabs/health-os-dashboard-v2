@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { planWeek, planRange, planHistory, planPost } from "../../lib/api";
+import { Screen } from "../../components/Screen";
 
 /* ════════════════════ backend types (health-plan v4) ════════════════════ */
 type Actual = {
@@ -33,7 +34,7 @@ type HistoryResp = { windows: { week: Win; d15: Win; d30: Win }; current_streak:
 
 /* ════════════════════ design tokens (from the prototype) ════════════════════ */
 const A = "#6C5CE7";                       // accent / brand
-const BG = "#0A0A0F", CARD = "#15151D", CARD2 = "#121219", CHIPBG = "#1B1B25";
+const CARD = "#15151D", CARD2 = "#121219", CHIPBG = "#1B1B25";
 const T1 = "#F4F4F7", T2 = "#C7C7D2", T3 = "#8E8E9C", T4 = "#6E6E7C";
 const INT: Record<string, string> = { easy: "#34D399", moderate: "#FBBF24", hard: "#FB7185" };
 const EFFORTS = ["Easy", "Aerobic", "Tempo", "Threshold", "Intervals", "Drills"];
@@ -132,6 +133,11 @@ function eventToItem(e: EventItem): Item {
   };
 }
 
+/* Only sessions the user has sent to the calendar (committed) or already completed show in
+   the Week/Month/Schedule views. AI suggestions (uncommitted) stay in the AI Coach Plan tab.
+   Calendar events (Google sync, manual travel/race/social) are always real, so always shown. */
+function onCalendar(it: Item) { return it.kind === "event" || it.committed || it.status === "done"; }
+
 /* ════════════════════ tiny style helpers ════════════════════ */
 const SS: Record<string, React.CSSProperties> = {
   card: { background: CARD, border: "1px solid rgba(255,255,255,.06)", borderRadius: 16, padding: 14, marginBottom: 12 },
@@ -143,9 +149,7 @@ function chipStyle(active: boolean, extra?: React.CSSProperties): React.CSSPrope
 }
 
 const SCOPED_CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-.schd{font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-  background:${BG};color:${T1};margin:-16px -16px -96px;padding:14px 14px 110px;min-height:100vh;}
+.schd{color:${T1};}
 .schd *{box-sizing:border-box;}
 .schd .hscroll{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
 .schd .hscroll::-webkit-scrollbar{display:none;}
@@ -159,7 +163,7 @@ const SCOPED_CSS = `
 
 /* ════════════════════ component ════════════════════ */
 type View = "coach" | "week" | "month" | "schedule" | "history";
-type Sheet = null | "form" | "push" | "cals";
+type Sheet = null | "form";
 type Drag = { id: string; sx: number; sy: number; dx: number; dy: number; moved: boolean; di: number; hour: number; min: number } | null;
 type Draft = Partial<Session> & { tkey?: TKey };
 
@@ -180,9 +184,6 @@ export default function SchedulePage() {
   const [sheet, setSheet] = useState<Sheet>(null);
   const [mode, setMode] = useState<"add" | "edit">("add");
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [pushDest, setPushDest] = useState<"healthos" | "google" | "notion" | "apple">("healthos");
-  const [pushing, setPushing] = useState(false);
-  const [pushDone, setPushDone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [drag, setDrag] = useState<Drag>(null);
@@ -230,7 +231,7 @@ export default function SchedulePage() {
   }
   const toggleDone = (it: Item) => { act("complete", { id: it.id }); };
   const skipItem = (it: Item) => { act("skip", { id: it.id }); };
-  const pushRow = (it: Item) => { act("commit", { id: it.id }); showToast("Added to your Health OS calendar ✓"); };
+  const pushRow = (it: Item) => { act("commit", { id: it.id }); showToast("Sent to your calendar \u2713"); };
 
   function sessionPayload(s: Session, over: Partial<Session>) {
     return {
@@ -245,7 +246,7 @@ export default function SchedulePage() {
     try { const d = await planPost<WeekResp & { ok: boolean; error?: string }>("generate", {}, weekMon); if (d.ok) { setWeek(d); showToast("Plan regenerated from your latest data ✨"); } else showToast(d.error || "Couldn't regenerate right now"); }
     catch (e) { showToast((e as Error).message); } finally { setBusy(false); }
   }
-  function commitWeek() { act("commit", { all: true }); showToast("Week added to your Health OS calendar ✓"); }
+  function commitWeek() { act("commit", { all: true }); showToast("This week sent to your calendar \u2713"); }
 
   /* ---- form ---- */
   function openAdd(date = today) { setMode("add"); setDraft({ tkey: "run", session_type: "Run", activity: "", session_date: date, start_time: "07:00", planned_duration: 45, intensity: null, focus: null, distance_m: null }); setSheet("form"); }
@@ -259,7 +260,7 @@ export default function SchedulePage() {
     setMode("edit"); setDraft({ ...s, tkey: it.tkey }); setSheet("form");
   }
   function setD(p: Partial<Draft>) { setDraft((d) => d ? { ...d, ...p } : d); }
-  function closeSheet() { setSheet(null); setDraft(null); setPushDone(false); setPushing(false); }
+  function closeSheet() { setSheet(null); setDraft(null); }
 
   async function saveDraft() {
     if (!draft?.session_date) return;
@@ -344,23 +345,18 @@ export default function SchedulePage() {
   const tabs: [View, string][] = [["coach", "AI Coach Plan"], ["week", "Week"], ["month", "Month"], ["schedule", "Schedule"], ["history", "History"]];
 
   return (
-    <div className="schd" ref={undefined}>
+    <Screen title="Schedule">
+    <div className="schd">
       <style dangerouslySetInnerHTML={{ __html: SCOPED_CSS }} />
 
-      {/* header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-        <div style={{ fontSize: 21, fontWeight: 800, letterSpacing: "-.02em" }}>Schedule</div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button style={SS.iconAct} title="Connected calendars" onClick={() => setSheet("cals")}>🔗</button>
-          <button style={{ ...SS.iconAct, background: A, border: "none", color: "#fff" }} title="Add activity" onClick={() => openAdd(today)}>＋</button>
-        </div>
-      </div>
-
-      {/* view tabs */}
-      <div className="hscroll" style={{ marginBottom: 14 }}>
+      {/* view tabs + add */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+      <div className="hscroll" style={{ flex: 1, minWidth: 0 }}>
         {tabs.map(([k, label]) => (
           <button key={k} onClick={() => setView(k)} style={{ padding: "9px 15px", borderRadius: 11, border: "none", cursor: "pointer", font: "700 13px 'Plus Jakarta Sans',sans-serif", flex: "none", ...(view === k ? { background: A, color: "#fff", boxShadow: "0 4px 12px " + hexA(A, .4) } : { background: CARD2, color: T3 }) }}>{label}</button>
         ))}
+      </div>
+        <button style={{ ...SS.iconAct, background: A, border: "none", color: "#fff", flex: "none" }} title="Add activity" onClick={() => openAdd(today)}>＋</button>
       </div>
 
       {weekErr && view !== "history" && <div style={{ ...SS.card, borderColor: "#7f1d1d" }}><b>Couldn&apos;t load</b><div style={{ color: T3, fontSize: 12, marginTop: 4 }}>{weekErr}</div></div>}
@@ -376,6 +372,7 @@ export default function SchedulePage() {
         <div style={{ position: "fixed", left: "50%", bottom: 108, transform: "translateX(-50%)", background: "#222230", color: "#fff", padding: "10px 16px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, zIndex: 1600, boxShadow: "0 8px 24px rgba(0,0,0,.5)", maxWidth: 340, textAlign: "center" }}>{toast}</div>
       )}
     </div>
+    </Screen>
   );
 
   /* ───────────── COACH ───────────── */
@@ -400,6 +397,9 @@ export default function SchedulePage() {
         </div>
         {week.week_focus && <div style={{ color: T2, fontSize: 12.5, margin: "0 2px 12px" }}>🎯 {week.week_focus}</div>}
 
+        {coachItems.some((x) => x.cat !== "rest" && !x.committed && x.status !== "done") && (
+          <div style={{ color: T3, fontSize: 11.5, margin: "0 2px 12px", lineHeight: 1.45 }}>These are AI suggestions. Tap 📤 to send a session to your calendar &mdash; only sent sessions show up in Week / Month / Schedule.</div>
+        )}
         {coachItems.length === 0 ? (
           <div style={{ ...SS.card, textAlign: "center", padding: "26px 16px" }}>
             <div style={{ fontSize: 30 }}>🗓️</div>
@@ -408,8 +408,8 @@ export default function SchedulePage() {
           </div>
         ) : coachItems.map((it) => coachRow(it))}
 
-        {coachItems.some((x) => x.source === "ai" && !x.committed && x.status !== "done") && (
-          <button onClick={commitWeek} style={{ width: "100%", marginTop: 4, padding: 13, borderRadius: 14, border: "none", background: A, color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>📤 Push this week to my calendar</button>
+        {coachItems.some((x) => x.cat !== "rest" && !x.committed && x.status !== "done") && (
+          <button onClick={commitWeek} style={{ width: "100%", marginTop: 4, padding: 13, borderRadius: 14, border: "none", background: A, color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>📤 Send this week to my calendar</button>
         )}
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
           <button onClick={regen} disabled={busy} style={{ flex: 1, padding: 13, borderRadius: 14, border: "1px solid " + hexA(A, .5), background: hexA(A, .12), color: "#ddd6fe", fontWeight: 700, fontSize: 13.5, cursor: "pointer" }}>{busy ? "Building…" : coachItems.length ? "↻ Regenerate" : "✨ Generate week"}</button>
@@ -462,10 +462,10 @@ export default function SchedulePage() {
     const inWk = (d: string) => d >= wDates[0] && d <= wDates[6];
     const hours: number[] = []; for (let h = 6; h <= 20; h++) hours.push(h);
     const gridW = 7 * 92, hourH = 44;
-    const blocks = wItems.filter((b) => inWk(b.date) && !b.allDay && b.hour != null && b.cat !== "meeting" && b.cat !== "rest");
+    const blocks = wItems.filter((b) => inWk(b.date) && !b.allDay && b.hour != null && b.cat !== "meeting" && b.cat !== "rest" && onCalendar(b));
     const meetings = wItems.filter((b) => inWk(b.date) && b.cat === "meeting" && b.hour != null);
-    const allDay = wItems.filter((b) => inWk(b.date) && b.allDay);
-    const unscheduled = wItems.filter((b) => inWk(b.date) && b.kind === "session" && b.hour == null && b.cat !== "rest");
+    const allDay = wItems.filter((b) => inWk(b.date) && b.allDay && onCalendar(b));
+    const unscheduled = wItems.filter((b) => inWk(b.date) && b.kind === "session" && b.hour == null && b.cat !== "rest" && onCalendar(b));
     const showNow = inWk(today);
     const n = istNow(); const nowTop = (n.getHours() - 6) * hourH + (n.getMinutes() / 60) * hourH;
     const weekLabel = weekOffset === 0 ? "This week" : weekOffset < 0 ? Math.abs(weekOffset) + "w ago" : "In " + weekOffset + "w";
@@ -492,6 +492,15 @@ export default function SchedulePage() {
           </div>
         )}
 
+        {blocks.length === 0 && unscheduled.length === 0 && allDay.length === 0 && meetings.length === 0 && (
+          <div style={{ ...SS.card, textAlign: "center", padding: "20px 16px" }}>
+            <div style={{ fontSize: 24 }}>🗓️</div>
+            <div style={{ color: T2, fontSize: 12.5, marginTop: 6, lineHeight: 1.5 }}>Nothing on your calendar this week yet. Send sessions from the <b style={{ color: T1 }}>AI Coach Plan</b> tab, or tap an empty slot below to add one.</div>
+          </div>
+        )}
+        {/* week board: day header + all-day + grid share one horizontal scroll */}
+        <div className="schd-grid-scroll" style={{ marginTop: 6 }}>
+        <div style={{ width: 34 + gridW }}>
         {/* day header */}
         <div style={{ display: "flex", paddingLeft: 34 }}>
           {wDates.map((dt, i) => { const isT = dt === today; return (
@@ -511,9 +520,8 @@ export default function SchedulePage() {
           </div>
         )}
 
-        {/* scrollable time grid */}
-        <div className="schd-grid-scroll" style={{ marginTop: 6 }}>
-          <div style={{ position: "relative", width: 34 + gridW, height: hours.length * hourH }}>
+        {/* time grid */}
+          <div style={{ position: "relative", width: 34 + gridW, height: hours.length * hourH, marginTop: 6 }}>
             {/* hour rows + labels */}
             {hours.map((h, i) => (
               <div key={h} style={{ position: "absolute", left: 0, top: i * hourH, width: 34 + gridW, height: hourH, borderTop: "1px solid rgba(255,255,255,.045)" }}>
@@ -545,6 +553,7 @@ export default function SchedulePage() {
             )}
           </div>
         </div>
+        </div>
         <div style={{ color: T4, fontSize: 11, textAlign: "center", marginTop: 10 }}>Drag a block to reschedule · tap an empty slot to add · meetings are read-only.</div>
       </>
     );
@@ -557,7 +566,7 @@ export default function SchedulePage() {
     const my = base.getFullYear(), mo = base.getMonth();
     const first = iso(new Date(my, mo, 1)); const gridStart = monOf(first);
     const cells = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
-    const items = monthData ? [...monthData.sessions.map(sessionToItem), ...monthData.events.map(eventToItem)] : [];
+    const items = (monthData ? [...monthData.sessions.map(sessionToItem), ...monthData.events.map(eventToItem)] : []).filter(onCalendar);
     const byDay = new Map<string, Item[]>();
     items.forEach((x) => { if (!byDay.has(x.date)) byDay.set(x.date, []); byDay.get(x.date)!.push(x); });
     const selItems = (byDay.get(selDate) || []).sort((a, b) => (a.hour ?? 99) - (b.hour ?? 99));
@@ -620,7 +629,7 @@ export default function SchedulePage() {
   /* ───────────── SCHEDULE (agenda) ───────────── */
   function renderAgenda() {
     if (!agenda) return <Loading />;
-    const items = [...agenda.sessions.map(sessionToItem), ...agenda.events.map(eventToItem)].filter((x) => x.date >= sunOf(addDays(today, -7)));
+    const items = [...agenda.sessions.map(sessionToItem), ...agenda.events.map(eventToItem)].filter((x) => x.date >= sunOf(addDays(today, -7)) && onCalendar(x));
     const byDay = new Map<string, Item[]>();
     items.forEach((x) => { if (!byDay.has(x.date)) byDay.set(x.date, []); byDay.get(x.date)!.push(x); });
     const dayKeys = [...byDay.keys()].sort();
@@ -634,7 +643,7 @@ export default function SchedulePage() {
           <button onClick={() => openAdd(today)} style={{ flex: 1, padding: 12, borderRadius: 14, border: "none", background: A, color: "#fff", fontWeight: 700, fontSize: 13.5, cursor: "pointer" }}>＋ Activity</button>
           <button onClick={() => { setMode("add"); setDraft({ tkey: "travel", session_type: "Travel", activity: "", session_date: today, start_time: null, planned_duration: 0, notes: "event:travel:allday" }); setSheet("form"); }} style={{ flex: 1, padding: 12, borderRadius: 14, border: "1px solid rgba(255,255,255,.1)", background: CARD2, color: T1, fontWeight: 700, fontSize: 13.5, cursor: "pointer" }}>✈️ Event</button>
         </div>
-        {gKeys.length === 0 && <div style={{ ...SS.card, textAlign: "center", padding: 24 }}><div style={{ fontSize: 28 }}>📭</div><div style={{ fontWeight: 700, margin: "6px 0 4px" }}>Nothing coming up</div><div style={{ color: T3, fontSize: 12 }}>Add an activity or event, or generate a plan.</div></div>}
+        {gKeys.length === 0 && <div style={{ ...SS.card, textAlign: "center", padding: 24 }}><div style={{ fontSize: 28 }}>📭</div><div style={{ fontWeight: 700, margin: "6px 0 4px" }}>Nothing on your calendar</div><div style={{ color: T3, fontSize: 12 }}>Send sessions from the AI Coach Plan tab, or add an activity or event here.</div></div>}
         {gKeys.map((gk) => {
           const end = addDays(gk, 6); const sameM = monShort(gk) === monShort(end);
           const range = sameM ? `${num(gk)}–${num(end)} ${monShort(gk)}` : `${num(gk)} ${monShort(gk)} – ${num(end)} ${monShort(end)}`;
@@ -725,7 +734,6 @@ export default function SchedulePage() {
       <div onClick={closeSheet} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 1500, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
         <div className="schd-sheet" onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: "#101017", border: "1px solid rgba(255,255,255,.08)", borderRadius: "20px 20px 0 0", padding: "18px 16px max(18px,env(safe-area-inset-bottom))", maxHeight: "90vh", overflowY: "auto", animation: "schd-in .22s ease" }}>
           {sheet === "form" && renderForm()}
-          {sheet === "cals" && renderCals()}
         </div>
       </div>
     );
@@ -802,31 +810,6 @@ export default function SchedulePage() {
     );
   }
 
-  function renderCals() {
-    const rows: [string, string, string, boolean][] = [
-      ["📅", "Google Calendar", "Connected · read-only sync", true],
-      ["📓", "Notion Calendar", "Not connected", false],
-      ["🍎", "Apple Calendar", "Not connected", false],
-    ];
-    return (
-      <>
-        <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 4 }}>Connected calendars</div>
-        <div style={{ fontSize: 11.5, color: T3, marginBottom: 14 }}>Your Health OS calendar is the source of truth. Connected calendars feed the planner busy/travel context.</div>
-        {rows.map(([icon, name, status, on]) => (
-          <div key={name} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 14px", marginBottom: 8, borderRadius: 14, background: CHIPBG, border: "1px solid rgba(255,255,255,.06)" }}>
-            <span style={{ fontSize: 20 }}>{icon}</span>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 700 }}>{name}</div>
-              <div style={{ fontSize: 11.5, color: on ? "#34D399" : T4 }}>{status}</div>
-            </div>
-            <div style={{ width: 44, height: 26, borderRadius: 13, padding: 2, background: on ? A : "rgba(255,255,255,.14)", display: "flex", justifyContent: on ? "flex-end" : "flex-start", alignItems: "center" }}><div style={{ width: 22, height: 22, borderRadius: "50%", background: "#fff" }} /></div>
-          </div>
-        ))}
-        <div style={{ fontSize: 11, color: T4, marginTop: 6, lineHeight: 1.5 }}>Note: Google is a one-way read into Health OS (it may need reconnecting in Settings). Pushing events out to Google/Notion/Apple isn&apos;t wired yet.</div>
-        <button onClick={closeSheet} style={{ width: "100%", padding: 13, borderRadius: 14, border: "none", background: A, color: "#fff", fontWeight: 700, cursor: "pointer", marginTop: 12 }}>Done</button>
-      </>
-    );
-  }
 }
 
 /* ════════════════════ small components ════════════════════ */
