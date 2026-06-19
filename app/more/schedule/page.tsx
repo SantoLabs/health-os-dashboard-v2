@@ -165,7 +165,7 @@ const SCOPED_CSS = `
 type View = "coach" | "week" | "month" | "schedule" | "history";
 type Sheet = null | "form";
 type Drag = { id: string; sx: number; sy: number; dx: number; dy: number; moved: boolean; di: number; hour: number; min: number } | null;
-type Draft = Partial<Session> & { tkey?: TKey };
+type Draft = Partial<Session> & { tkey?: TKey; end_time?: string | null };
 
 export default function SchedulePage() {
   const today = todayISO();
@@ -270,7 +270,7 @@ export default function SchedulePage() {
       if (isEvent) {
         const kind = (draft.notes || "event:event").split(":")[1] || "event";
         const allDay = (draft.notes || "").includes(":allday") || !draft.start_time;
-        await planPost("event_save", { id: draft.id, title: draft.activity || T[draft.tkey || "travel"].label, kind, event_date: draft.session_date, all_day: allDay, start_ts: allDay ? null : `${draft.session_date}T${(draft.start_time || "09:00")}:00Z`, source: "manual", busy: true });
+        await planPost("event_save", { id: draft.id, title: draft.activity || T[draft.tkey || "travel"].label, kind, event_date: draft.session_date, all_day: allDay, start_ts: allDay ? null : `${draft.session_date}T${(draft.start_time || "09:00")}:00Z`, end_ts: allDay ? null : `${draft.session_date}T${(draft.end_time || "10:00")}:00Z`, source: "manual", busy: true });
       } else {
         const tkey = draft.tkey || "custom";
         await planPost("session_save", {
@@ -689,15 +689,23 @@ export default function SchedulePage() {
             <button key={k} onClick={() => setHistRange(k)} style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: "none", cursor: "pointer", font: "700 12px 'Plus Jakarta Sans',sans-serif", ...(histRange === k ? { background: A, color: "#fff" } : { background: "transparent", color: T3 }) }}>{l}</button>
           ))}
         </div>
-        <div style={{ ...SS.card, display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{ position: "relative", width: 60, height: 60, borderRadius: "50%", background: `conic-gradient(${A} 0% ${pct}%, rgba(255,255,255,.08) ${pct}% 100%)`, flex: "none", display: "grid", placeItems: "center" }}>
-            <div style={{ position: "absolute", inset: 7, borderRadius: "50%", background: CARD, display: "grid", placeItems: "center", fontSize: 14, fontWeight: 800 }}>{pct}%</div>
+        {w.planned === 0 ? (
+          <div style={{ ...SS.card, textAlign: "center", padding: "22px 16px" }}>
+            <div style={{ fontSize: 26 }}>🗓️</div>
+            <div style={{ fontWeight: 700, margin: "8px 0 4px" }}>Nothing planned {histRange === "week" ? "this week" : histRange === "15" ? "in the last 15 days" : "in the last 30 days"} yet</div>
+            <div style={{ color: T3, fontSize: 12, lineHeight: 1.5 }}>Send sessions to your calendar from the <b style={{ color: "#F4F4F7" }}>AI Coach Plan</b> tab — once they&apos;re on your calendar, your completion rate and minutes show up here.</div>
           </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 18, fontWeight: 800 }}>{w.completed} <span style={{ color: T3, fontSize: 14, fontWeight: 600 }}>/ {w.planned} sessions</span></div>
-            <div style={{ color: T3, fontSize: 12, marginTop: 2 }}>{w.completed_min} of {w.planned_min} planned minutes done</div>
+        ) : (
+          <div style={{ ...SS.card, display: "flex", alignItems: "center", gap: 16 }}>
+            <div style={{ position: "relative", width: 60, height: 60, borderRadius: "50%", background: `conic-gradient(${A} 0% ${pct}%, rgba(255,255,255,.08) ${pct}% 100%)`, flex: "none", display: "grid", placeItems: "center" }}>
+              <div style={{ position: "absolute", inset: 7, borderRadius: "50%", background: CARD, display: "grid", placeItems: "center", fontSize: 14, fontWeight: 800 }}>{pct}%</div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 18, fontWeight: 800 }}>{w.completed} <span style={{ color: T3, fontSize: 14, fontWeight: 600 }}>/ {w.planned} sessions</span></div>
+              <div style={{ color: T3, fontSize: 12, marginTop: 2 }}>{w.completed_min} of {w.planned_min} planned minutes done</div>
+            </div>
           </div>
-        </div>
+        )}
         <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
           <div style={{ flex: 1, background: CARD2, border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, padding: "11px 12px", textAlign: "center" }}><div style={{ fontSize: 20, fontWeight: 800, color: "#34D399" }}>{history.current_streak}🔥</div><div style={{ fontSize: 10, color: T3, marginTop: 2 }}>Current streak</div></div>
           <div style={{ flex: 1, background: CARD2, border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, padding: "11px 12px", textAlign: "center" }}><div style={{ fontSize: 20, fontWeight: 800 }}>{history.best_streak}</div><div style={{ fontSize: 10, color: T3, marginTop: 2 }}>Best streak</div></div>
@@ -713,7 +721,7 @@ export default function SchedulePage() {
                       <div style={{ position: "absolute", bottom: 0, width: "100%", height: (x.planned / maxMin * 70) + "px", borderRadius: "4px 4px 0 0", background: "rgba(255,255,255,.1)" }} />
                       <div style={{ position: "absolute", bottom: 0, width: "100%", height: (x.completed / maxMin * 70) + "px", borderRadius: "4px 4px 0 0", background: A }} />
                     </div>
-                    <span style={{ fontSize: 9, color: T3, marginTop: 5 }}>{num(x.week)}/{monShort(x.week)[0]}</span>
+                    <span style={{ fontSize: 9, color: T3, marginTop: 5, whiteSpace: "nowrap" }}>{num(x.week)} {monShort(x.week)}</span>
                   </div>
                 ))}
               </div>
@@ -733,6 +741,9 @@ export default function SchedulePage() {
     return (
       <div onClick={closeSheet} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 1500, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
         <div className="schd-sheet" onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: "#101017", border: "1px solid rgba(255,255,255,.08)", borderRadius: "20px 20px 0 0", padding: "18px 16px max(18px,env(safe-area-inset-bottom))", maxHeight: "90vh", overflowY: "auto", animation: "schd-in .22s ease" }}>
+          <div style={{ position: "sticky", top: 0, display: "flex", justifyContent: "flex-end", zIndex: 5 }}>
+            <button onClick={closeSheet} aria-label="Close" style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid rgba(255,255,255,.12)", background: CHIPBG, color: T2, fontSize: 15, lineHeight: 1, cursor: "pointer" }}>✕</button>
+          </div>
           {sheet === "form" && renderForm()}
         </div>
       </div>
@@ -745,6 +756,7 @@ export default function SchedulePage() {
     const fMon = monOf(draft.session_date || today);
     const tkey = draft.tkey || "run";
     const [hh, mm] = (draft.start_time || "07:00").split(":").map((x) => parseInt(x, 10));
+    const [eh, em] = (draft.end_time || "10:00").split(":").map((x) => parseInt(x, 10));
     const allDay = isEvent && (draft.notes || "").includes(":allday");
     return (
       <>
@@ -778,6 +790,14 @@ export default function SchedulePage() {
               <Stepper label={pad(isNaN(mm) ? 0 : mm)} onUp={() => setD({ start_time: fmtT(isNaN(hh) ? 7 : hh, ((isNaN(mm) ? 0 : mm) + 5) % 60) })} onDown={() => setD({ start_time: fmtT(isNaN(hh) ? 7 : hh, ((isNaN(mm) ? 0 : mm) + 55) % 60) })} />
               {isEvent && <button onClick={() => setD({ notes: "event:" + tkey + ":allday", start_time: null })} style={chipStyle(false, { marginLeft: "auto" })}>All day</button>}
             </div>
+            {isEvent && (<>
+              <label style={fl}>End time</label>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <Stepper label={pad(isNaN(eh) ? 10 : eh)} onUp={() => setD({ end_time: fmtT(((isNaN(eh) ? 10 : eh) + 1) % 24, isNaN(em) ? 0 : em) })} onDown={() => setD({ end_time: fmtT(((isNaN(eh) ? 10 : eh) + 23) % 24, isNaN(em) ? 0 : em) })} />
+                <span style={{ fontSize: 22, fontWeight: 800, color: T2 }}>:</span>
+                <Stepper label={pad(isNaN(em) ? 0 : em)} onUp={() => setD({ end_time: fmtT(isNaN(eh) ? 10 : eh, ((isNaN(em) ? 0 : em) + 5) % 60) })} onDown={() => setD({ end_time: fmtT(isNaN(eh) ? 10 : eh, ((isNaN(em) ? 0 : em) + 55) % 60) })} />
+              </div>
+            </>)}
           </>
         )}
         {allDay && isEvent && <button onClick={() => setD({ notes: "event:" + tkey, start_time: "09:00" })} style={{ ...chipStyle(false), marginTop: 10 }}>Set a time</button>}
@@ -797,6 +817,9 @@ export default function SchedulePage() {
 
         {mode === "edit" && draft.id && !isEvent && (
           <button onClick={toggleDraftDone} style={{ width: "100%", padding: 14, borderRadius: 14, cursor: "pointer", font: "700 14px 'Plus Jakarta Sans',sans-serif", marginTop: 14, border: "1px solid " + (draft.completed ? "transparent" : hexA("#34D399", .4)), background: draft.completed ? "#34D399" : hexA("#34D399", .1), color: draft.completed ? "#06281c" : "#34D399" }}>{draft.completed ? "✓ Completed — tap to undo" : "Mark as completed 🎉"}</button>
+        )}
+        {mode === "edit" && draft.id && !isEvent && draft.committed && (
+          <button onClick={async () => { if (!draft.id) return; await planPost("uncommit", { id: draft.id }, monOf(draft.session_date || today)); closeSheet(); refreshAll(); showToast("Removed from calendar — back in your AI plan"); }} style={{ width: "100%", padding: 13, borderRadius: 14, cursor: "pointer", fontWeight: 700, fontSize: 13.5, marginTop: 8, border: "1px solid rgba(255,255,255,.14)", background: CARD2, color: T2 }}>↩ Remove from calendar</button>
         )}
         <button onClick={saveDraft} disabled={busy || !draft.session_date} style={{ width: "100%", border: "none", color: "#fff", font: "700 15px 'Plus Jakarta Sans',sans-serif", padding: 15, borderRadius: 14, cursor: "pointer", background: A, marginTop: 8 }}>{busy ? "Saving…" : mode === "edit" ? "Save changes" : isEvent ? "Add event" : "Add to plan"}</button>
         {mode === "edit" && draft.id && (
