@@ -12,7 +12,7 @@ export type MealLite = { id: string; meal_type: string | null; snack_slot: strin
 type Food = { id: string; name: string; brand: string | null; category: string | null; basis: string; kcal: number; protein: number; carbs: number; fats: number; fiber: number; micros: Record<string, number>; unit_grams: Record<string, number>; source: string; verified: boolean };
 type Tmpl = { id: string; name: string; meal_type: string | null; kcal: number; protein: number; carbs: number; fats: number; fiber: number; default_unit: string | null; default_qty: number; times_logged: number; pinned: boolean; auto: boolean; food_id: string | null };
 type Hist = { id: string; meal_type: string | null; name: string; kcal: number; protein: number; carbs: number; fats: number; fiber: number; date: string; food_id: string | null; unit: string | null; quantity: number | null };
-type Pantry = { category: string; food_id: string | null; label: string | null; per_unit: string | null; kcal: number | null; protein_g: number | null };
+type Pantry = { id?: string; category: string; food_id: string | null; label: string; basis: string; kcal: number; protein: number; carbs: number; fats: number; fiber: number; unit_grams: Record<string, number>; micros: Record<string, number> };
 type Draft = { name: string; kcal: string; protein: string; carbs: string; fats: string; fiber: string; food_id: string | null; micros: Record<string, number> };
 
 const MEALS = ["breakfast", "lunch", "dinner", "snack"];
@@ -36,6 +36,8 @@ function unitOptions(f: Food): string[] {
 }
 function scaleMicros(m: Record<string, number>, f: number): Record<string, number> { const o: Record<string, number> = {}; for (const k in m) o[k] = r1((m[k] || 0) * f); return o; }
 function computeMacros(f: Food, unit: string, qty: number) { const x = gramsFactor(f, unit, qty); return { kcal: Math.round(f.kcal * x), protein: r1(f.protein * x), carbs: r1(f.carbs * x), fats: r1(f.fats * x), fiber: r1(f.fiber * x), micros: scaleMicros(f.micros, x) }; }
+function gramsOf(f: Food, unit: string, qty: number): number { if (f.basis === "per_100g") return unit === "g" ? qty : qty * (f.unit_grams[unit] || 100); return qty; }
+function macrosFrom(s: { basis: string; kcal: number; protein: number; carbs: number; fats: number; fiber: number; micros: Record<string, number> }, grams: number, qty: number) { const f = s.basis === "per_100g" ? grams / 100 : qty; return { kcal: Math.round(s.kcal * f), protein: r1(s.protein * f), carbs: r1(s.carbs * f), fats: r1(s.fats * f), fiber: r1(s.fiber * f), micros: scaleMicros(s.micros, f) }; }
 
 const tiny: CSSProperties = { fontSize: 9, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: FAINT };
 const sub: CSSProperties = { fontSize: 11.5, color: FAINT };
@@ -82,9 +84,12 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
   }, [q, view]);
   useEffect(() => {
     if (!picked) return;
-    const m = computeMacros(picked, unit, qty);
+    const grams = gramsOf(picked, unit, qty);
+    const pd = referPantry ? pantryFor(picked.category) : null;
+    const eff = pd ? { basis: pd.basis, kcal: pd.kcal, protein: pd.protein, carbs: pd.carbs, fats: pd.fats, fiber: pd.fiber, micros: pd.micros } : picked;
+    const m = macrosFrom(eff, grams, qty);
     setDraft((d) => ({ name: d.name || picked.name, kcal: String(m.kcal), protein: String(m.protein), carbs: String(m.carbs), fats: String(m.fats), fiber: String(m.fiber), food_id: picked.id, micros: m.micros }));
-  }, [picked, unit, qty]);
+  }, [picked, unit, qty, referPantry, pantry]);
 
   const pantryFor = (cat: string | null) => (cat ? pantry.find((p) => p.category === cat) || null : null);
 
