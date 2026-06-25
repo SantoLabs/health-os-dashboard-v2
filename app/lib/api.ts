@@ -234,3 +234,11 @@ export async function nutriAdherence<T>(window = 7): Promise<T> {
   if (!res.ok) throw new Error(`Couldn't load adherence (${res.status})`);
   return res.json();
 }
+
+// GET profile + targets + pantry in one shot: { profile, targets, pantry }.
+// Writes go through nutriPost: profile_save / targets_save / pantry_save / pantry_delete.
+export async function nutriProfile<T>(): Promise<T> {
+  const res = await authedFetch(`/functions/v1/health-nutrition?api=profile`);
+  if (!res.ok) throw new Error(`Couldn't load profile (${res.status})`);
+  return res.json();
+}
