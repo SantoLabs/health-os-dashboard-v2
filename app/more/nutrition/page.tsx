@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback, type CSSProperties } from "react";
 import { Screen } from "../../components/Screen";
-import { nutriDay, nutriWeek, nutriPost } from "../../lib/api";
+import { nutriDay, nutriWeek } from "../../lib/api";
+import AddFlow, { type MealLite } from "./AddFlow";
 
 /* ---- design tokens (mapped from the Nutrition spec) ---- */
 const CARD = "#101626", INSET = "#0e1320", CB = "#1a2232", IB = "#1f2838";
@@ -14,7 +15,6 @@ const ON = "#46c79a", PARTIAL = "#f3b14e", MISS = "#e0574b";
 const card: CSSProperties = { background: CARD, border: "1px solid " + CB, borderRadius: 16, padding: 14 };
 const label: CSSProperties = { fontSize: 9, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: FAINT };
 const navBtn: CSSProperties = { width: 30, height: 30, borderRadius: 9, border: "1px solid " + CB, background: CHIP_IDLE, color: MUTED, fontSize: 16, lineHeight: 1, cursor: "pointer" };
-const inp: CSSProperties = { width: "100%", boxSizing: "border-box", padding: "11px 12px", borderRadius: 11, border: "1px solid " + IB, background: "#0b101b", color: BODY, fontSize: 13.5, outline: "none" };
 
 type Targets = { calories: number; protein: number; carbs: number; fats: number; fiber: number; micros_rda: Record<string, number> };
 type Totals = { calories: number; protein: number; carbs: number; fats: number; fiber: number; water: number; micros: Record<string, number> };
@@ -22,18 +22,15 @@ type Meal = { id: string; meal_type: string | null; snack_slot: string | null; n
 type Day = { date: string; targets: Targets; totals: Totals; meals: Meal[] };
 type WeekDay = { date: string; dow: number; protein: number; calories: number; entries: number; status: string };
 type Week = { start: string; today: string; target_protein: number; streak: number; days: WeekDay[] };
-type Draft = { id?: string; meal_type: string; name: string; kcal: string; protein: string; carbs: string; fats: string; fiber: string };
 
 const WD = ["M", "T", "W", "T", "F", "S", "S"];
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const MEALS = ["breakfast", "lunch", "dinner", "snack"];
 
 function istToday(): string { return new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10); }
 function mondayOf(iso: string): string { const d = new Date(iso + "T00:00:00Z"); const dow = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - dow); return d.toISOString().slice(0, 10); }
 function addDays(iso: string, n: number): string { const d = new Date(iso + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
 function dnum(iso: string): number { return Number(iso.slice(8, 10)); }
 function monOf(iso: string): string { return MON[Number(iso.slice(5, 7)) - 1]; }
-function cap(s: string): string { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
 function fmtTime(t: string | null): string { if (!t) return ""; const d = new Date(t); if (isNaN(d.getTime())) return ""; const ist = new Date(d.getTime() + 5.5 * 3600 * 1000); return String(ist.getUTCHours()).padStart(2, "0") + ":" + String(ist.getUTCMinutes()).padStart(2, "0"); }
 function statusColor(s: string): string { return s === "on" ? ON : s === "partial" ? PARTIAL : (s === "low" || s === "missed") ? MISS : s === "future" ? CHIP_IDLE_B : FAINT; }
 function mealColor(m: Meal): string { const t = m.snack_slot ? "snack" : (m.meal_type || ""); return t === "breakfast" ? CARB : t === "lunch" ? PROT : t === "dinner" ? ACCENT_LT : t === "snack" ? FIBR : ACCENT; }
@@ -42,7 +39,6 @@ function mealLabel(m: Meal): string { if (m.snack_slot) return "SNACK · " + m.s
 function Bar({ pct, color, h = 6 }: { pct: number; color: string; h?: number }) {
   return <div style={{ height: h, borderRadius: h / 2, background: TRACK, overflow: "hidden" }}><div style={{ width: Math.max(0, Math.min(100, pct)) + "%", height: "100%", background: color }} /></div>;
 }
-
 function MacroCard({ lbl, val, target, color }: { lbl: string; val: number; target: number; color: string }) {
   const pct = target ? (val / target) * 100 : 0;
   return (
@@ -54,23 +50,13 @@ function MacroCard({ lbl, val, target, color }: { lbl: string; val: number; targ
   );
 }
 
-function NumField({ lbl, v, on, accent }: { lbl: string; v: string; on: (val: string) => void; accent?: string }) {
-  return (
-    <div style={{ flex: 1 }}>
-      <div style={label}>{lbl}</div>
-      <input value={v} onChange={(e) => on(e.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" placeholder="0" style={{ ...inp, marginTop: 4, borderColor: accent ? "#294063" : IB }} />
-    </div>
-  );
-}
-
 export default function NutritionPage() {
   const [sel, setSel] = useState<string>(istToday());
   const [week, setWeek] = useState<Week | null>(null);
   const [day, setDay] = useState<Day | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [sheet, setSheet] = useState<boolean>(false);
-  const [draft, setDraft] = useState<Draft | null>(null);
-  const [saving, setSaving] = useState<boolean>(false);
+  const [addOpen, setAddOpen] = useState<boolean>(false);
+  const [editMeal, setEditMeal] = useState<MealLite | null>(null);
 
   const loadWeek = useCallback((d: string) => { nutriWeek<Week>(mondayOf(d)).then(setWeek).catch((e) => setErr(e.message)); }, []);
   const loadDay = useCallback((d: string) => { setDay(null); nutriDay<Day>(d).then(setDay).catch((e) => setErr(e.message)); }, []);
@@ -79,24 +65,9 @@ export default function NutritionPage() {
   useEffect(() => { loadWeek(istToday()); }, [loadWeek]);
 
   function shiftWeek(n: number) { const ns = addDays(mondayOf(sel), n * 7); setSel(ns); loadWeek(ns); }
-  function openAdd() { setDraft({ meal_type: "breakfast", name: "", kcal: "", protein: "", carbs: "", fats: "", fiber: "" }); setSheet(true); }
-  function openEdit(m: Meal) { setDraft({ id: m.id, meal_type: m.snack_slot ? "snack" : (m.meal_type || "breakfast"), name: m.name, kcal: String(m.kcal || ""), protein: String(m.protein || ""), carbs: String(m.carbs || ""), fats: String(m.fats || ""), fiber: String(m.fiber || "") }); setSheet(true); }
-  function setD(p: Partial<Draft>) { setDraft((d) => (d ? { ...d, ...p } : d)); }
-  function closeSheet() { setSheet(false); setDraft(null); }
-
-  async function save() {
-    if (!draft) return; setSaving(true);
-    const body = { date: sel, meal_type: draft.meal_type, name: draft.name, kcal: Number(draft.kcal) || 0, protein: Number(draft.protein) || 0, carbs: Number(draft.carbs) || 0, fats: Number(draft.fats) || 0, fiber: Number(draft.fiber) || 0, source: "manual" };
-    try {
-      const r = draft.id ? await nutriPost<Day>("update", { id: draft.id, ...body }) : await nutriPost<Day>("log", body);
-      setDay(r); closeSheet(); loadWeek(sel);
-    } catch (e) { setErr((e as Error).message); } finally { setSaving(false); }
-  }
-  async function del() {
-    if (!draft || !draft.id) return; setSaving(true);
-    try { const r = await nutriPost<Day>("delete", { id: draft.id, date: sel }); setDay(r); closeSheet(); loadWeek(sel); }
-    catch (e) { setErr((e as Error).message); } finally { setSaving(false); }
-  }
+  function openAdd() { setEditMeal(null); setAddOpen(true); }
+  function openEdit(m: Meal) { setEditMeal(m); setAddOpen(true); }
+  function onSaved(d: unknown) { setDay(d as Day); loadWeek(sel); }
 
   const t = day ? day.targets : null;
   const tot = day ? day.totals : null;
@@ -168,6 +139,7 @@ export default function NutritionPage() {
                   <span>{fmtTime(m.time)} · {mealLabel(m)}</span><span style={{ color: FAINTER }}>{m.kcal} kcal</span>
                 </div>
                 <div style={{ fontSize: 13.5, fontWeight: 600, color: BODY, marginTop: 3 }}>{m.name || "—"}</div>
+                <div style={{ fontSize: 10.5, color: FAINTER, marginTop: 3 }}>P {Math.round(m.protein)} · C {Math.round(m.carbs)} · F {Math.round(m.fats)}{m.fiber ? " · Fb " + Math.round(m.fiber) : ""}</div>
               </button>
             </div>
           ))}
@@ -180,33 +152,7 @@ export default function NutritionPage() {
 
       <button onClick={openAdd} aria-label="Add food" style={{ position: "fixed", right: 18, bottom: 90, width: 56, height: 56, borderRadius: 28, border: "none", background: ACCENT, color: "#fff", fontSize: 28, lineHeight: 1, cursor: "pointer", boxShadow: "0 6px 18px rgba(79,156,249,.45)", zIndex: 30 }}>＋</button>
 
-      {sheet && draft && (
-        <div onClick={closeSheet} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 40 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: INSET, border: "1px solid " + CB, borderRadius: "20px 20px 0 0", padding: "16px 16px max(16px,env(safe-area-inset-bottom))", maxHeight: "88vh", overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: H }}>{draft.id ? "Edit entry" : "Add to " + cap(monOf(sel)) + " " + dnum(sel)}</div>
-              <button onClick={closeSheet} aria-label="Close" style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid " + CB, background: CHIP_IDLE, color: MUTED, fontSize: 15, cursor: "pointer" }}>✕</button>
-            </div>
-            <div style={label}>Meal</div>
-            <div style={{ display: "flex", gap: 6, margin: "6px 0 12px" }}>
-              {MEALS.map((mt) => { const a = draft.meal_type === mt; return <button key={mt} onClick={() => setD({ meal_type: mt })} style={{ flex: 1, padding: "8px 0", borderRadius: 12, cursor: "pointer", fontSize: 12, fontWeight: 700, border: "1px solid " + (a ? CHIP_SEL_B : CHIP_IDLE_B), background: a ? CHIP_SEL : CHIP_IDLE, color: a ? ACCENT_LT : MUTED }}>{cap(mt)}</button>; })}
-            </div>
-            <div style={label}>What you ate</div>
-            <input value={draft.name} onChange={(e) => setD({ name: e.target.value })} placeholder="e.g. 3 roti, dal, paneer bhurji" style={{ ...inp, marginTop: 4 }} />
-            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-              <NumField lbl="Calories" v={draft.kcal} on={(v) => setD({ kcal: v })} />
-              <NumField lbl="Protein" v={draft.protein} on={(v) => setD({ protein: v })} accent={PROT} />
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <NumField lbl="Carbs" v={draft.carbs} on={(v) => setD({ carbs: v })} />
-              <NumField lbl="Fats" v={draft.fats} on={(v) => setD({ fats: v })} />
-              <NumField lbl="Fiber" v={draft.fiber} on={(v) => setD({ fiber: v })} />
-            </div>
-            <button onClick={save} disabled={saving} style={{ width: "100%", marginTop: 14, padding: 13, borderRadius: 14, border: "none", background: ACCENT, color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>{saving ? "Saving…" : draft.id ? "Save" : "Add to " + cap(draft.meal_type)}</button>
-            {draft.id && <button onClick={del} disabled={saving} style={{ width: "100%", marginTop: 8, padding: 12, borderRadius: 14, border: "1px solid #5a2532", background: "#1a0f12", color: "#ff9aa5", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Delete</button>}
-          </div>
-        </div>
-      )}
+      {addOpen && <AddFlow date={sel} editMeal={editMeal} onClose={() => setAddOpen(false)} onSaved={onSaved} />}
     </Screen>
   );
 }
