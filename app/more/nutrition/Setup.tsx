@@ -47,12 +47,16 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
   const [pAdding, setPAdding] = useState(false); const [pCat, setPCat] = useState(""); const [pQ, setPQ] = useState(""); const [pFoods, setPFoods] = useState<Food[]>([]); const [pPicked, setPPicked] = useState<Food | null>(null);
   const [pLabel, setPLabel] = useState(""); const [pKcal, setPKcal] = useState(""); const [pPro, setPPro] = useState(""); const [pCar, setPCar] = useState(""); const [pFat, setPFat] = useState(""); const [pFib, setPFib] = useState("");
   const [pantry, setPantry] = useState<PantryItem[]>([]);
+  const [menu, setMenu] = useState<any>(null);
+  const [genBusy, setGenBusy] = useState(false);
+  const [genNote, setGenNote] = useState<string | null>(null);
 
   function hydrate(d: ProfileResp) {
     setData(d);
     setCal(String(d.targets.calories || "")); setPro(String(d.targets.protein || "")); setCar(String(d.targets.carbs || "")); setFat(String(d.targets.fats || "")); setFib(String(d.targets.fiber || ""));
     setCuisine(d.profile.cuisine || []); setPattern(d.profile.eating_pattern || ""); setReferDefault(d.profile.refer_pantry_default !== false);
     setPantry(d.pantry || []);
+    setMenu(d.profile.starter_menu && (d.profile.starter_menu as any).breakfast ? d.profile.starter_menu : null);
   }
   useEffect(() => { nutriProfile<ProfileResp>().then(hydrate).catch((e) => setErr(e.message)); }, []);
   useEffect(() => {
@@ -78,6 +82,11 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
     catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   }
   function toggleCuisine(c: string) { setCuisine((xs) => (xs.indexOf(c) >= 0 ? xs.filter((x) => x !== c) : [...xs, c])); }
+  async function generateMenu() {
+    setGenBusy(true); setGenNote(null);
+    try { const r = await nutriPost<{ menu: any; note?: string }>("menu_generate", {}); if (r && r.menu) setMenu(r.menu); else setGenNote((r && r.note) || "Couldn't generate right now."); }
+    catch (e) { setGenNote((e as Error).message); } finally { setGenBusy(false); }
+  }
 
   function pickPantryFood(f: Food) { setPPicked(f); setPLabel(f.brand ? f.brand + " " + f.name : f.name); setPKcal(String(f.kcal)); setPPro(String(f.protein)); setPCar(String(f.carbs)); setPFat(String(f.fats)); setPFib(String(f.fiber)); if (f.category && !pCat) setPCat(f.category); }
   function resetPantryAdd() { setPCat(""); setPQ(""); setPFoods([]); setPPicked(null); setPLabel(""); setPKcal(""); setPPro(""); setPCar(""); setPFat(""); setPFib(""); }
@@ -145,7 +154,17 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
               <span style={{ fontSize: 12.5, color: BODY, textAlign: "left" }}>Use my Pantry brands by default<br /><span style={{ fontSize: 10.5, color: FAINT }}>When logging, prefer your saved products over generic values.</span></span>
               <span style={{ fontSize: 12, fontWeight: 800, color: referDefault ? FIBR2 : FAINTER }}>{referDefault ? "ON" : "OFF"}</span>
             </button>
-            <div style={{ fontSize: 10.5, color: FAINTER, marginTop: 10 }}>✨ AI-generated starter menus from your cuisines are coming in a later update.</div>
+            <div style={{ marginTop: 14 }}>
+              <button onClick={generateMenu} disabled={genBusy} style={{ width: "100%", padding: 11, borderRadius: 12, border: "1px solid " + CHIP_SEL_B, background: CHIP_SEL, color: ACCENT_LT, fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: genBusy ? 0.6 : 1 }}>{genBusy ? "Generating…" : "✨ Generate starter menu"}</button>
+              <div style={{ fontSize: 10.5, color: FAINTER, marginTop: 6 }}>Uses your cuisines + eating pattern + targets. Regenerate anytime.</div>
+              {genNote && <div style={{ fontSize: 11, color: "#ff9aa5", marginTop: 6 }}>{genNote}</div>}
+              {menu && ["breakfast", "lunch", "dinner", "snacks"].map((k) => (Array.isArray(menu[k]) && menu[k].length ? (
+                <div key={k} style={{ marginTop: 10 }}>
+                  <div style={{ ...tiny, marginBottom: 5 }}>{cap(k)}</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{menu[k].map((it: string, i: number) => <span key={i} style={{ fontSize: 11.5, color: BODY, background: CARD, border: "1px solid " + CB, borderRadius: 9, padding: "5px 9px" }}>{it}</span>)}</div>
+                </div>
+              ) : null))}
+            </div>
             <button onClick={savePrefs} disabled={busy} style={{ ...primary, opacity: busy ? 0.6 : 1 }}>{busy ? "Saving…" : "Save preferences"}</button>
           </div>
         )}
