@@ -38,6 +38,23 @@ function scaleMicros(m: Record<string, number>, f: number): Record<string, numbe
 function computeMacros(f: Food, unit: string, qty: number) { const x = gramsFactor(f, unit, qty); return { kcal: Math.round(f.kcal * x), protein: r1(f.protein * x), carbs: r1(f.carbs * x), fats: r1(f.fats * x), fiber: r1(f.fiber * x), micros: scaleMicros(f.micros, x) }; }
 function gramsOf(f: Food, unit: string, qty: number): number { if (f.basis === "per_100g") return unit === "g" ? qty : qty * (f.unit_grams[unit] || 100); return qty; }
 function macrosFrom(s: { basis: string; kcal: number; protein: number; carbs: number; fats: number; fiber: number; micros: Record<string, number> }, grams: number, qty: number) { const f = s.basis === "per_100g" ? grams / 100 : qty; return { kcal: Math.round(s.kcal * f), protein: r1(s.protein * f), carbs: r1(s.carbs * f), fats: r1(s.fats * f), fiber: r1(s.fiber * f), micros: scaleMicros(s.micros, f) }; }
+function resizeToB64(file: File): Promise<{ image_b64: string; mime: string }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      let w = img.width, h = img.height; const max = 1024;
+      if (w > max || h > max) { const s = max / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); }
+      const c = document.createElement("canvas"); c.width = w; c.height = h;
+      const ctx = c.getContext("2d"); if (!ctx) { reject(new Error("no canvas")); return; }
+      ctx.drawImage(img, 0, 0, w, h);
+      const data = c.toDataURL("image/jpeg", 0.8); URL.revokeObjectURL(url);
+      resolve({ image_b64: data.split(",")[1] || "", mime: "image/jpeg" });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("img load failed")); };
+    img.src = url;
+  });
+}
 
 const tiny: CSSProperties = { fontSize: 9, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: FAINT };
 const sub: CSSProperties = { fontSize: 11.5, color: FAINT };
@@ -95,6 +112,11 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
 
   function pickFood(f: Food) { setPicked(f); setQty(1); const def = f.basis === "per_100g" ? (Object.keys(f.unit_grams)[0] || "g") : unitOptions(f)[0]; setUnit(def); }
   function resetManual() { setPicked(null); setDraft(EMPTY); setQ(""); }
+  async function aiEstimateFood() {
+    const nm = q.trim(); if (!nm) return; setBusy(true); setErr(null);
+    try { const r = await nutriPost<{ food: Food | null }>("ai_food", { name: nm }); if (r && r.food) { setFoods([r.food]); pickFood(r.food); } else setErr("Couldn't estimate that food — try typing the macros."); }
+    catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  }
 
   async function addLog(d: { name: string; kcal: number; protein: number; carbs: number; fats: number; fiber: number; food_id: string | null; source: string; unit?: string | null; quantity?: number | null; micros?: Record<string, number> }) {
     setBusy(true); setErr(null);
@@ -107,10 +129,10 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
   function manualAdd() {
     addLog({ name: draft.name || (picked ? picked.name : "Manual entry"), kcal: numv(draft.kcal), protein: numv(draft.protein), carbs: numv(draft.carbs), fats: numv(draft.fats), fiber: numv(draft.fiber), food_id: draft.food_id, source: "manual", unit: picked ? unit : null, quantity: picked ? qty : null, micros: draft.micros });
   }
-  async function runEstimate(mode: string) {
+  async function runEstimate(mode: string, image?: { image_b64: string; mime: string }) {
     setBusy(true); setErr(null);
     try {
-      const r = await nutriPost<{ note?: string; totals?: Record<string, number> }>("estimate", mode === "photo" ? { mode } : { mode, text });
+      const r = await nutriPost<{ note?: string; totals?: Record<string, number> }>("estimate", mode === "photo" ? { mode, ...(image || {}) } : { mode, text });
       setEstNote(r.note || null); const t = r.totals || {};
       setDraft((d) => ({ name: mode === "describe" ? (text.slice(0, 120) || "Meal") : (d.name || "Photo meal"), kcal: String(t.kcal || 0), protein: String(t.protein || 0), carbs: String(t.carbs || 0), fats: String(t.fats || 0), fiber: String(t.fiber || 0), food_id: null, micros: {} }));
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
@@ -180,7 +202,12 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
                     <div style={{ fontSize: 10.5, color: FAINT, marginTop: 2 }}>P {f.protein} · C {f.carbs} · F {f.fats}{f.verified ? "" : " · est"}</div>
                   </button>
                 ))}
-                {foods.length === 0 && <div style={{ ...sub, padding: 10 }}>No matches. Type the macros below to log it — it gets saved & learned.</div>}
+                {foods.length === 0 && (
+                  <div style={{ padding: 10 }}>
+                    {q.trim() ? <button onClick={aiEstimateFood} disabled={busy} style={{ width: "100%", padding: 11, borderRadius: 11, border: "1px solid " + CHIP_SEL_B, background: CHIP_SEL, color: ACCENT_LT, fontSize: 12.5, fontWeight: 700, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>{busy ? "Estimating…" : "✨ Estimate “" + q.trim() + "” with AI"}</button> : null}
+                    <div style={{ ...sub, marginTop: q.trim() ? 8 : 0 }}>{q.trim() ? "Not in the library yet — let AI estimate it (saved for next time), or type the macros below." : "Search, or just type the macros below to log it."}</div>
+                  </div>
+                )}
                 <button onClick={() => setPicked(null)} style={{ display: "none" }} />
               </div>
             )}
@@ -229,7 +256,7 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
           <div style={{ marginTop: 12 }}>
             <label style={{ display: "block", border: "1px dashed " + IB, borderRadius: 14, padding: photo ? 0 : "26px 12px", textAlign: "center", cursor: "pointer", overflow: "hidden", background: CARD }}>
               {photo ? <img src={photo} alt="meal" style={{ width: "100%", display: "block", maxHeight: 220, objectFit: "cover" }} /> : <span style={{ ...sub }}>📷 Tap to take or choose a photo</span>}
-              <input type="file" accept="image/*" capture="environment" onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) { setPhoto(URL.createObjectURL(f)); runEstimate("photo"); } }} style={{ display: "none" }} />
+              <input type="file" accept="image/*" capture="environment" onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) { setPhoto(URL.createObjectURL(f)); resizeToB64(f).then((img) => runEstimate("photo", img)).catch(() => runEstimate("photo")); } }} style={{ display: "none" }} />
             </label>
             {estNote && <div style={{ ...sub, marginTop: 8 }}>{estNote}</div>}
             <MacroFields d={draft} set={setD} />
