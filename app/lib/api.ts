@@ -227,3 +227,10 @@ export async function nutriLoggedDays<T>(limit = 12): Promise<T> {
   if (!res.ok) throw new Error(`Couldn't load days (${res.status})`);
   return res.json();
 }
+
+// GET adherence over a window (7 or 30 days): macros avg vs target + micros vs RDA + streak.
+export async function nutriAdherence<T>(window = 7): Promise<T> {
+  const res = await authedFetch(`/functions/v1/health-nutrition?api=adherence&window=${window}`);
+  if (!res.ok) throw new Error(`Couldn't load adherence (${res.status})`);
+  return res.json();
+}
