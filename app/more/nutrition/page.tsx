@@ -5,6 +5,7 @@ import { Screen } from "../../components/Screen";
 import { nutriDay, nutriWeek, nutriGaps, nutriLoggedDays, nutriPost } from "../../lib/api";
 import AddFlow, { type MealLite } from "./AddFlow";
 import Adherence from "./Adherence";
+import Setup from "./Setup";
 
 /* ---- design tokens (mapped from the Nutrition spec) ---- */
 const CARD = "#101626", INSET = "#0e1320", CB = "#1a2232", IB = "#1f2838";
@@ -68,6 +69,7 @@ export default function NutritionPage() {
   const [pickDays, setPickDays] = useState<LoggedDay[] | null>(null);
   const [copying, setCopying] = useState<boolean>(false);
   const [adhOpen, setAdhOpen] = useState<boolean>(false);
+  const [setupOpen, setSetupOpen] = useState<boolean>(false);
 
   const loadWeek = useCallback((d: string) => { nutriWeek<Week>(mondayOf(d)).then(setWeek).catch((e) => setErr(e.message)); }, []);
   const loadDay = useCallback((d: string) => { setDay(null); nutriDay<Day>(d).then(setDay).catch((e) => setErr(e.message)); }, []);
@@ -101,6 +103,7 @@ export default function NutritionPage() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: MUTED }}>{week ? monOf(week.days[0].date) + (monOf(week.days[0].date) !== monOf(week.days[6].date) ? " – " + monOf(week.days[6].date) : "") : ""}</div>
         <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={() => setSetupOpen(true)} aria-label="Settings" style={navBtn}>⚙</button>
           <button onClick={() => shiftWeek(-1)} aria-label="Previous week" style={navBtn}>‹</button>
           <button onClick={() => shiftWeek(1)} aria-label="Next week" style={navBtn}>›</button>
         </div>
@@ -196,6 +199,7 @@ export default function NutritionPage() {
 
       {addOpen && <AddFlow date={sel} editMeal={editMeal} onClose={() => setAddOpen(false)} onSaved={onSaved} />}
       {adhOpen && <Adherence onClose={() => setAdhOpen(false)} />}
+      {setupOpen && <Setup onClose={() => setSetupOpen(false)} onChanged={() => { loadDay(sel); loadWeek(sel); }} />}
 
       {copyOpen && (
         <div onClick={() => setCopyOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 45 }}>
