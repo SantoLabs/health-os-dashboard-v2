@@ -188,3 +188,29 @@ export async function nutriPost<T>(action: string, body: unknown = {}): Promise<
   if (!res.ok) throw new Error(`Request failed (${res.status})`);
   return res.json();
 }
+
+// GET food-DB search: { foods: [...] }. Optional category filter.
+export async function nutriFoods<T>(q: string, cat?: string): Promise<T> {
+  const qs = "&q=" + encodeURIComponent(q || "") + (cat ? "&cat=" + encodeURIComponent(cat) : "");
+  const res = await authedFetch(`/functions/v1/health-nutrition?api=foods${qs}`);
+  if (!res.ok) throw new Error(`Couldn't search foods (${res.status})`);
+  return res.json();
+}
+// GET quick-add templates: { templates: [...] }.
+export async function nutriTemplates<T>(): Promise<T> {
+  const res = await authedFetch(`/functions/v1/health-nutrition?api=templates`);
+  if (!res.ok) throw new Error(`Couldn't load templates (${res.status})`);
+  return res.json();
+}
+// GET recent entries for re-log: { history: [...] }.
+export async function nutriHistory<T>(limit = 30): Promise<T> {
+  const res = await authedFetch(`/functions/v1/health-nutrition?api=history&limit=${limit}`);
+  if (!res.ok) throw new Error(`Couldn't load history (${res.status})`);
+  return res.json();
+}
+// GET pantry defaults: { pantry: [...] }.
+export async function nutriPantry<T>(): Promise<T> {
+  const res = await authedFetch(`/functions/v1/health-nutrition?api=pantry`);
+  if (!res.ok) throw new Error(`Couldn't load pantry (${res.status})`);
+  return res.json();
+}
