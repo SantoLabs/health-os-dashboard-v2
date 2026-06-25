@@ -162,3 +162,29 @@ export async function mindPost<T>(action: string, body: unknown): Promise<T> {
   if (!res.ok) throw new Error(`Request failed (${res.status})`);
   return res.json();
 }
+
+// ---- health-nutrition (Nutrition: daily log, day/week, AI methods) ----
+// GET a single day: { date, targets, totals, meals[] }. Defaults to today (IST).
+export async function nutriDay<T>(date?: string): Promise<T> {
+  const q = date ? `&date=${encodeURIComponent(date)}` : "";
+  const res = await authedFetch(`/functions/v1/health-nutrition?api=day${q}`);
+  if (!res.ok) throw new Error(`Couldn't load the day (${res.status})`);
+  return res.json();
+}
+// GET the 7-day strip (Mon-anchored): { start, today, target_protein, streak, days[] }.
+export async function nutriWeek<T>(start?: string): Promise<T> {
+  const q = start ? `&start=${encodeURIComponent(start)}` : "";
+  const res = await authedFetch(`/functions/v1/health-nutrition?api=week${q}`);
+  if (!res.ok) throw new Error(`Couldn't load the week (${res.status})`);
+  return res.json();
+}
+// POST an action (log / update / delete). Returns the refreshed day.
+export async function nutriPost<T>(action: string, body: unknown = {}): Promise<T> {
+  const res = await authedFetch(`/functions/v1/health-nutrition?api=${action}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  return res.json();
+}
