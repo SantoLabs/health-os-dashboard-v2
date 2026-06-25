@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, type CSSProperties } from "react";
 import { Screen } from "../../components/Screen";
 import { nutriDay, nutriWeek, nutriGaps, nutriLoggedDays, nutriPost } from "../../lib/api";
 import AddFlow, { type MealLite } from "./AddFlow";
+import Adherence from "./Adherence";
 
 /* ---- design tokens (mapped from the Nutrition spec) ---- */
 const CARD = "#101626", INSET = "#0e1320", CB = "#1a2232", IB = "#1f2838";
@@ -66,6 +67,7 @@ export default function NutritionPage() {
   const [copyOpen, setCopyOpen] = useState<boolean>(false);
   const [pickDays, setPickDays] = useState<LoggedDay[] | null>(null);
   const [copying, setCopying] = useState<boolean>(false);
+  const [adhOpen, setAdhOpen] = useState<boolean>(false);
 
   const loadWeek = useCallback((d: string) => { nutriWeek<Week>(mondayOf(d)).then(setWeek).catch((e) => setErr(e.message)); }, []);
   const loadDay = useCallback((d: string) => { setDay(null); nutriDay<Day>(d).then(setDay).catch((e) => setErr(e.message)); }, []);
@@ -121,7 +123,7 @@ export default function NutritionPage() {
 
       {week && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <div style={{ fontSize: 11.5, color: FAINT }}>Protein adherence · last 7 days · <span style={{ color: ON, fontWeight: 700 }}>{week.streak}-day streak</span></div>
+          <button onClick={() => setAdhOpen(true)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left", fontSize: 11.5, color: FAINT }}>Protein adherence · last 7 days · <span style={{ color: ON, fontWeight: 700 }}>{week.streak}-day streak</span> <span style={{ color: ACCENT, fontWeight: 700 }}>›</span></button>
           {sel !== today && <button onClick={() => jumpTo(today)} style={{ fontSize: 11, fontWeight: 700, color: ACCENT, background: "none", border: "none", cursor: "pointer" }}>Today →</button>}
         </div>
       )}
@@ -193,6 +195,7 @@ export default function NutritionPage() {
       <button onClick={openAdd} aria-label="Add food" style={{ position: "fixed", right: 18, bottom: 90, width: 56, height: 56, borderRadius: 28, border: "none", background: ACCENT, color: "#fff", fontSize: 28, lineHeight: 1, cursor: "pointer", boxShadow: "0 6px 18px rgba(79,156,249,.45)", zIndex: 30 }}>＋</button>
 
       {addOpen && <AddFlow date={sel} editMeal={editMeal} onClose={() => setAddOpen(false)} onSaved={onSaved} />}
+      {adhOpen && <Adherence onClose={() => setAdhOpen(false)} />}
 
       {copyOpen && (
         <div onClick={() => setCopyOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 45 }}>
