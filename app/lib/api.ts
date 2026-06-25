@@ -214,3 +214,16 @@ export async function nutriPantry<T>(): Promise<T> {
   if (!res.ok) throw new Error(`Couldn't load pantry (${res.status})`);
   return res.json();
 }
+
+// GET unlogged past days within N days: { gaps: [dates], today }.
+export async function nutriGaps<T>(within = 7): Promise<T> {
+  const res = await authedFetch(`/functions/v1/health-nutrition?api=gaps&within=${within}`);
+  if (!res.ok) throw new Error(`Couldn't load gaps (${res.status})`);
+  return res.json();
+}
+// GET recent days that have entries (for the copy-a-day backfill picker): { days: [...] }.
+export async function nutriLoggedDays<T>(limit = 12): Promise<T> {
+  const res = await authedFetch(`/functions/v1/health-nutrition?api=logged_days&limit=${limit}`);
+  if (!res.ok) throw new Error(`Couldn't load days (${res.status})`);
+  return res.json();
+}
