@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, type CSSProperties } from "react";
 import { Screen } from "../../components/Screen";
-import { nutriDay, nutriWeek } from "../../lib/api";
+import { nutriDay, nutriWeek, nutriGaps, nutriLoggedDays, nutriPost } from "../../lib/api";
 import AddFlow, { type MealLite } from "./AddFlow";
 
 /* ---- design tokens (mapped from the Nutrition spec) ---- */
@@ -22,8 +22,10 @@ type Meal = { id: string; meal_type: string | null; snack_slot: string | null; n
 type Day = { date: string; targets: Targets; totals: Totals; meals: Meal[] };
 type WeekDay = { date: string; dow: number; protein: number; calories: number; entries: number; status: string };
 type Week = { start: string; today: string; target_protein: number; streak: number; days: WeekDay[] };
+type LoggedDay = { date: string; calories: number; protein: number; entries: number };
 
 const WD = ["M", "T", "W", "T", "F", "S", "S"];
+const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function istToday(): string { return new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10); }
@@ -31,6 +33,8 @@ function mondayOf(iso: string): string { const d = new Date(iso + "T00:00:00Z");
 function addDays(iso: string, n: number): string { const d = new Date(iso + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
 function dnum(iso: string): number { return Number(iso.slice(8, 10)); }
 function monOf(iso: string): string { return MON[Number(iso.slice(5, 7)) - 1]; }
+function dowOf(iso: string): string { return DOW[new Date(iso + "T00:00:00Z").getUTCDay()]; }
+function nice(iso: string): string { return dowOf(iso) + ", " + monOf(iso) + " " + dnum(iso); }
 function fmtTime(t: string | null): string { if (!t) return ""; const d = new Date(t); if (isNaN(d.getTime())) return ""; const ist = new Date(d.getTime() + 5.5 * 3600 * 1000); return String(ist.getUTCHours()).padStart(2, "0") + ":" + String(ist.getUTCMinutes()).padStart(2, "0"); }
 function statusColor(s: string): string { return s === "on" ? ON : s === "partial" ? PARTIAL : (s === "low" || s === "missed") ? MISS : s === "future" ? CHIP_IDLE_B : FAINT; }
 function mealColor(m: Meal): string { const t = m.snack_slot ? "snack" : (m.meal_type || ""); return t === "breakfast" ? CARB : t === "lunch" ? PROT : t === "dinner" ? ACCENT_LT : t === "snack" ? FIBR : ACCENT; }
@@ -51,27 +55,42 @@ function MacroCard({ lbl, val, target, color }: { lbl: string; val: number; targ
 }
 
 export default function NutritionPage() {
-  const [sel, setSel] = useState<string>(istToday());
+  const today = istToday();
+  const [sel, setSel] = useState<string>(today);
   const [week, setWeek] = useState<Week | null>(null);
   const [day, setDay] = useState<Day | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState<boolean>(false);
   const [editMeal, setEditMeal] = useState<MealLite | null>(null);
+  const [gaps, setGaps] = useState<string[]>([]);
+  const [copyOpen, setCopyOpen] = useState<boolean>(false);
+  const [pickDays, setPickDays] = useState<LoggedDay[] | null>(null);
+  const [copying, setCopying] = useState<boolean>(false);
 
   const loadWeek = useCallback((d: string) => { nutriWeek<Week>(mondayOf(d)).then(setWeek).catch((e) => setErr(e.message)); }, []);
   const loadDay = useCallback((d: string) => { setDay(null); nutriDay<Day>(d).then(setDay).catch((e) => setErr(e.message)); }, []);
+  const loadGaps = useCallback(() => { nutriGaps<{ gaps: string[] }>(7).then((r) => setGaps(r.gaps || [])).catch(() => {}); }, []);
 
   useEffect(() => { loadDay(sel); }, [sel, loadDay]);
-  useEffect(() => { loadWeek(istToday()); }, [loadWeek]);
+  useEffect(() => { loadWeek(today); loadGaps(); }, [loadWeek, loadGaps, today]);
 
+  function jumpTo(d: string) { setSel(d); loadWeek(d); }
   function shiftWeek(n: number) { const ns = addDays(mondayOf(sel), n * 7); setSel(ns); loadWeek(ns); }
   function openAdd() { setEditMeal(null); setAddOpen(true); }
   function openEdit(m: Meal) { setEditMeal(m); setAddOpen(true); }
-  function onSaved(d: unknown) { setDay(d as Day); loadWeek(sel); }
+  function onSaved(d: unknown) { setDay(d as Day); loadWeek(sel); loadGaps(); }
+
+  function openCopy() { setCopyOpen(true); setPickDays(null); nutriLoggedDays<{ days: LoggedDay[] }>(12).then((r) => setPickDays((r.days || []).filter((x) => x.date !== sel))).catch(() => setPickDays([])); }
+  async function copyFrom(from: string) {
+    setCopying(true); setErr(null);
+    try { const d = await nutriPost<Day>("copy_day", { from, to: sel }); setDay(d); loadWeek(sel); loadGaps(); setCopyOpen(false); }
+    catch (e) { setErr((e as Error).message); } finally { setCopying(false); }
+  }
 
   const t = day ? day.targets : null;
   const tot = day ? day.totals : null;
   const proteinLeft = t && tot ? Math.max(0, Math.round(t.protein - tot.protein)) : 0;
+  const emptyPast = sel < today && day !== null && day.meals.length === 0;
 
   return (
     <Screen title="Nutrition">
@@ -101,12 +120,22 @@ export default function NutritionPage() {
       )}
 
       {week && (
-        <div style={{ fontSize: 11.5, color: FAINT, marginBottom: 12 }}>Protein adherence · last 7 days · <span style={{ color: ON, fontWeight: 700 }}>{week.streak}-day streak</span></div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <div style={{ fontSize: 11.5, color: FAINT }}>Protein adherence · last 7 days · <span style={{ color: ON, fontWeight: 700 }}>{week.streak}-day streak</span></div>
+          {sel !== today && <button onClick={() => jumpTo(today)} style={{ fontSize: 11, fontWeight: 700, color: ACCENT, background: "none", border: "none", cursor: "pointer" }}>Today →</button>}
+        </div>
+      )}
+
+      {gaps.length > 0 && (
+        <button onClick={() => jumpTo(gaps[0])} style={{ width: "100%", textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between", background: "#1b1606", border: "1px solid #4a3a12", borderRadius: 13, padding: "10px 13px", marginBottom: 12, cursor: "pointer" }}>
+          <span style={{ fontSize: 12.5, color: "#f3cf8e", fontWeight: 600 }}>🗓️ {gaps.length} unlogged {gaps.length === 1 ? "day" : "days"} this past week</span>
+          <span style={{ fontSize: 11.5, fontWeight: 800, color: PARTIAL }}>Backfill →</span>
+        </button>
       )}
 
       <div style={{ ...card, marginBottom: 8 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-          <span style={label}>Calories</span>
+          <span style={label}>Calories{sel !== today ? " · " + nice(sel) : ""}</span>
           <span style={{ fontSize: 13, fontWeight: 700, color: H, fontVariantNumeric: "tabular-nums" }}>{Math.round(tot ? tot.calories : 0)} <span style={{ color: FAINTER, fontWeight: 600 }}>/ {t ? t.calories : 0} kcal</span></span>
         </div>
         <Bar pct={t && t.calories ? ((tot ? tot.calories : 0) / t.calories) * 100 : 0} color="#cdd5e3" h={7} />
@@ -119,10 +148,21 @@ export default function NutritionPage() {
         <MacroCard lbl="Fibr" val={tot ? tot.fiber : 0} target={t ? t.fiber : 0} color={FIBR} />
       </div>
 
-      {proteinLeft > 0 && (
+      {proteinLeft > 0 && day && day.meals.length > 0 && (
         <div style={{ background: "linear-gradient(90deg, #13203a, #101626)", border: "1px solid " + CHIP_SEL_B, borderRadius: 14, padding: "11px 13px", marginBottom: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: ACCENT_LT }}>🎯 {proteinLeft}g protein to go</div>
           <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>{Math.round(tot ? tot.protein : 0)} of {t ? t.protein : 0}g — log a protein-rich item to close the gap.</div>
+        </div>
+      )}
+
+      {emptyPast && (
+        <div style={{ background: CARD, border: "1px solid " + CB, borderRadius: 14, padding: 14, marginBottom: 12 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: H }}>Nothing logged for {nice(sel)}</div>
+          <div style={{ fontSize: 11.5, color: FAINT, marginTop: 3 }}>Backfill it so your streak and trends stay accurate.</div>
+          <div style={{ display: "flex", gap: 8, marginTop: 11 }}>
+            <button onClick={openCopy} style={{ flex: 1, padding: 11, borderRadius: 12, border: "1px solid " + CHIP_SEL_B, background: CHIP_SEL, color: ACCENT_LT, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>📋 Copy a day</button>
+            <button onClick={openAdd} style={{ flex: 1, padding: 11, borderRadius: 12, border: "none", background: ACCENT, color: "#fff", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>+ Add food</button>
+          </div>
         </div>
       )}
 
@@ -153,6 +193,28 @@ export default function NutritionPage() {
       <button onClick={openAdd} aria-label="Add food" style={{ position: "fixed", right: 18, bottom: 90, width: 56, height: 56, borderRadius: 28, border: "none", background: ACCENT, color: "#fff", fontSize: 28, lineHeight: 1, cursor: "pointer", boxShadow: "0 6px 18px rgba(79,156,249,.45)", zIndex: 30 }}>＋</button>
 
       {addOpen && <AddFlow date={sel} editMeal={editMeal} onClose={() => setAddOpen(false)} onSaved={onSaved} />}
+
+      {copyOpen && (
+        <div onClick={() => setCopyOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 45 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: INSET, border: "1px solid " + CB, borderRadius: "20px 20px 0 0", padding: "16px 16px max(16px,env(safe-area-inset-bottom))", maxHeight: "80vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: H }}>Copy a day into {nice(sel)}</div>
+              <button onClick={() => setCopyOpen(false)} aria-label="Close" style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid " + CB, background: CHIP_IDLE, color: MUTED, fontSize: 15, cursor: "pointer" }}>✕</button>
+            </div>
+            <div style={{ fontSize: 11.5, color: FAINT, marginBottom: 12 }}>Clones every entry from the day you pick. You can tweak afterwards.</div>
+            {pickDays === null && <div style={{ fontSize: 12, color: FAINT, padding: 10 }}>Loading…</div>}
+            {pickDays && pickDays.length === 0 && <div style={{ fontSize: 12, color: FAINT, padding: 10 }}>No other logged days yet to copy from.</div>}
+            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+              {pickDays && pickDays.map((d) => (
+                <button key={d.date} disabled={copying} onClick={() => copyFrom(d.date)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: CARD, border: "1px solid " + CB, borderRadius: 12, padding: "11px 13px", cursor: "pointer", opacity: copying ? 0.6 : 1 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: BODY }}>{nice(d.date)}</span>
+                  <span style={{ fontSize: 11, color: FAINT }}>{d.entries} items · {d.calories} kcal · P {d.protein}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </Screen>
   );
 }
