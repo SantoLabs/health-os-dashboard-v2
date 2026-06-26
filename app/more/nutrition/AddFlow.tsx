@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState, useRef, type CSSProperties } from "react";
 import { nutriPost, nutriFoods, nutriTemplates, nutriHistory, nutriPantry } from "../../lib/api";
 
 const CARD = "#101626", INSET = "#0e1320", CB = "#1a2232", IB = "#1f2838";
@@ -87,6 +87,8 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
   const [pantry, setPantry] = useState<Pantry[]>([]); const [referPantry, setReferPantry] = useState(true);
 
   const [text, setText] = useState(""); const [estNote, setEstNote] = useState<string | null>(null); const [photo, setPhoto] = useState<string | null>(null);
+  const [camOn, setCamOn] = useState(false); const videoRef = useRef<HTMLVideoElement | null>(null); const streamRef = useRef<MediaStream | null>(null);
+  const [aiMode, setAiMode] = useState(false); const [aiQty, setAiQty] = useState(1); const [aiUnit, setAiUnit] = useState("serving");
   const [tmpls, setTmpls] = useState<Tmpl[] | null>(null); const [hist, setHist] = useState<Hist[] | null>(null);
   const [servings, setServings] = useState(editMeal?.servings || 1);
   const [editName, setEditName] = useState(editMeal?.name || "");
@@ -107,14 +109,34 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
     const m = macrosFrom(eff, grams, qty);
     setDraft((d) => ({ name: d.name || picked.name, kcal: String(m.kcal), protein: String(m.protein), carbs: String(m.carbs), fats: String(m.fats), fiber: String(m.fiber), food_id: picked.id, micros: m.micros }));
   }, [picked, unit, qty, referPantry, pantry]);
+  useEffect(() => { if (camOn && videoRef.current && streamRef.current) { videoRef.current.srcObject = streamRef.current; videoRef.current.play().catch(() => {}); } }, [camOn]);
+  useEffect(() => { if (view !== "photo" && streamRef.current) stopCam(); }, [view]);
+  useEffect(() => () => { const s = streamRef.current; if (s) s.getTracks().forEach((t) => t.stop()); }, []);
 
   const pantryFor = (cat: string | null) => (cat ? pantry.find((p) => p.category === cat) || null : null);
 
   function pickFood(f: Food) { setPicked(f); setQty(1); const def = f.basis === "per_100g" ? (Object.keys(f.unit_grams)[0] || "g") : unitOptions(f)[0]; setUnit(def); }
   function resetManual() { setPicked(null); setDraft(EMPTY); setQ(""); }
+  function stopCam() { const s = streamRef.current; if (s) { s.getTracks().forEach((t) => t.stop()); streamRef.current = null; } setCamOn(false); }
+  async function startCam() {
+    setErr(null);
+    try { const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false }); streamRef.current = s; setCamOn(true); }
+    catch { setErr("Camera unavailable here — use the Upload option instead."); }
+  }
+  function capturePhoto() {
+    const v = videoRef.current; if (!v) return;
+    const max = 1024; let w = v.videoWidth || 640, h = v.videoHeight || 480;
+    if (w > max || h > max) { const sc = max / Math.max(w, h); w = Math.round(w * sc); h = Math.round(h * sc); }
+    const c = document.createElement("canvas"); c.width = w; c.height = h; const ctx = c.getContext("2d"); if (!ctx) return;
+    ctx.drawImage(v, 0, 0, w, h); const data = c.toDataURL("image/jpeg", 0.8);
+    stopCam(); setPhoto(data); runEstimate("photo", { image_b64: data.split(",")[1] || "", mime: "image/jpeg" });
+  }
   async function aiEstimateFood() {
     const nm = q.trim(); if (!nm) return; setBusy(true); setErr(null);
-    try { const r = await nutriPost<{ food: Food | null }>("ai_food", { name: nm }); if (r && r.food) { setFoods([r.food]); pickFood(r.food); } else setErr("Couldn't estimate that food — try typing the macros."); }
+    try {
+      const r = await nutriPost<{ food: Food | null }>("ai_food", { name: nm, hint_qty: aiQty, hint_unit: aiUnit });
+      if (r && r.food) { const f = r.food; setFoods([f]); setPicked(f); const opts = unitOptions(f); setUnit(opts.indexOf(aiUnit) >= 0 ? aiUnit : (f.basis === "per_100g" ? (Object.keys(f.unit_grams)[0] || "g") : opts[0])); setQty(aiQty); setAiMode(false); }
+      else setErr("Couldn't estimate that food — try typing the macros."); }
     catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   }
 
@@ -204,8 +226,30 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
                 ))}
                 {foods.length === 0 && (
                   <div style={{ padding: 10 }}>
-                    {q.trim() ? <button onClick={aiEstimateFood} disabled={busy} style={{ width: "100%", padding: 11, borderRadius: 11, border: "1px solid " + CHIP_SEL_B, background: CHIP_SEL, color: ACCENT_LT, fontSize: 12.5, fontWeight: 700, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>{busy ? "Estimating…" : "✨ Estimate “" + q.trim() + "” with AI"}</button> : null}
-                    <div style={{ ...sub, marginTop: q.trim() ? 8 : 0 }}>{q.trim() ? "Not in the library yet — let AI estimate it (saved for next time), or type the macros below." : "Search, or just type the macros below to log it."}</div>
+                    {!q.trim() && <div style={sub}>Search, or just type the macros below to log it.</div>}
+                    {q.trim() && !aiMode && (
+                      <>
+                        <button onClick={() => setAiMode(true)} style={{ width: "100%", padding: 11, borderRadius: 11, border: "1px solid " + CHIP_SEL_B, background: CHIP_SEL, color: ACCENT_LT, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{"✨ Ask AI to estimate “" + q.trim() + "”"}</button>
+                        <div style={{ ...sub, marginTop: 8 }}>Not in the library yet — AI can estimate it (saved for next time), or type the macros below.</div>
+                      </>
+                    )}
+                    {q.trim() && aiMode && (
+                      <div style={{ background: CARD, border: "1px solid " + CB, borderRadius: 12, padding: 12 }}>
+                        <div style={{ ...tiny, marginBottom: 8 }}>How much do you usually have?</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <button onClick={() => setAiQty((x) => Math.max(0.5, r1(x - 0.5)))} style={stepBtn}>−</button>
+                          <div style={{ minWidth: 40, textAlign: "center", fontSize: 15, fontWeight: 800, color: H, fontVariantNumeric: "tabular-nums" }}>{aiQty}</div>
+                          <button onClick={() => setAiQty((x) => r1(x + 0.5))} style={stepBtn}>+</button>
+                          <div style={{ display: "flex", gap: 5, overflowX: "auto", marginLeft: 4 }}>
+                            {["serving", "piece", "katori", "bowl", "plate", "glass", "g"].map((u) => <button key={u} onClick={() => setAiUnit(u)} style={{ ...chip(aiUnit === u), padding: "6px 10px", fontSize: 11 }}>{u}</button>)}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                          <button onClick={() => setAiMode(false)} style={{ flex: 1, padding: 10, borderRadius: 11, border: "1px solid " + CB, background: CHIP_IDLE, color: MUTED, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+                          <button onClick={aiEstimateFood} disabled={busy} style={{ flex: 2, padding: 10, borderRadius: 11, border: "none", background: ACCENT, color: "#fff", fontSize: 12.5, fontWeight: 800, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>{busy ? "Estimating…" : "✨ Estimate with AI"}</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
                 <button onClick={() => setPicked(null)} style={{ display: "none" }} />
@@ -254,11 +298,27 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
         {/* PHOTO */}
         {view === "photo" && (
           <div style={{ marginTop: 12 }}>
-            <label style={{ display: "block", border: "1px dashed " + IB, borderRadius: 14, padding: photo ? 0 : "26px 12px", textAlign: "center", cursor: "pointer", overflow: "hidden", background: CARD }}>
-              {photo ? <img src={photo} alt="meal" style={{ width: "100%", display: "block", maxHeight: 220, objectFit: "cover" }} /> : <span style={{ ...sub }}>📷 Tap to take or choose a photo</span>}
-              <input type="file" accept="image/*" capture="environment" onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) { setPhoto(URL.createObjectURL(f)); resizeToB64(f).then((img) => runEstimate("photo", img)).catch(() => runEstimate("photo")); } }} style={{ display: "none" }} />
-            </label>
-            {estNote && <div style={{ ...sub, marginTop: 8 }}>{estNote}</div>}
+            {camOn ? (
+              <div style={{ borderRadius: 14, overflow: "hidden", background: "#000" }}>
+                <video ref={videoRef} playsInline muted style={{ width: "100%", display: "block", maxHeight: 320, objectFit: "cover" }} />
+                <div style={{ display: "flex", gap: 8, padding: 10 }}>
+                  <button onClick={stopCam} style={{ flex: 1, padding: 11, borderRadius: 11, border: "1px solid " + CB, background: CHIP_IDLE, color: MUTED, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+                  <button onClick={capturePhoto} style={{ flex: 2, padding: 11, borderRadius: 11, border: "none", background: ACCENT, color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>📸 Capture</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {photo && <img src={photo} alt="meal" style={{ width: "100%", display: "block", maxHeight: 240, objectFit: "cover", borderRadius: 14, border: "1px solid " + CB }} />}
+                <div style={{ display: "flex", gap: 8, marginTop: photo ? 10 : 0 }}>
+                  <label style={{ flex: 1, textAlign: "center", border: "1px dashed " + IB, borderRadius: 12, padding: "14px 10px", cursor: "pointer", background: CARD, color: ACCENT_LT, fontSize: 13, fontWeight: 700 }}>📁 Upload photo
+                    <input type="file" accept="image/*" onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) { setPhoto(URL.createObjectURL(f)); resizeToB64(f).then((img) => runEstimate("photo", img)).catch(() => runEstimate("photo")); } }} style={{ display: "none" }} />
+                  </label>
+                  <button onClick={startCam} style={{ flex: 1, border: "1px dashed " + IB, borderRadius: 12, padding: "14px 10px", cursor: "pointer", background: CARD, color: ACCENT_LT, fontSize: 13, fontWeight: 700 }}>📷 Use camera</button>
+                </div>
+              </>
+            )}
+            {busy && <div style={{ ...sub, marginTop: 10 }}>✨ Analysing photo…</div>}
+            {estNote && !busy && <div style={{ ...sub, marginTop: 8 }}>{estNote}</div>}
             <MacroFields d={draft} set={setD} />
             <button onClick={manualAdd} disabled={busy} style={{ ...primaryBtn, opacity: busy ? 0.6 : 1 }}>{busy ? "Adding…" : "Add to " + cap(mealType)}</button>
           </div>
