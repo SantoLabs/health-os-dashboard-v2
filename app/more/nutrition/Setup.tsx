@@ -7,13 +7,15 @@ const CARD = "#101626", INSET = "#0e1320", CB = "#1a2232", IB = "#1f2838";
 const H = "#f3f6fb", BODY = "#e8ecf3", MUTED = "#aeb6c4", FAINT = "#7b8597", FAINTER = "#5c6573";
 const ACCENT = "#4f9cf9", ACCENT_LT = "#7fb0ff", CHIP_SEL = "#13203a", CHIP_SEL_B = "#294063", CHIP_IDLE = "#141b29", CHIP_IDLE_B = "#222c3d";
 const PROT = "#5b9bff", CARB = "#f3b14e", FAT = "#f0735a", FIBR = "#46c79a", FIBR2 = "#46c79a";
+const LIKE = "#46c79a", LIKE_B = "#1f4d3e", DISLIKE = "#e0574b", DISLIKE_B = "#4d2622";
 
-type Targets = { calories: number; protein: number; carbs: number; fats: number; fiber: number; micros_rda: Record<string, number> };
-type Profile = { cuisine: string[]; eating_pattern: string; restrictions: string; refer_pantry_default: boolean; typical_meals: string; biggest_challenge: string; starter_menu: unknown; likes: string; narrative: string; height_cm: number | null; age: number | null; sex: string; activity_level: string };
+type DaySet = { calories: number; protein: number; carbs: number; fats: number; fiber: number };
+type Targets = DaySet & { micros_rda: Record<string, number>; rest?: DaySet; has_rest?: boolean; inputs?: Record<string, number> | null };
+type Profile = { cuisine: string[]; eating_pattern: string; restrictions: string; refer_pantry_default: boolean; typical_meals: string; biggest_challenge: string; starter_menu: unknown; likes: string; dislikes: string; narrative: string; height_cm: number | null; age: number | null; sex: string; activity_level: string };
 type PantryItem = { id: string; category: string; food_id: string | null; label: string; basis: string; kcal: number; protein: number; carbs: number; fats: number; fiber: number; unit_grams: Record<string, number>; micros: Record<string, number> };
 type Food = { id: string; name: string; brand: string | null; category: string | null; basis: string; kcal: number; protein: number; carbs: number; fats: number; fiber: number; micros: Record<string, number>; unit_grams: Record<string, number>; source: string; verified: boolean };
 type ProfileResp = { profile: Profile; targets: Targets; pantry: PantryItem[] };
-type Sug = { rationale: string; bmr?: number; tdee?: number; weight?: number; bf?: number | null };
+type Sug = { rationale: string; bmr?: number; tdee?: number; bmi?: number; af?: number; ai?: boolean };
 
 const CUISINES = ["North Indian", "South Indian", "Gujarati", "Punjabi", "Bengali", "Maharashtrian", "Continental", "Chinese", "Mediterranean", "Mexican"];
 const PATTERNS = ["Vegetarian", "Eggetarian", "Non-veg", "Vegan", "Jain"];
@@ -47,10 +49,13 @@ function resizeToB64(file: File): Promise<{ image_b64: string; mime: string }> {
 }
 
 function NumIn({ v, on, color }: { v: string; on: (s: string) => void; color?: string }) {
-  return <input value={v} onChange={(e) => on(e.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" placeholder="0" style={{ width: "100%", boxSizing: "border-box", padding: "9px 8px", borderRadius: 10, border: "1px solid " + (color ? "#294063" : IB), background: "#0b101b", color: BODY, fontSize: 13, outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />;
+  return <input value={v} onChange={(e) => on(e.target.value.replace(/[^0-9.-]/g, ""))} inputMode="decimal" placeholder="0" style={{ width: "100%", boxSizing: "border-box", padding: "9px 8px", borderRadius: 10, border: "1px solid " + (color ? "#294063" : IB), background: "#0b101b", color: BODY, fontSize: 13, outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />;
 }
 function Field({ lbl, v, on, color }: { lbl: string; v: string; on: (s: string) => void; color?: string }) {
   return <div style={{ flex: 1 }}><div style={{ ...tiny, textAlign: "center", color: color || FAINT, marginBottom: 4 }}>{lbl}</div><NumIn v={v} on={on} color={color} /></div>;
+}
+function QField({ lbl, v, on }: { lbl: string; v: string; on: (s: string) => void }) {
+  return <div style={{ flex: 1 }}><div style={{ ...tiny, marginBottom: 4 }}>{lbl}</div><NumIn v={v} on={on} /></div>;
 }
 
 export default function Setup({ onClose, onChanged }: { onClose: () => void; onChanged?: () => void }) {
@@ -59,14 +64,21 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // targets
-  const [cal, setCal] = useState(""); const [pro, setPro] = useState(""); const [car, setCar] = useState(""); const [fat, setFat] = useState(""); const [fib, setFib] = useState("");
-  const [ht, setHt] = useState(""); const [age, setAge] = useState(""); const [sex, setSex] = useState("male"); const [goal, setGoal] = useState("recomp");
+  // targets — training + rest sets
+  const [calTr, setCalTr] = useState(""); const [proTr, setProTr] = useState(""); const [carTr, setCarTr] = useState(""); const [fatTr, setFatTr] = useState(""); const [fibTr, setFibTr] = useState("");
+  const [calRt, setCalRt] = useState(""); const [proRt, setProRt] = useState(""); const [carRt, setCarRt] = useState(""); const [fatRt, setFatRt] = useState(""); const [fibRt, setFibRt] = useState("");
+  const [hasRest, setHasRest] = useState(false);
+  // quantifiers
+  const [wt, setWt] = useState(""); const [bf, setBf] = useState(""); const [ht, setHt] = useState(""); const [age, setAge] = useState(""); const [sex, setSex] = useState("male");
+  const [spw, setSpw] = useState(""); const [goal, setGoal] = useState("recomp"); const [rate, setRate] = useState(""); const [ppk, setPpk] = useState("");
+  const [aiTune, setAiTune] = useState(false);
   const [sugBusy, setSugBusy] = useState(false); const [sug, setSug] = useState<Sug | null>(null);
   // prefs
   const [cuisine, setCuisine] = useState<string[]>([]); const [pattern, setPattern] = useState(""); const [referDefault, setReferDefault] = useState(true);
   const [typical, setTypical] = useState(""); const [listening, setListening] = useState(false);
   const [menu, setMenu] = useState<any>(null); const [genBusy, setGenBusy] = useState(false); const [genNote, setGenNote] = useState<string | null>(null);
+  const [menuPick, setMenuPick] = useState<Record<string, number>>({}); const [picksBusy, setPicksBusy] = useState(false); const [picksNote, setPicksNote] = useState<string | null>(null);
+  const [existingLikes, setExistingLikes] = useState(""); const [existingDislikes, setExistingDislikes] = useState("");
   // pantry
   const [pantry, setPantry] = useState<PantryItem[]>([]);
   const [pAdding, setPAdding] = useState(false); const [pCat, setPCat] = useState(""); const [pQ, setPQ] = useState(""); const [pFoods, setPFoods] = useState<Food[]>([]); const [pPicked, setPPicked] = useState(false);
@@ -77,12 +89,19 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
 
   function hydrate(d: ProfileResp) {
     setData(d);
-    setCal(String(d.targets.calories || "")); setPro(String(d.targets.protein || "")); setCar(String(d.targets.carbs || "")); setFat(String(d.targets.fats || "")); setFib(String(d.targets.fiber || ""));
-    setCuisine(d.profile.cuisine || []); setPattern(d.profile.eating_pattern || ""); setReferDefault(d.profile.refer_pantry_default !== false);
-    setTypical(d.profile.typical_meals || "");
+    const tg = d.targets; const rest = tg.rest || tg; const inpv = tg.inputs || {};
+    setCalTr(String(tg.calories || "")); setProTr(String(tg.protein || "")); setCarTr(String(tg.carbs || "")); setFatTr(String(tg.fats || "")); setFibTr(String(tg.fiber || ""));
+    setCalRt(String(rest.calories || "")); setProRt(String(rest.protein || "")); setCarRt(String(rest.carbs || "")); setFatRt(String(rest.fats || "")); setFibRt(String(rest.fiber || ""));
+    setHasRest(!!tg.has_rest);
+    if (inpv.weight_kg) setWt(String(inpv.weight_kg)); if (inpv.body_fat_pct != null) setBf(String(inpv.body_fat_pct));
+    if (inpv.sessions_per_week != null) setSpw(String(inpv.sessions_per_week)); if (inpv.rate_kg_wk != null) setRate(String(inpv.rate_kg_wk)); if (inpv.protein_per_kg != null) setPpk(String(inpv.protein_per_kg));
+    if (inpv.goal != null) setGoal(String(inpv.goal));
     if (d.profile.height_cm != null) setHt(String(d.profile.height_cm)); if (d.profile.age != null) setAge(String(d.profile.age)); if (d.profile.sex) setSex(d.profile.sex);
+    setCuisine(d.profile.cuisine || []); setPattern(d.profile.eating_pattern || ""); setReferDefault(d.profile.refer_pantry_default !== false);
+    setTypical(d.profile.typical_meals || ""); setExistingLikes(d.profile.likes || ""); setExistingDislikes(d.profile.dislikes || "");
     setPantry(d.pantry || []);
     setMenu(d.profile.starter_menu && (d.profile.starter_menu as any).breakfast ? d.profile.starter_menu : null);
+    setMenuPick({});
   }
   useEffect(() => { nutriProfile<ProfileResp>().then(hydrate).catch((e) => setErr(e.message)); }, []);
   useEffect(() => {
@@ -93,21 +112,37 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
   useEffect(() => { if (camOn && videoRef.current && streamRef.current) { videoRef.current.srcObject = streamRef.current; videoRef.current.play().catch(() => {}); } }, [camOn]);
   useEffect(() => () => { const s = streamRef.current; if (s) s.getTracks().forEach((t) => t.stop()); }, []);
 
-  async function aiSuggestTargets() {
+  async function suggestTargets() {
     setSugBusy(true); setErr(null); setSug(null);
     try {
-      const r = await nutriPost<any>("targets_suggest", { height_cm: numv(ht) || null, age: numv(age) || null, sex: sex || null, goal });
-      if (r && r.needs) setErr("Add " + (r.needs as string[]).join(", ") + " above for a personalised suggestion.");
-      else if (r && r.suggestion) {
-        const s = r.suggestion; setCal(String(s.calories)); setPro(String(s.protein)); setCar(String(s.carbs)); setFat(String(s.fats)); setFib(String(s.fiber));
-        setSug({ rationale: r.rationale || "", bmr: r.inputs?.bmr, tdee: r.inputs?.tdee, weight: r.inputs?.weight_kg, bf: r.inputs?.body_fat_pct });
+      const body = { weight_kg: numv(wt) || null, body_fat_pct: bf !== "" ? numv(bf) : null, height_cm: numv(ht) || null, age: numv(age) || null, sex: sex || null, sessions_per_week: spw !== "" ? numv(spw) : null, goal, rate_kg_wk: rate !== "" ? numv(rate) : null, protein_per_kg: ppk !== "" ? numv(ppk) : null, ai: aiTune };
+      const r = await nutriPost<any>("targets_suggest", body);
+      if (r && r.needs) { setErr("Add " + (r.needs as string[]).join(", ") + " above for a personalised suggestion."); return; }
+      if (r && r.training) {
+        const T = r.training, R = r.rest || r.training; const inpv = r.inputs || {};
+        setCalTr(String(T.calories)); setProTr(String(T.protein)); setCarTr(String(T.carbs)); setFatTr(String(T.fats)); setFibTr(String(T.fiber));
+        setCalRt(String(R.calories)); setProRt(String(R.protein)); setCarRt(String(R.carbs)); setFatRt(String(R.fats)); setFibRt(String(R.fiber));
+        setHasRest(true);
+        setSug({ rationale: r.rationale || "", bmr: inpv.bmr, tdee: inpv.tdee, bmi: inpv.bmi, af: inpv.activity_factor, ai: !!r.ai });
+        if (inpv.weight_kg && !wt) setWt(String(inpv.weight_kg));
+        if (inpv.body_fat_pct != null && bf === "") setBf(String(inpv.body_fat_pct));
+        if (inpv.sessions_per_week != null && spw === "") setSpw(String(inpv.sessions_per_week));
+        if (inpv.rate_kg_wk != null && rate === "") setRate(String(inpv.rate_kg_wk));
+        if (inpv.protein_per_kg != null && ppk === "") setPpk(String(inpv.protein_per_kg));
       } else setErr((r && r.note) || "Couldn't suggest right now.");
     } catch (e) { setErr((e as Error).message); } finally { setSugBusy(false); }
   }
   async function saveTargets() {
     setBusy(true); setErr(null);
-    try { const d = await nutriPost<ProfileResp>("targets_save", { calories: numv(cal), protein: numv(pro), carbs: numv(car), fats: numv(fat), fiber: numv(fib) }); hydrate(d); if (onChanged) onChanged(); }
-    catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+    try {
+      const inputs = { weight_kg: numv(wt) || null, body_fat_pct: bf !== "" ? numv(bf) : null, height_cm: numv(ht) || null, age: numv(age) || null, sex, sessions_per_week: spw !== "" ? numv(spw) : null, goal, rate_kg_wk: rate !== "" ? numv(rate) : null, protein_per_kg: ppk !== "" ? numv(ppk) : null };
+      const d = await nutriPost<ProfileResp>("targets_save", {
+        calories: numv(calTr), protein: numv(proTr), carbs: numv(carTr), fats: numv(fatTr), fiber: numv(fibTr),
+        rest_calories: numv(calRt), rest_protein: numv(proRt), rest_carbs: numv(carRt), rest_fats: numv(fatRt), rest_fiber: numv(fibRt),
+        inputs,
+      });
+      hydrate(d); if (onChanged) onChanged();
+    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   }
   async function savePrefs() {
     setBusy(true); setErr(null);
@@ -125,9 +160,27 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
     } catch { setListening(false); }
   }
   async function generateMenu() {
-    setGenBusy(true); setGenNote(null);
-    try { const r = await nutriPost<{ menu: any; note?: string }>("menu_generate", { cuisine, eating_pattern: pattern, typical_meals: typical }); if (r && r.menu) setMenu(r.menu); else setGenNote((r && r.note) || "Couldn't generate right now."); }
+    setGenBusy(true); setGenNote(null); setPicksNote(null);
+    try { const r = await nutriPost<{ menu: any; note?: string }>("menu_generate", { cuisine, eating_pattern: pattern, typical_meals: typical }); if (r && r.menu) { setMenu(r.menu); setMenuPick({}); } else setGenNote((r && r.note) || "Couldn't generate right now."); }
     catch (e) { setGenNote((e as Error).message); } finally { setGenBusy(false); }
+  }
+  function cyclePick(item: string) {
+    setMenuPick((m) => { const cur = m[item] || 0; const nx = cur === 0 ? 1 : cur === 1 ? -1 : 0; const c = { ...m }; if (nx === 0) delete c[item]; else c[item] = nx; return c; });
+  }
+  function mergeCsv(existing: string, add: string[]): string {
+    const seen = new Set<string>(); const out: string[] = [];
+    for (const part of [...String(existing || "").split(","), ...add]) { const t = part.trim(); if (!t) continue; const k = t.toLowerCase(); if (seen.has(k)) continue; seen.add(k); out.push(t); }
+    return out.join(", ");
+  }
+  async function saveMenuPicks() {
+    const likes = Object.keys(menuPick).filter((k) => menuPick[k] === 1);
+    const dislikes = Object.keys(menuPick).filter((k) => menuPick[k] === -1);
+    if (!likes.length && !dislikes.length) { setPicksNote("Tap a dish once for 👍, twice for 👎."); return; }
+    setPicksBusy(true); setErr(null); setPicksNote(null);
+    try {
+      const d = await nutriPost<ProfileResp>("profile_save", { likes: mergeCsv(existingLikes, likes), dislikes: mergeCsv(existingDislikes, dislikes) });
+      hydrate(d); setPicksNote("Saved — future menus will lean into your 👍 and avoid your 👎.");
+    } catch (e) { setErr((e as Error).message); } finally { setPicksBusy(false); }
   }
 
   function applyFood(f: Food) { setPPicked(true); setPLabel(f.brand ? f.brand + " " + f.name : f.name); setPKcal(String(f.kcal)); setPPro(String(f.protein)); setPCar(String(f.carbs)); setPFat(String(f.fats)); setPFib(String(f.fiber)); setPBasis(f.basis); setPUnitGrams(f.unit_grams || {}); setPMicros(f.micros || {}); if (f.category && !pCat) setPCat(f.category); }
@@ -170,6 +223,22 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
   }
   async function delPantry(it: PantryItem) { try { const r = await nutriPost<{ pantry: PantryItem[] }>("pantry_delete", { id: it.id }); setPantry(r.pantry || []); } catch { /* ignore */ } }
 
+  // macro row for a target set (training/rest), highlighted when active
+  function macroRow(kind: string) {
+    const isTr = kind === "training";
+    const fields: [string, string, (s: string) => void, string | undefined][] = isTr
+      ? [["Cal", calTr, setCalTr, undefined], ["Prot", proTr, setProTr, PROT], ["Carb", carTr, setCarTr, CARB], ["Fat", fatTr, setFatTr, FAT], ["Fibr", fibTr, setFibTr, FIBR]]
+      : [["Cal", calRt, setCalRt, undefined], ["Prot", proRt, setProRt, PROT], ["Carb", carRt, setCarRt, CARB], ["Fat", fatRt, setFatRt, FAT], ["Fibr", fibRt, setFibRt, FIBR]];
+    return (
+      <div style={{ marginTop: 10, padding: 11, borderRadius: 12, background: isTr ? CHIP_SEL : CARD, border: "1px solid " + (isTr ? CHIP_SEL_B : CB) }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: isTr ? ACCENT_LT : MUTED, marginBottom: 8 }}>{isTr ? "🏋 Training day" : "🛌 Rest day"}</div>
+        <div style={{ display: "flex", gap: 6 }}>
+          {fields.map(([lbl, v, on, col]) => <Field key={lbl} lbl={lbl} v={v} on={on} color={col} />)}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 49 }}>
       <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: INSET, border: "1px solid " + CB, borderRadius: "20px 20px 0 0", padding: "14px 16px max(16px,env(safe-area-inset-bottom))", maxHeight: "92vh", overflowY: "auto" }}>
@@ -187,35 +256,46 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
 
         {data && tab === "targets" && (
           <div>
-            <div style={{ ...tiny, marginBottom: 6 }}>Daily targets</div>
-            <div style={{ display: "flex", gap: 6 }}>
-              <Field lbl="Cal" v={cal} on={setCal} />
-              <Field lbl="Prot" v={pro} on={setPro} color={PROT} />
-              <Field lbl="Carb" v={car} on={setCar} color={CARB} />
-              <Field lbl="Fat" v={fat} on={setFat} color={FAT} />
-              <Field lbl="Fibr" v={fib} on={setFib} color={FIBR} />
-            </div>
-            <div style={{ marginTop: 14, background: CARD, border: "1px solid " + CB, borderRadius: 13, padding: 12 }}>
-              <div style={{ ...tiny, marginBottom: 8 }}>✨ Suggest from your data</div>
+            <div style={{ background: CARD, border: "1px solid " + CB, borderRadius: 13, padding: 12 }}>
+              <div style={{ ...tiny, marginBottom: 8 }}>✨ Calculator — your numbers</div>
               <div style={{ display: "flex", gap: 6 }}>
-                <div style={{ flex: 1 }}><div style={{ ...tiny, marginBottom: 4 }}>Height cm</div><NumIn v={ht} on={setHt} /></div>
-                <div style={{ flex: 1 }}><div style={{ ...tiny, marginBottom: 4 }}>Age</div><NumIn v={age} on={setAge} /></div>
-                <div style={{ flex: 1.4 }}><div style={{ ...tiny, marginBottom: 4 }}>Sex</div>
+                <QField lbl="Weight kg" v={wt} on={setWt} />
+                <QField lbl="Body-fat %" v={bf} on={setBf} />
+                <QField lbl="Sessions/wk" v={spw} on={setSpw} />
+              </div>
+              <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                <QField lbl="Height cm" v={ht} on={setHt} />
+                <QField lbl="Age" v={age} on={setAge} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ ...tiny, marginBottom: 4 }}>Sex</div>
                   <div style={{ display: "flex", gap: 5 }}>{["male", "female"].map((s) => <button key={s} onClick={() => setSex(s)} style={{ ...chip(sex === s), flex: 1, padding: "8px 0", textAlign: "center", fontSize: 11 }}>{cap(s)}</button>)}</div>
                 </div>
               </div>
+              <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                <QField lbl="Rate kg/wk (− = loss)" v={rate} on={setRate} />
+                <QField lbl="Protein g/kg" v={ppk} on={setPpk} />
+              </div>
               <div style={{ ...tiny, margin: "10px 0 4px" }}>Goal</div>
               <div style={{ display: "flex", gap: 5 }}>{GOALS.map((g) => <button key={g} onClick={() => setGoal(g)} style={{ ...chip(goal === g), flex: 1, padding: "8px 0", textAlign: "center", fontSize: 11 }}>{cap(g)}</button>)}</div>
-              <button onClick={aiSuggestTargets} disabled={sugBusy} style={{ ...softBtn, marginTop: 10, opacity: sugBusy ? 0.6 : 1 }}>{sugBusy ? "Calculating…" : "✨ Suggest targets with AI"}</button>
+              <button onClick={() => setAiTune((x) => !x)} style={{ width: "100%", marginTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center", background: INSET, border: "1px solid " + CB, borderRadius: 10, padding: "9px 11px", cursor: "pointer" }}>
+                <span style={{ fontSize: 11.5, color: MUTED }}>✨ AI fine-tune <span style={{ color: FAINTER }}>· nudge ±12% for training load</span></span>
+                <span style={{ fontSize: 11, fontWeight: 800, color: aiTune ? FIBR2 : FAINTER }}>{aiTune ? "ON" : "OFF"}</span>
+              </button>
+              <button onClick={suggestTargets} disabled={sugBusy} style={{ ...softBtn, marginTop: 10, opacity: sugBusy ? 0.6 : 1 }}>{sugBusy ? "Calculating…" : "Calculate targets"}</button>
               {sug && (
                 <div style={{ marginTop: 10, padding: 10, borderRadius: 10, background: INSET, border: "1px solid " + CB }}>
                   <div style={{ fontSize: 11.5, color: BODY, lineHeight: 1.45 }}>{sug.rationale}</div>
-                  <div style={{ fontSize: 10.5, color: FAINT, marginTop: 6 }}>BMR ~{sug.bmr} · TDEE ~{sug.tdee} kcal{sug.weight ? " · " + Math.round(sug.weight) + "kg" : ""}{sug.bf ? " · " + sug.bf + "% BF" : ""} — applied above, edit freely.</div>
+                  <div style={{ fontSize: 10.5, color: FAINT, marginTop: 6 }}>BMR ~{sug.bmr} · TDEE ~{sug.tdee} kcal{sug.bmi ? " · BMI " + sug.bmi : ""}{sug.af ? " · ×" + sug.af : ""}{sug.ai ? " · AI-tuned" : ""} — edit any field below.</div>
                 </div>
               )}
-              <div style={{ fontSize: 10.5, color: FAINTER, marginTop: 6 }}>Uses your weight, body-fat, training load &amp; goal. A starting point, not medical advice.</div>
+              <div style={{ fontSize: 10.5, color: FAINTER, marginTop: 6 }}>Blanks fall back to your latest weight, DEXA body-fat &amp; training load. A starting point, not medical advice.</div>
             </div>
-            <button onClick={saveTargets} disabled={busy} style={{ ...primary, opacity: busy ? 0.6 : 1 }}>{busy ? "Saving…" : "Save targets"}</button>
+
+            <div style={{ ...tiny, margin: "14px 0 0" }}>Daily targets — protein held constant; carbs cycle by day</div>
+            {macroRow("training")}
+            {macroRow("rest")}
+            <div style={{ fontSize: 10.5, color: FAINTER, marginTop: 6 }}>The day view highlights whichever set applies, based on your Schedule.</div>
+            <button onClick={saveTargets} disabled={busy} style={{ ...primary, opacity: busy ? 0.6 : 1 }}>{busy ? "Saving…" : "Save both targets"}</button>
           </div>
         )}
 
@@ -234,20 +314,35 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
               <button onClick={startDictation} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 9, border: "1px solid " + (listening ? "#5a2532" : CHIP_IDLE_B), background: listening ? "#1a0f12" : CHIP_IDLE, color: listening ? "#ff9aa5" : ACCENT_LT, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{listening ? "● Listening…" : "🎤 Speak"}</button>
             </div>
             <textarea value={typical} onChange={(e) => setTypical(e.target.value)} rows={3} placeholder="e.g. I usually have idli or oats for breakfast, dal-roti-sabzi lunches, paneer often. Love filter coffee. Dislike mushrooms; no eggs." style={{ ...inp, resize: "vertical", lineHeight: 1.45 }} />
+            {(existingLikes || existingDislikes) && (
+              <div style={{ fontSize: 10.5, color: FAINTER, marginTop: 8, lineHeight: 1.5 }}>{existingLikes ? <span>👍 {existingLikes}</span> : null}{existingLikes && existingDislikes ? <br /> : null}{existingDislikes ? <span>👎 {existingDislikes}</span> : null}</div>
+            )}
             <button onClick={() => setReferDefault((x) => !x)} style={{ width: "100%", marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center", background: CARD, border: "1px solid " + CB, borderRadius: 12, padding: "12px 13px", cursor: "pointer" }}>
-              <span style={{ fontSize: 12.5, color: BODY, textAlign: "left" }}>Use my Pantry brands by default<br /><span style={{ fontSize: 10.5, color: FAINT }}>When logging, prefer your saved products over generic values.</span></span>
+              <span style={{ fontSize: 12.5, color: BODY, textAlign: "left" }}>Use my Pantry brands by default<br /><span style={{ fontSize: 10.5, color: FAINT }}>The global default; each add screen can still override per entry.</span></span>
               <span style={{ fontSize: 12, fontWeight: 800, color: referDefault ? FIBR2 : FAINTER }}>{referDefault ? "ON" : "OFF"}</span>
             </button>
             <div style={{ marginTop: 14 }}>
               <button onClick={generateMenu} disabled={genBusy} style={{ ...softBtn, opacity: genBusy ? 0.6 : 1 }}>{genBusy ? "Generating…" : "✨ Generate starter menu"}</button>
-              <div style={{ fontSize: 10.5, color: FAINTER, marginTop: 6 }}>Built from your cuisines, eating pattern, the notes above &amp; your targets.</div>
+              <div style={{ fontSize: 10.5, color: FAINTER, marginTop: 6 }}>Built from your cuisines, eating pattern, the notes above &amp; your targets. Tap a dish: once 👍, twice 👎.</div>
               {genNote && <div style={{ fontSize: 11, color: "#ff9aa5", marginTop: 6 }}>{genNote}</div>}
               {menu && ["breakfast", "lunch", "dinner", "snacks"].map((k) => (Array.isArray(menu[k]) && menu[k].length ? (
                 <div key={k} style={{ marginTop: 10 }}>
                   <div style={{ ...tiny, marginBottom: 5 }}>{cap(k)}</div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{menu[k].map((it: string, i: number) => <span key={i} style={{ fontSize: 11.5, color: BODY, background: CARD, border: "1px solid " + CB, borderRadius: 9, padding: "5px 9px" }}>{it}</span>)}</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{menu[k].map((it: string, i: number) => {
+                    const p = menuPick[it] || 0;
+                    const bg = p === 1 ? LIKE_B : p === -1 ? DISLIKE_B : CARD;
+                    const bd = p === 1 ? LIKE : p === -1 ? DISLIKE : CB;
+                    const col = p === 1 ? LIKE : p === -1 ? DISLIKE : BODY;
+                    return <button key={i} onClick={() => cyclePick(it)} style={{ fontSize: 11.5, color: col, background: bg, border: "1px solid " + bd, borderRadius: 9, padding: "5px 9px", cursor: "pointer", fontWeight: p ? 700 : 500 }}>{p === 1 ? "👍 " : p === -1 ? "👎 " : ""}{it}</button>;
+                  })}</div>
                 </div>
               ) : null))}
+              {menu && (
+                <>
+                  <button onClick={saveMenuPicks} disabled={picksBusy} style={{ width: "100%", marginTop: 12, padding: 11, borderRadius: 12, border: "1px solid " + LIKE_B, background: "transparent", color: LIKE, fontSize: 12.5, fontWeight: 700, cursor: "pointer", opacity: picksBusy ? 0.6 : 1 }}>{picksBusy ? "Saving…" : "Save 👍 / 👎 to my preferences"}</button>
+                  {picksNote && <div style={{ fontSize: 11, color: FAINT, marginTop: 6 }}>{picksNote}</div>}
+                </>
+              )}
             </div>
             <button onClick={savePrefs} disabled={busy} style={{ ...primary, opacity: busy ? 0.6 : 1 }}>{busy ? "Saving…" : "Save preferences"}</button>
           </div>
