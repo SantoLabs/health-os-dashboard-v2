@@ -21,7 +21,8 @@ const navBtn: CSSProperties = { width: 30, height: 30, borderRadius: 9, border: 
 type Targets = { calories: number; protein: number; carbs: number; fats: number; fiber: number; micros_rda: Record<string, number> };
 type Totals = { calories: number; protein: number; carbs: number; fats: number; fiber: number; water: number; micros: Record<string, number> };
 type Meal = { id: string; meal_type: string | null; snack_slot: string | null; name: string; source: string; confidence: string | null; time: string | null; quantity: number | null; unit: string | null; servings: number; kcal: number; protein: number; carbs: number; fats: number; fiber: number; water_ml: number; micros: Record<string, number>; food_id: string | null };
-type Day = { date: string; targets: Targets; totals: Totals; meals: Meal[] };
+type DaySet = { calories: number; protein: number; carbs: number; fats: number; fiber: number };
+type Day = { date: string; targets: Targets; targets_training?: DaySet; targets_rest?: DaySet; has_rest?: boolean; day_type?: string; totals: Totals; meals: Meal[] };
 type WeekDay = { date: string; dow: number; protein: number; calories: number; entries: number; status: string };
 type Week = { start: string; today: string; target_protein: number; streak: number; days: WeekDay[] };
 type LoggedDay = { date: string; calories: number; protein: number; entries: number };
@@ -91,7 +92,11 @@ export default function NutritionPage() {
     catch (e) { setErr((e as Error).message); } finally { setCopying(false); }
   }
 
-  const t = day ? day.targets : null;
+  const dtype = day?.day_type || "unknown";
+  const tt: DaySet | null = day ? (day.targets_training || day.targets) : null;
+  const tr: DaySet | null = day ? (day.targets_rest || day.targets) : null;
+  const showSplit = !!(day && day.has_rest);
+  const t: DaySet | null = day ? (showSplit && dtype === "rest" ? tr : tt) : null;
   const tot = day ? day.totals : null;
   const proteinLeft = t && tot ? Math.max(0, Math.round(t.protein - tot.protein)) : 0;
   const emptyPast = sel < today && day !== null && day.meals.length === 0;
@@ -136,6 +141,23 @@ export default function NutritionPage() {
           <span style={{ fontSize: 12.5, color: "#f3cf8e", fontWeight: 600 }}>🗓️ {gaps.length} unlogged {gaps.length === 1 ? "day" : "days"} this past week</span>
           <span style={{ fontSize: 11.5, fontWeight: 800, color: PARTIAL }}>Backfill →</span>
         </button>
+      )}
+
+      {showSplit && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          {([["training", "\uD83C\uDFCB Training", tt], ["rest", "\uD83D\uDECC Rest", tr]] as [string, string, DaySet | null][]).map(([k, lbl, set]) => {
+            const active = dtype === k; const unknown = dtype === "unknown";
+            return (
+              <div key={k} style={{ flex: 1, borderRadius: 12, padding: "8px 11px", border: "1px solid " + (active ? CHIP_SEL_B : CB), background: active ? CHIP_SEL : CARD, opacity: unknown || active ? 1 : 0.55 }}>
+                <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".04em", color: active ? ACCENT_LT : FAINT }}>{lbl}{active ? " \u00b7 today" : ""}</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: active ? H : MUTED, fontVariantNumeric: "tabular-nums", marginTop: 2 }}>{set ? set.calories : 0}<span style={{ fontSize: 9.5, color: FAINTER, fontWeight: 600 }}> kcal \u00b7 P{set ? set.protein : 0}</span></div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {showSplit && dtype === "unknown" && (
+        <div style={{ fontSize: 10.5, color: FAINT, marginBottom: 8, marginTop: -2 }}>No workout scheduled today \u2014 showing both; the active set highlights once the Schedule has a session.</div>
       )}
 
       <div style={{ ...card, marginBottom: 8 }}>
