@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { nutriProfile, nutriFoods, nutriPost } from "../../lib/api";
 
 const CARD = "#101626", INSET = "#0e1320", CB = "#1a2232", IB = "#1f2838";
@@ -9,14 +9,16 @@ const ACCENT = "#4f9cf9", ACCENT_LT = "#7fb0ff", CHIP_SEL = "#13203a", CHIP_SEL_
 const PROT = "#5b9bff", CARB = "#f3b14e", FAT = "#f0735a", FIBR = "#46c79a", FIBR2 = "#46c79a";
 
 type Targets = { calories: number; protein: number; carbs: number; fats: number; fiber: number; micros_rda: Record<string, number> };
-type Profile = { cuisine: string[]; eating_pattern: string; restrictions: string; refer_pantry_default: boolean; typical_meals: string; biggest_challenge: string; starter_menu: unknown };
+type Profile = { cuisine: string[]; eating_pattern: string; restrictions: string; refer_pantry_default: boolean; typical_meals: string; biggest_challenge: string; starter_menu: unknown; likes: string; narrative: string; height_cm: number | null; age: number | null; sex: string; activity_level: string };
 type PantryItem = { id: string; category: string; food_id: string | null; label: string; basis: string; kcal: number; protein: number; carbs: number; fats: number; fiber: number; unit_grams: Record<string, number>; micros: Record<string, number> };
 type Food = { id: string; name: string; brand: string | null; category: string | null; basis: string; kcal: number; protein: number; carbs: number; fats: number; fiber: number; micros: Record<string, number>; unit_grams: Record<string, number>; source: string; verified: boolean };
 type ProfileResp = { profile: Profile; targets: Targets; pantry: PantryItem[] };
+type Sug = { rationale: string; bmr?: number; tdee?: number; weight?: number; bf?: number | null };
 
 const CUISINES = ["North Indian", "South Indian", "Gujarati", "Punjabi", "Bengali", "Maharashtrian", "Continental", "Chinese", "Mediterranean", "Mexican"];
 const PATTERNS = ["Vegetarian", "Eggetarian", "Non-veg", "Vegan", "Jain"];
 const CATS = ["milk", "paneer", "curd", "whey", "atta", "oats", "oil", "ghee", "bread", "rice", "dal"];
+const GOALS = ["cut", "recomp", "maintain", "gain"];
 
 const numv = (s: string) => Number(s) || 0;
 const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
@@ -24,6 +26,25 @@ const tiny: CSSProperties = { fontSize: 9, fontWeight: 600, letterSpacing: ".06e
 const inp: CSSProperties = { width: "100%", boxSizing: "border-box", padding: "10px 11px", borderRadius: 10, border: "1px solid " + IB, background: "#0b101b", color: BODY, fontSize: 13.5, outline: "none" };
 function chip(active: boolean): CSSProperties { return { padding: "8px 12px", borderRadius: 11, cursor: "pointer", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", border: "1px solid " + (active ? CHIP_SEL_B : CHIP_IDLE_B), background: active ? CHIP_SEL : CHIP_IDLE, color: active ? ACCENT_LT : MUTED }; }
 const primary: CSSProperties = { width: "100%", marginTop: 14, padding: 13, borderRadius: 14, border: "none", background: ACCENT, color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer" };
+const softBtn: CSSProperties = { width: "100%", padding: 11, borderRadius: 12, border: "1px solid " + CHIP_SEL_B, background: CHIP_SEL, color: ACCENT_LT, fontSize: 13, fontWeight: 700, cursor: "pointer" };
+
+function resizeToB64(file: File): Promise<{ image_b64: string; mime: string }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      let w = img.width, h = img.height; const max = 1280;
+      if (w > max || h > max) { const s = max / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); }
+      const c = document.createElement("canvas"); c.width = w; c.height = h;
+      const ctx = c.getContext("2d"); if (!ctx) { reject(new Error("no canvas")); return; }
+      ctx.drawImage(img, 0, 0, w, h);
+      const data = c.toDataURL("image/jpeg", 0.85); URL.revokeObjectURL(url);
+      resolve({ image_b64: data.split(",")[1] || "", mime: "image/jpeg" });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("img load failed")); };
+    img.src = url;
+  });
+}
 
 function NumIn({ v, on, color }: { v: string; on: (s: string) => void; color?: string }) {
   return <input value={v} onChange={(e) => on(e.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" placeholder="0" style={{ width: "100%", boxSizing: "border-box", padding: "9px 8px", borderRadius: 10, border: "1px solid " + (color ? "#294063" : IB), background: "#0b101b", color: BODY, fontSize: 13, outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />;
@@ -38,23 +59,28 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // targets draft
+  // targets
   const [cal, setCal] = useState(""); const [pro, setPro] = useState(""); const [car, setCar] = useState(""); const [fat, setFat] = useState(""); const [fib, setFib] = useState("");
-  const [wt, setWt] = useState(""); const [goal, setGoal] = useState("maintain");
-  // prefs draft
+  const [ht, setHt] = useState(""); const [age, setAge] = useState(""); const [sex, setSex] = useState("male"); const [goal, setGoal] = useState("recomp");
+  const [sugBusy, setSugBusy] = useState(false); const [sug, setSug] = useState<Sug | null>(null);
+  // prefs
   const [cuisine, setCuisine] = useState<string[]>([]); const [pattern, setPattern] = useState(""); const [referDefault, setReferDefault] = useState(true);
-  // pantry add
-  const [pAdding, setPAdding] = useState(false); const [pCat, setPCat] = useState(""); const [pQ, setPQ] = useState(""); const [pFoods, setPFoods] = useState<Food[]>([]); const [pPicked, setPPicked] = useState<Food | null>(null);
-  const [pLabel, setPLabel] = useState(""); const [pKcal, setPKcal] = useState(""); const [pPro, setPPro] = useState(""); const [pCar, setPCar] = useState(""); const [pFat, setPFat] = useState(""); const [pFib, setPFib] = useState("");
+  const [typical, setTypical] = useState(""); const [listening, setListening] = useState(false);
+  const [menu, setMenu] = useState<any>(null); const [genBusy, setGenBusy] = useState(false); const [genNote, setGenNote] = useState<string | null>(null);
+  // pantry
   const [pantry, setPantry] = useState<PantryItem[]>([]);
-  const [menu, setMenu] = useState<any>(null);
-  const [genBusy, setGenBusy] = useState(false);
-  const [genNote, setGenNote] = useState<string | null>(null);
+  const [pAdding, setPAdding] = useState(false); const [pCat, setPCat] = useState(""); const [pQ, setPQ] = useState(""); const [pFoods, setPFoods] = useState<Food[]>([]); const [pPicked, setPPicked] = useState(false);
+  const [pLabel, setPLabel] = useState(""); const [pKcal, setPKcal] = useState(""); const [pPro, setPPro] = useState(""); const [pCar, setPCar] = useState(""); const [pFat, setPFat] = useState(""); const [pFib, setPFib] = useState("");
+  const [pBasis, setPBasis] = useState("per_100g"); const [pUnitGrams, setPUnitGrams] = useState<Record<string, number>>({}); const [pMicros, setPMicros] = useState<Record<string, number>>({});
+  const [scanBusy, setScanBusy] = useState(false); const [camOn, setCamOn] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null); const streamRef = useRef<MediaStream | null>(null);
 
   function hydrate(d: ProfileResp) {
     setData(d);
     setCal(String(d.targets.calories || "")); setPro(String(d.targets.protein || "")); setCar(String(d.targets.carbs || "")); setFat(String(d.targets.fats || "")); setFib(String(d.targets.fiber || ""));
     setCuisine(d.profile.cuisine || []); setPattern(d.profile.eating_pattern || ""); setReferDefault(d.profile.refer_pantry_default !== false);
+    setTypical(d.profile.typical_meals || "");
+    if (d.profile.height_cm != null) setHt(String(d.profile.height_cm)); if (d.profile.age != null) setAge(String(d.profile.age)); if (d.profile.sex) setSex(d.profile.sex);
     setPantry(d.pantry || []);
     setMenu(d.profile.starter_menu && (d.profile.starter_menu as any).breakfast ? d.profile.starter_menu : null);
   }
@@ -64,12 +90,19 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
     const t = setTimeout(() => { nutriFoods<{ foods: Food[] }>(pQ).then((r) => setPFoods(r.foods || [])).catch(() => {}); }, 220);
     return () => clearTimeout(t);
   }, [pQ, pAdding]);
+  useEffect(() => { if (camOn && videoRef.current && streamRef.current) { videoRef.current.srcObject = streamRef.current; videoRef.current.play().catch(() => {}); } }, [camOn]);
+  useEffect(() => () => { const s = streamRef.current; if (s) s.getTracks().forEach((t) => t.stop()); }, []);
 
-  function suggest() {
-    const w = numv(wt); if (!w) { setErr("Enter your weight first"); return; }
-    const perKg = goal === "cut" ? 26 : goal === "gain" ? 34 : 30;
-    const c = Math.round(w * perKg); const p = Math.round(w * 1.8); const f = Math.round((c * 0.25) / 9); const cb = Math.round((c - p * 4 - f * 9) / 4);
-    setCal(String(c)); setPro(String(p)); setFat(String(f)); setCar(String(cb < 0 ? 0 : cb)); setFib(String(30));
+  async function aiSuggestTargets() {
+    setSugBusy(true); setErr(null); setSug(null);
+    try {
+      const r = await nutriPost<any>("targets_suggest", { height_cm: numv(ht) || null, age: numv(age) || null, sex: sex || null, goal });
+      if (r && r.needs) setErr("Add " + (r.needs as string[]).join(", ") + " above for a personalised suggestion.");
+      else if (r && r.suggestion) {
+        const s = r.suggestion; setCal(String(s.calories)); setPro(String(s.protein)); setCar(String(s.carbs)); setFat(String(s.fats)); setFib(String(s.fiber));
+        setSug({ rationale: r.rationale || "", bmr: r.inputs?.bmr, tdee: r.inputs?.tdee, weight: r.inputs?.weight_kg, bf: r.inputs?.body_fat_pct });
+      } else setErr((r && r.note) || "Couldn't suggest right now.");
+    } catch (e) { setErr((e as Error).message); } finally { setSugBusy(false); }
   }
   async function saveTargets() {
     setBusy(true); setErr(null);
@@ -78,23 +111,60 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
   }
   async function savePrefs() {
     setBusy(true); setErr(null);
-    try { const d = await nutriPost<ProfileResp>("profile_save", { cuisine, eating_pattern: pattern, refer_pantry_default: referDefault }); hydrate(d); }
+    try { const d = await nutriPost<ProfileResp>("profile_save", { cuisine, eating_pattern: pattern, refer_pantry_default: referDefault, typical_meals: typical }); hydrate(d); }
     catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   }
   function toggleCuisine(c: string) { setCuisine((xs) => (xs.indexOf(c) >= 0 ? xs.filter((x) => x !== c) : [...xs, c])); }
+  function startDictation() {
+    const SR: any = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    if (!SR) { setErr("Voice input isn't supported in this browser — please type instead."); return; }
+    try {
+      const rec = new SR(); rec.lang = "en-IN"; rec.interimResults = false; rec.continuous = false; setListening(true);
+      rec.onresult = (e: any) => { const txt = Array.from(e.results).map((x: any) => x[0].transcript).join(" "); setTypical((t) => (t ? t + " " : "") + txt); };
+      rec.onerror = () => setListening(false); rec.onend = () => setListening(false); rec.start();
+    } catch { setListening(false); }
+  }
   async function generateMenu() {
     setGenBusy(true); setGenNote(null);
-    try { const r = await nutriPost<{ menu: any; note?: string }>("menu_generate", {}); if (r && r.menu) setMenu(r.menu); else setGenNote((r && r.note) || "Couldn't generate right now."); }
+    try { const r = await nutriPost<{ menu: any; note?: string }>("menu_generate", { cuisine, eating_pattern: pattern, typical_meals: typical }); if (r && r.menu) setMenu(r.menu); else setGenNote((r && r.note) || "Couldn't generate right now."); }
     catch (e) { setGenNote((e as Error).message); } finally { setGenBusy(false); }
   }
 
-  function pickPantryFood(f: Food) { setPPicked(f); setPLabel(f.brand ? f.brand + " " + f.name : f.name); setPKcal(String(f.kcal)); setPPro(String(f.protein)); setPCar(String(f.carbs)); setPFat(String(f.fats)); setPFib(String(f.fiber)); if (f.category && !pCat) setPCat(f.category); }
-  function resetPantryAdd() { setPCat(""); setPQ(""); setPFoods([]); setPPicked(null); setPLabel(""); setPKcal(""); setPPro(""); setPCar(""); setPFat(""); setPFib(""); }
+  function applyFood(f: Food) { setPPicked(true); setPLabel(f.brand ? f.brand + " " + f.name : f.name); setPKcal(String(f.kcal)); setPPro(String(f.protein)); setPCar(String(f.carbs)); setPFat(String(f.fats)); setPFib(String(f.fiber)); setPBasis(f.basis); setPUnitGrams(f.unit_grams || {}); setPMicros(f.micros || {}); if (f.category && !pCat) setPCat(f.category); }
+  function resetPantryAdd() { setPCat(""); setPQ(""); setPFoods([]); setPPicked(false); setPLabel(""); setPKcal(""); setPPro(""); setPCar(""); setPFat(""); setPFib(""); setPBasis("per_100g"); setPUnitGrams({}); setPMicros({}); stopCam(); }
+  async function aiPantryFood() {
+    const nm = pQ.trim(); if (!nm) return; setBusy(true); setErr(null);
+    try { const r = await nutriPost<{ food: Food | null }>("ai_food", { name: nm }); if (r && r.food) applyFood(r.food); else setErr("Couldn't estimate that product — type the values or scan the label."); }
+    catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  }
+  async function runLabelScan(image_b64: string, mime: string) {
+    setScanBusy(true); setErr(null);
+    try {
+      const r = await nutriPost<any>("label_scan", { image_b64, mime });
+      if (r && r.ok && r.label) { const L = r.label; setPPicked(true); if (L.name && !pLabel) setPLabel(L.name); setPKcal(String(L.kcal)); setPPro(String(L.protein)); setPCar(String(L.carbs)); setPFat(String(L.fats)); setPFib(String(L.fiber)); setPBasis(L.basis || "per_100g"); setPUnitGrams(L.unit_grams || {}); }
+      else setErr((r && r.note) || "Couldn't read the label — try a clearer photo or type the values.");
+    } catch (e) { setErr((e as Error).message); } finally { setScanBusy(false); }
+  }
+  function scanUpload(file: File) { resizeToB64(file).then((img) => runLabelScan(img.image_b64, img.mime)).catch(() => setErr("Couldn't read that image.")); }
+  function stopCam() { const s = streamRef.current; if (s) { s.getTracks().forEach((t) => t.stop()); streamRef.current = null; } setCamOn(false); }
+  async function startCam() {
+    setErr(null);
+    try { const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false }); streamRef.current = s; setCamOn(true); }
+    catch { setErr("Camera unavailable here — use the Upload option instead."); }
+  }
+  function captureLabel() {
+    const v = videoRef.current; if (!v) return;
+    const max = 1280; let w = v.videoWidth || 720, h = v.videoHeight || 540;
+    if (w > max || h > max) { const sc = max / Math.max(w, h); w = Math.round(w * sc); h = Math.round(h * sc); }
+    const c = document.createElement("canvas"); c.width = w; c.height = h; const ctx = c.getContext("2d"); if (!ctx) return;
+    ctx.drawImage(v, 0, 0, w, h); const dataUrl = c.toDataURL("image/jpeg", 0.85);
+    stopCam(); runLabelScan(dataUrl.split(",")[1] || "", "image/jpeg");
+  }
   async function savePantryItem() {
     if (!pCat.trim()) { setErr("Pick or type a category"); return; }
     setBusy(true); setErr(null);
     try {
-      const r = await nutriPost<{ pantry: PantryItem[] }>("pantry_save", { category: pCat.trim().toLowerCase(), label: pLabel || pCat, food_id: pPicked ? pPicked.id : null, basis: pPicked ? pPicked.basis : "per_100g", kcal: numv(pKcal), protein: numv(pPro), carbs: numv(pCar), fats: numv(pFat), fiber: numv(pFib), unit_grams: pPicked ? pPicked.unit_grams : {}, micros: pPicked ? pPicked.micros : {} });
+      const r = await nutriPost<{ pantry: PantryItem[] }>("pantry_save", { category: pCat.trim().toLowerCase(), label: pLabel || pCat, basis: pBasis, kcal: numv(pKcal), protein: numv(pPro), carbs: numv(pCar), fats: numv(pFat), fiber: numv(pFib), unit_grams: pUnitGrams, micros: pMicros });
       setPantry(r.pantry || []); resetPantryAdd(); setPAdding(false);
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   }
@@ -126,15 +196,24 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
               <Field lbl="Fibr" v={fib} on={setFib} color={FIBR} />
             </div>
             <div style={{ marginTop: 14, background: CARD, border: "1px solid " + CB, borderRadius: 13, padding: 12 }}>
-              <div style={{ ...tiny, marginBottom: 8 }}>Quick-set from bodyweight</div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <div style={{ width: 96 }}><input value={wt} onChange={(e) => setWt(e.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" placeholder="kg" style={inp} /></div>
-                <div style={{ display: "flex", gap: 5, flex: 1 }}>
-                  {["cut", "maintain", "gain"].map((g) => <button key={g} onClick={() => setGoal(g)} style={{ ...chip(goal === g), flex: 1, padding: "8px 0", textAlign: "center" }}>{cap(g)}</button>)}
+              <div style={{ ...tiny, marginBottom: 8 }}>✨ Suggest from your data</div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <div style={{ flex: 1 }}><div style={{ ...tiny, marginBottom: 4 }}>Height cm</div><NumIn v={ht} on={setHt} /></div>
+                <div style={{ flex: 1 }}><div style={{ ...tiny, marginBottom: 4 }}>Age</div><NumIn v={age} on={setAge} /></div>
+                <div style={{ flex: 1.4 }}><div style={{ ...tiny, marginBottom: 4 }}>Sex</div>
+                  <div style={{ display: "flex", gap: 5 }}>{["male", "female"].map((s) => <button key={s} onClick={() => setSex(s)} style={{ ...chip(sex === s), flex: 1, padding: "8px 0", textAlign: "center", fontSize: 11 }}>{cap(s)}</button>)}</div>
                 </div>
               </div>
-              <button onClick={suggest} style={{ width: "100%", marginTop: 10, padding: 10, borderRadius: 11, border: "1px solid " + CHIP_SEL_B, background: CHIP_SEL, color: ACCENT_LT, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Suggest targets (~1.8g protein/kg)</button>
-              <div style={{ fontSize: 10.5, color: FAINTER, marginTop: 6 }}>A starting point you can edit. Not medical advice — adjust to how you feel and progress.</div>
+              <div style={{ ...tiny, margin: "10px 0 4px" }}>Goal</div>
+              <div style={{ display: "flex", gap: 5 }}>{GOALS.map((g) => <button key={g} onClick={() => setGoal(g)} style={{ ...chip(goal === g), flex: 1, padding: "8px 0", textAlign: "center", fontSize: 11 }}>{cap(g)}</button>)}</div>
+              <button onClick={aiSuggestTargets} disabled={sugBusy} style={{ ...softBtn, marginTop: 10, opacity: sugBusy ? 0.6 : 1 }}>{sugBusy ? "Calculating…" : "✨ Suggest targets with AI"}</button>
+              {sug && (
+                <div style={{ marginTop: 10, padding: 10, borderRadius: 10, background: INSET, border: "1px solid " + CB }}>
+                  <div style={{ fontSize: 11.5, color: BODY, lineHeight: 1.45 }}>{sug.rationale}</div>
+                  <div style={{ fontSize: 10.5, color: FAINT, marginTop: 6 }}>BMR ~{sug.bmr} · TDEE ~{sug.tdee} kcal{sug.weight ? " · " + Math.round(sug.weight) + "kg" : ""}{sug.bf ? " · " + sug.bf + "% BF" : ""} — applied above, edit freely.</div>
+                </div>
+              )}
+              <div style={{ fontSize: 10.5, color: FAINTER, marginTop: 6 }}>Uses your weight, body-fat, training load &amp; goal. A starting point, not medical advice.</div>
             </div>
             <button onClick={saveTargets} disabled={busy} style={{ ...primary, opacity: busy ? 0.6 : 1 }}>{busy ? "Saving…" : "Save targets"}</button>
           </div>
@@ -150,13 +229,18 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {PATTERNS.map((p) => <button key={p} onClick={() => setPattern(p)} style={chip(pattern === p)}>{p}</button>)}
             </div>
-            <button onClick={() => setReferDefault((x) => !x)} style={{ width: "100%", marginTop: 16, display: "flex", justifyContent: "space-between", alignItems: "center", background: CARD, border: "1px solid " + CB, borderRadius: 12, padding: "12px 13px", cursor: "pointer" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "16px 0 6px" }}>
+              <div style={tiny}>What you typically eat · likes &amp; dislikes</div>
+              <button onClick={startDictation} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 9, border: "1px solid " + (listening ? "#5a2532" : CHIP_IDLE_B), background: listening ? "#1a0f12" : CHIP_IDLE, color: listening ? "#ff9aa5" : ACCENT_LT, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{listening ? "● Listening…" : "🎤 Speak"}</button>
+            </div>
+            <textarea value={typical} onChange={(e) => setTypical(e.target.value)} rows={3} placeholder="e.g. I usually have idli or oats for breakfast, dal-roti-sabzi lunches, paneer often. Love filter coffee. Dislike mushrooms; no eggs." style={{ ...inp, resize: "vertical", lineHeight: 1.45 }} />
+            <button onClick={() => setReferDefault((x) => !x)} style={{ width: "100%", marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center", background: CARD, border: "1px solid " + CB, borderRadius: 12, padding: "12px 13px", cursor: "pointer" }}>
               <span style={{ fontSize: 12.5, color: BODY, textAlign: "left" }}>Use my Pantry brands by default<br /><span style={{ fontSize: 10.5, color: FAINT }}>When logging, prefer your saved products over generic values.</span></span>
               <span style={{ fontSize: 12, fontWeight: 800, color: referDefault ? FIBR2 : FAINTER }}>{referDefault ? "ON" : "OFF"}</span>
             </button>
             <div style={{ marginTop: 14 }}>
-              <button onClick={generateMenu} disabled={genBusy} style={{ width: "100%", padding: 11, borderRadius: 12, border: "1px solid " + CHIP_SEL_B, background: CHIP_SEL, color: ACCENT_LT, fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: genBusy ? 0.6 : 1 }}>{genBusy ? "Generating…" : "✨ Generate starter menu"}</button>
-              <div style={{ fontSize: 10.5, color: FAINTER, marginTop: 6 }}>Uses your cuisines + eating pattern + targets. Regenerate anytime.</div>
+              <button onClick={generateMenu} disabled={genBusy} style={{ ...softBtn, opacity: genBusy ? 0.6 : 1 }}>{genBusy ? "Generating…" : "✨ Generate starter menu"}</button>
+              <div style={{ fontSize: 10.5, color: FAINTER, marginTop: 6 }}>Built from your cuisines, eating pattern, the notes above &amp; your targets.</div>
               {genNote && <div style={{ fontSize: 11, color: "#ff9aa5", marginTop: 6 }}>{genNote}</div>}
               {menu && ["breakfast", "lunch", "dinner", "snacks"].map((k) => (Array.isArray(menu[k]) && menu[k].length ? (
                 <div key={k} style={{ marginTop: 10 }}>
@@ -194,18 +278,42 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
                   {CATS.map((c) => <button key={c} onClick={() => setPCat(c)} style={{ ...chip(pCat === c), padding: "6px 10px", fontSize: 11 }}>{c}</button>)}
                 </div>
                 <input value={pCat} onChange={(e) => setPCat(e.target.value)} placeholder="or type a category" style={{ ...inp, marginBottom: 10 }} />
+
                 <div style={{ ...tiny, marginBottom: 6 }}>Find your product</div>
                 <input value={pQ} onChange={(e) => setPQ(e.target.value)} placeholder="search e.g. paneer, whey, milk…" style={inp} />
                 {!pPicked && pFoods.length > 0 && (
                   <div style={{ marginTop: 8, maxHeight: 150, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
                     {pFoods.map((f) => (
-                      <button key={f.id} onClick={() => pickPantryFood(f)} style={{ textAlign: "left", background: INSET, border: "1px solid " + CB, borderRadius: 10, padding: "8px 10px", cursor: "pointer" }}>
+                      <button key={f.id} onClick={() => applyFood(f)} style={{ textAlign: "left", background: INSET, border: "1px solid " + CB, borderRadius: 10, padding: "8px 10px", cursor: "pointer" }}>
                         <span style={{ fontSize: 12.5, fontWeight: 600, color: BODY }}>{f.name}</span>
                         <span style={{ fontSize: 10.5, color: FAINT }}> · {f.kcal} kcal · P {f.protein}</span>
                       </button>
                     ))}
                   </div>
                 )}
+                {!pPicked && pQ.trim() && pFoods.length === 0 && (
+                  <button onClick={aiPantryFood} disabled={busy} style={{ ...softBtn, marginTop: 8, opacity: busy ? 0.6 : 1 }}>{busy ? "Estimating…" : "✨ Estimate “" + pQ.trim() + "” with AI"}</button>
+                )}
+
+                <div style={{ ...tiny, margin: "12px 0 6px" }}>Or scan the nutrition label</div>
+                {camOn ? (
+                  <div style={{ borderRadius: 12, overflow: "hidden", background: "#000" }}>
+                    <video ref={videoRef} playsInline muted style={{ width: "100%", display: "block", maxHeight: 280, objectFit: "cover" }} />
+                    <div style={{ display: "flex", gap: 8, padding: 8 }}>
+                      <button onClick={stopCam} style={{ flex: 1, padding: 10, borderRadius: 10, border: "1px solid " + CB, background: CHIP_IDLE, color: MUTED, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+                      <button onClick={captureLabel} style={{ flex: 2, padding: 10, borderRadius: 10, border: "none", background: ACCENT, color: "#fff", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>📸 Capture label</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <label style={{ flex: 1, textAlign: "center", border: "1px dashed " + IB, borderRadius: 11, padding: "11px 8px", cursor: "pointer", background: INSET, color: ACCENT_LT, fontSize: 12, fontWeight: 700 }}>📁 Upload label
+                      <input type="file" accept="image/*" onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) scanUpload(f); }} style={{ display: "none" }} />
+                    </label>
+                    <button onClick={startCam} style={{ flex: 1, border: "1px dashed " + IB, borderRadius: 11, padding: "11px 8px", cursor: "pointer", background: INSET, color: ACCENT_LT, fontSize: 12, fontWeight: 700 }}>📷 Camera</button>
+                  </div>
+                )}
+                {scanBusy && <div style={{ fontSize: 11, color: FAINT, marginTop: 6 }}>✨ Reading label…</div>}
+
                 <div style={{ ...tiny, margin: "12px 0 4px" }}>Label</div>
                 <input value={pLabel} onChange={(e) => setPLabel(e.target.value)} placeholder="e.g. Amul High-Protein Paneer" style={inp} />
                 <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
@@ -215,7 +323,7 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
                   <Field lbl="Fat" v={pFat} on={setPFat} color={FAT} />
                   <Field lbl="Fibr" v={pFib} on={setPFib} color={FIBR} />
                 </div>
-                <div style={{ fontSize: 10.5, color: FAINTER, marginTop: 6 }}>Per 100g (or per piece/serving if you picked such a food).</div>
+                <div style={{ fontSize: 10.5, color: FAINTER, marginTop: 6 }}>{pBasis === "per_serving" ? "Per serving (from the label)." : "Per 100g (or per piece/serving if picked/scanned)."}</div>
                 <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                   <button onClick={() => { resetPantryAdd(); setPAdding(false); }} style={{ flex: 1, padding: 11, borderRadius: 12, border: "1px solid " + CB, background: CHIP_IDLE, color: MUTED, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
                   <button onClick={savePantryItem} disabled={busy} style={{ flex: 1, padding: 11, borderRadius: 12, border: "none", background: ACCENT, color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>{busy ? "Saving…" : "Save default"}</button>
