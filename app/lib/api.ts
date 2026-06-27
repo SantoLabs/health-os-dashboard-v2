@@ -92,7 +92,7 @@ export function useApi<T>(route: string) {
   return { data, error };
 }
 
-// ---- health-coach (AI coach) ----
+// ---- health-coach (legacy basic Q&A — superseded by the Kai coach below) ----
 export async function coachAsk(
   question: string,
   history: { role: string; content: string }[],
@@ -103,6 +103,70 @@ export async function coachAsk(
     body: JSON.stringify({ question, history }),
   });
   if (!res.ok) throw new Error(`Coach unavailable (${res.status})`);
+  return res.json();
+}
+
+// ---- coach (Kai: agentic AI coach — threads, grounded turns, confirm-first actions) ----
+export type KaiCitation = { label: string; color: string; source: string };
+export type KaiItem = { name: string; qty: number; unit: string; grams?: number | null; kcal: number; protein: number; carbs: number; fats: number; fiber: number };
+export type KaiAction = {
+  id: string;
+  type: string;
+  title: string;
+  delta_badge?: { text: string; color: string };
+  status: "proposed" | "editing" | "applied" | "dismissed";
+  payload?: { meal_type: string; date: string; items: KaiItem[] };
+  impact?: { metric: string; from: number; to: number; target: number; color: string } | null;
+  summary?: { kcal: number; protein: number };
+  applied_log_ids?: string[];
+};
+export type KaiMessage = { id: string; role: "user" | "kai"; text: string; citations?: KaiCitation[]; action?: KaiAction | null; created_at?: string };
+export type KaiThread = { id: string; title: string; pinned: boolean; last_message?: string; last_role?: string; updated_at?: string };
+
+export async function coachThreads(): Promise<{ threads: KaiThread[] }> {
+  const res = await authedFetch(`/functions/v1/coach?api=threads`);
+  if (!res.ok) throw new Error(`Couldn't load chats (${res.status})`);
+  return res.json();
+}
+export async function coachThread(id: string): Promise<{ thread: KaiThread | null; messages: KaiMessage[] }> {
+  const res = await authedFetch(`/functions/v1/coach?api=thread&id=${encodeURIComponent(id)}`);
+  if (!res.ok) throw new Error(`Couldn't load chat (${res.status})`);
+  return res.json();
+}
+export async function coachSend(body: { text: string; thread_id?: string; context_route?: string }): Promise<{ thread_id: string; message: KaiMessage; degraded?: boolean }> {
+  const res = await authedFetch(`/functions/v1/coach?api=send`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Kai is unavailable (${res.status})`);
+  return res.json();
+}
+export async function coachApply(message_id: string, items?: KaiItem[]): Promise<{ ok: boolean; applied_log_ids: string[]; action: KaiAction }> {
+  const res = await authedFetch(`/functions/v1/coach?api=apply_action`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message_id, items }),
+  });
+  if (!res.ok) throw new Error(`Couldn't apply (${res.status})`);
+  return res.json();
+}
+export async function coachUndo(message_id: string): Promise<{ ok: boolean; action: KaiAction }> {
+  const res = await authedFetch(`/functions/v1/coach?api=undo_action`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message_id }),
+  });
+  if (!res.ok) throw new Error(`Couldn't undo (${res.status})`);
+  return res.json();
+}
+export async function coachThreadOp(op: "rename" | "pin" | "delete_thread", body: Record<string, unknown>): Promise<{ ok: boolean }> {
+  const res = await authedFetch(`/functions/v1/coach?api=${op}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
   return res.json();
 }
 
