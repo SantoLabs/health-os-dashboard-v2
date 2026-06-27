@@ -5,7 +5,7 @@
 // dispatcher, and MessageRow. Used by both the full Ask tab (/more/ask) and the
 // global floating coach widget (KaiFab), so the chat looks and behaves identically.
 
-import { useState, type CSSProperties } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { coachApply, coachUndo, type KaiMessage, type KaiAction, type KaiItem } from "../lib/api";
 
 export const PAGE = "#0e1320", SURF = "#161d2c", RAISED = "#1a2232", INPUTBG = "#171f2e", SUNKEN = "#0f1622";
@@ -312,17 +312,192 @@ function TargetActionCard({ msg, onApplied, onUndone }: { msg: KaiMessage; onApp
   );
 }
 
+// ===================== Swap / Pantry / Reminder / Memory cards =====================
+type CardProps = { msg: KaiMessage; onApplied: (m: KaiMessage) => void; onUndone: (m: KaiMessage) => void };
+
+function useAct(msg: KaiMessage, onApplied: (m: KaiMessage) => void, onUndone: (m: KaiMessage) => void) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const apply = async () => { setBusy(true); setErr(null); try { const r = await coachApply(msg.id); onApplied({ ...msg, action: r.action }); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); } };
+  const undo = async () => { setBusy(true); setErr(null); try { const r = await coachUndo(msg.id); onUndone({ ...msg, action: r.action }); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); } };
+  return { busy, err, apply, undo };
+}
+
+function AppliedShell({ tint, tick, label, created, busy, onUndo, children }: { tint: string; tick: string; label: string; created?: string; busy: boolean; onUndo: () => void; children?: ReactNode }) {
+  return (
+    <div style={{ marginTop: 8, borderRadius: 16, padding: 13, background: tint + "14", border: "1px solid " + tint + "59" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ width: 22, height: 22, borderRadius: "50%", background: tick, color: "#08182e", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 900 }}>✓</span>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: H }}>{label}</span>
+        <span style={{ marginLeft: "auto", fontSize: 10.5, color: FAINT }}>{relTime(created)} ago</span>
+      </div>
+      {children}
+      <button onClick={onUndo} disabled={busy} style={{ marginTop: 8, background: "none", border: "none", color: ACCENT_LT, fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0 }}>↶ {busy ? "Undoing…" : "Undo"}</button>
+    </div>
+  );
+}
+
+function SwapActionCard({ msg, onApplied, onUndone }: CardProps) {
+  const a = msg.action as KaiAction;
+  const { busy, err, apply, undo } = useAct(msg, onApplied, onUndone);
+  const [kept, setKept] = useState(false);
+  const p = a.payload || {};
+  const isSession = p.target === "session";
+  const fromO = (a.from as { name?: string; activity?: string } | undefined) || {};
+  const toItems = a.to?.items || p.items || [];
+  const fromTxt = isSession ? String(fromO.activity || "session") : String(fromO.name || "item");
+  const toTxt = isSession ? String(p.new_activity || "") : toItems.map((i) => i.name).join(", ");
+
+  if (a.status === "applied") {
+    return (
+      <AppliedShell tint={ACCENT} tick={ACCENT} label="Swapped" created={msg.created_at} busy={busy} onUndo={undo}>
+        <div style={{ fontSize: 12.5, color: BODY, marginTop: 8 }}><span style={{ textDecoration: "line-through", color: SECOND, textTransform: isSession ? "capitalize" : "none" }}>{fromTxt}</span> → <span style={{ color: ACCENT_LT, fontWeight: 700, textTransform: isSession ? "capitalize" : "none" }}>{toTxt}</span></div>
+        {err && <div style={errStyle}>{err}</div>}
+      </AppliedShell>
+    );
+  }
+  if (kept) return <div style={keptStyle}>Kept it as is.</div>;
+  return (
+    <div style={proposedWrap}>
+      <div style={cardHead}><span style={cardIcon(ACCENT)}>⇄</span><span style={cardTitle}>{a.title || "Swap"}</span>{a.delta_badge ? <span style={badgePill(a.delta_badge.color)}>{a.delta_badge.text}</span> : null}</div>
+      <div style={{ background: SUNKEN, borderRadius: 12, padding: "11px 13px", display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ flex: 1, minWidth: 0 }}><div style={miniLabel}>Remove</div><div style={{ fontSize: 13, color: SECOND, textDecoration: "line-through", textDecorationColor: "#54607a", textTransform: isSession ? "capitalize" : "none" }}>{fromTxt}</div></div>
+        <span style={{ color: ACCENT, fontSize: 18, fontWeight: 800 }}>→</span>
+        <div style={{ flex: 1, minWidth: 0 }}><div style={miniLabel}>Add</div><div style={{ fontSize: isSession ? 14 : 13, color: ACCENT_LT, fontWeight: isSession ? 800 : 700, textTransform: isSession ? "capitalize" : "none" }}>{toTxt}</div></div>
+      </div>
+      {!isSession && toItems.length ? <div style={{ fontSize: 10.5, color: FAINT, marginTop: 6 }}>{toItems.map((i) => `${i.protein}P`).join(" · ")} · {Math.round(toItems.reduce((s, i) => s + Number(i.kcal || 0), 0))} kcal</div> : null}
+      {err && <div style={errStyle}>{err}</div>}
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <button onClick={apply} disabled={busy} style={{ ...primaryBtn, flex: 2, opacity: busy ? 0.6 : 1 }}>{busy ? "Swapping…" : "Swap"}</button>
+        <button onClick={() => setKept(true)} disabled={busy} style={ghostBtn}>Keep</button>
+      </div>
+      <div style={fineprint}>{isSession ? "Updates your plan." : "Replaces the logged item."} You can undo after.</div>
+    </div>
+  );
+}
+
+function PantryActionCard({ msg, onApplied, onUndone }: CardProps) {
+  const a = msg.action as KaiAction;
+  const { busy, err, apply, undo } = useAct(msg, onApplied, onUndone);
+  const [kept, setKept] = useState(false);
+  const row = (a.payload?.row || {}) as Record<string, number | string>;
+  const label = String(row.label || "Staple");
+
+  if (a.status === "applied") {
+    return (
+      <AppliedShell tint={PROT} tick={PROT} label="Saved to pantry" created={msg.created_at} busy={busy} onUndo={undo}>
+        <div style={{ fontSize: 12.5, color: BODY, marginTop: 8 }}>{label} · <span style={{ color: PROT, fontWeight: 700 }}>{row.protein_g}g protein</span> / {row.per_unit}</div>
+        {err && <div style={errStyle}>{err}</div>}
+      </AppliedShell>
+    );
+  }
+  if (kept) return <div style={keptStyle}>Won't save that.</div>;
+  return (
+    <div style={proposedWrap}>
+      <div style={cardHead}><span style={cardIcon(PROT)}>🥫</span><span style={cardTitle}>{a.title || "Add to pantry"}</span>{a.delta_badge ? <span style={badgePill(a.delta_badge.color)}>{a.delta_badge.text}</span> : null}</div>
+      <div style={{ background: SUNKEN, borderRadius: 12, padding: "11px 13px" }}>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: H }}>{label}</div>
+        <div style={{ fontSize: 10.5, color: FAINT, marginTop: 3 }}>per {String(row.per_unit || "serving")} · <span style={{ color: PROT }}>{row.protein_g}P</span> · <span style={{ color: CARB }}>{row.carbs_g}C</span> · <span style={{ color: FAT }}>{row.fat_g}F</span> · {row.kcal} kcal {row.category ? `· ${row.category}` : ""}</div>
+      </div>
+      {err && <div style={errStyle}>{err}</div>}
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <button onClick={apply} disabled={busy} style={{ ...primaryBtn, flex: 2, opacity: busy ? 0.6 : 1 }}>{busy ? "Saving…" : "Save to pantry"}</button>
+        <button onClick={() => setKept(true)} disabled={busy} style={ghostBtn}>Not now</button>
+      </div>
+      <div style={fineprint}>Saves a reusable staple for quick logging. You can undo after.</div>
+    </div>
+  );
+}
+
+function ReminderActionCard({ msg, onApplied, onUndone }: CardProps) {
+  const a = msg.action as KaiAction;
+  const { busy, err, apply, undo } = useAct(msg, onApplied, onUndone);
+  const [kept, setKept] = useState(false);
+  const p = a.payload || {};
+  const d = a.display || {};
+  const isCheckin = p.kind === "checkin";
+  const when = d.when || (p.recurrence === "none" ? "" : `${p.recur_time || ""} ${p.recurrence || ""}`);
+
+  if (a.status === "applied") {
+    return (
+      <AppliedShell tint={ACCENT} tick={ACCENT} label={isCheckin ? "Check-in scheduled" : "Reminder set"} created={msg.created_at} busy={busy} onUndo={undo}>
+        <div style={{ fontSize: 12.5, color: BODY, marginTop: 8 }}>{String(p.title || d.title || "")} · <span style={{ color: ACCENT_LT, fontWeight: 700 }}>{when}</span></div>
+        {err && <div style={errStyle}>{err}</div>}
+      </AppliedShell>
+    );
+  }
+  if (kept) return <div style={keptStyle}>No reminder set.</div>;
+  return (
+    <div style={proposedWrap}>
+      <div style={cardHead}><span style={cardIcon(ACCENT)}>{isCheckin ? "💬" : "🔔"}</span><span style={cardTitle}>{isCheckin ? "Schedule check-in" : "Set reminder"}</span>{when ? <span style={badgePill(ACCENT)}>{when}</span> : null}</div>
+      <div style={{ background: SUNKEN, borderRadius: 12, padding: "11px 13px" }}>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: H }}>{String(p.title || d.title || "Reminder")}</div>
+        {p.body || d.body ? <div style={{ fontSize: 11.5, color: SECOND, marginTop: 4, lineHeight: 1.45 }}>{String(p.body || d.body)}</div> : null}
+        {isCheckin && (p.seed_prompt || d.seed) ? <div style={{ fontSize: 11.5, color: MUTED, marginTop: 6, fontStyle: "italic" }}>Kai will ask: “{String(p.seed_prompt || d.seed)}”</div> : null}
+      </div>
+      {err && <div style={errStyle}>{err}</div>}
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <button onClick={apply} disabled={busy} style={{ ...primaryBtn, flex: 2, opacity: busy ? 0.6 : 1 }}>{busy ? "Setting…" : isCheckin ? "Schedule it" : "Set reminder"}</button>
+        <button onClick={() => setKept(true)} disabled={busy} style={ghostBtn}>No</button>
+      </div>
+      <div style={fineprint}>Shows up in-app when due. You can undo after.</div>
+    </div>
+  );
+}
+
+function MemoryActionCard({ msg, onApplied, onUndone }: CardProps) {
+  const a = msg.action as KaiAction;
+  const { busy, err, apply, undo } = useAct(msg, onApplied, onUndone);
+  const [kept, setKept] = useState(false);
+  const p = a.payload || {};
+
+  if (a.status === "applied") {
+    return (
+      <AppliedShell tint={FIBR} tick={FIBR} label="Saved to memory" created={msg.created_at} busy={busy} onUndo={undo}>
+        <div style={{ fontSize: 12.5, color: BODY, marginTop: 8 }}>“{String(p.text || "")}”</div>
+        {err && <div style={errStyle}>{err}</div>}
+      </AppliedShell>
+    );
+  }
+  if (kept) return <div style={keptStyle}>Won't remember that.</div>;
+  return (
+    <div style={{ marginTop: 8, borderRadius: 16, padding: 13, background: "rgba(70,199,154,.07)", border: "1px solid rgba(70,199,154,.3)" }}>
+      <div style={cardHead}><span style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(70,199,154,.16)", color: FIBR, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>🧠</span><span style={cardTitle}>Remember this?</span>{p.category ? <span style={{ marginLeft: "auto", fontSize: 10.5, fontWeight: 800, color: FIBR, background: "rgba(70,199,154,.12)", border: "1px solid rgba(70,199,154,.3)", borderRadius: 999, padding: "3px 8px" }}>{String(p.category)}</span> : null}</div>
+      <div style={{ fontSize: 13, color: BODY, lineHeight: 1.5 }}>“{String(p.text || "")}”</div>
+      {err && <div style={errStyle}>{err}</div>}
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <button onClick={apply} disabled={busy} style={{ ...primaryBtn, flex: 2, background: FIBR, opacity: busy ? 0.6 : 1 }}>{busy ? "Saving…" : "Remember"}</button>
+        <button onClick={() => setKept(true)} disabled={busy} style={ghostBtn}>Don't save</button>
+      </div>
+      <div style={fineprint}>Kai uses this to personalize future advice. Manage it anytime in “What Kai remembers”.</div>
+    </div>
+  );
+}
+
 // ===================== Action card dispatch =====================
 export function ActionCard(props: { msg: KaiMessage; onApplied: (m: KaiMessage) => void; onUndone: (m: KaiMessage) => void }) {
   const t = props.msg.action?.type;
   if (t === "schedule") return <ScheduleActionCard {...props} />;
   if (t === "target") return <TargetActionCard {...props} />;
+  if (t === "swap") return <SwapActionCard {...props} />;
+  if (t === "pantry") return <PantryActionCard {...props} />;
+  if (t === "reminder") return <ReminderActionCard {...props} />;
+  if (t === "memory") return <MemoryActionCard {...props} />;
   return <FoodActionCard {...props} />;
 }
 
 const stepBtn: CSSProperties = { width: 26, height: 26, borderRadius: 7, border: "1px solid " + BORDER, background: INPUTBG, color: SECOND, fontSize: 14, cursor: "pointer", lineHeight: 1 };
 export const primaryBtn: CSSProperties = { padding: "10px 0", borderRadius: 11, border: "none", background: ACCENT, color: "#0c1422", fontSize: 13, fontWeight: 800, cursor: "pointer" };
 const ghostBtn: CSSProperties = { flex: 1, padding: "10px 0", borderRadius: 11, border: "1px solid " + BORDER_STRONG, background: "transparent", color: SECOND, fontSize: 13, fontWeight: 700, cursor: "pointer" };
+const errStyle: CSSProperties = { fontSize: 11, color: FAT, marginTop: 8 };
+const keptStyle: CSSProperties = { marginTop: 8, fontSize: 11.5, color: FAINT, fontStyle: "italic" };
+const proposedWrap: CSSProperties = { marginTop: 8, borderRadius: 16, padding: 13, background: RAISED, border: "1px solid " + BORDER_STRONG };
+const cardHead: CSSProperties = { display: "flex", alignItems: "center", gap: 8, marginBottom: 12 };
+const cardTitle: CSSProperties = { fontSize: 13, fontWeight: 700, color: H };
+const miniLabel: CSSProperties = { fontSize: 9.5, color: FAINT, textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 2 };
+const fineprint: CSSProperties = { fontSize: 10, color: FAINTER, marginTop: 8 };
+function cardIcon(color: string): CSSProperties { return { width: 24, height: 24, borderRadius: 7, background: "rgba(79,156,249,.16)", color, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13 }; }
+function badgePill(color: string): CSSProperties { return { marginLeft: "auto", fontSize: 10.5, fontWeight: 800, color, background: "rgba(91,155,255,.12)", border: "1px solid rgba(91,155,255,.3)", borderRadius: 999, padding: "3px 8px" }; }
 
 // ===================== Message row =====================
 export function MessageRow({ msg, onApplied, onUndone }: { msg: KaiMessage; onApplied: (m: KaiMessage) => void; onUndone: (m: KaiMessage) => void }) {
