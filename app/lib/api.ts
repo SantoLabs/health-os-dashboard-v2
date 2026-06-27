@@ -156,7 +156,7 @@ export async function coachThread(id: string): Promise<{ thread: KaiThread | nul
   if (!res.ok) throw new Error(`Couldn't load chat (${res.status})`);
   return res.json();
 }
-export async function coachSend(body: { text: string; thread_id?: string; context_route?: string }): Promise<{ thread_id: string; message: KaiMessage; degraded?: boolean }> {
+export async function coachSend(body: { text: string; thread_id?: string; context_route?: string; page_context?: { label: string; hint?: string } }): Promise<{ thread_id: string; message: KaiMessage; degraded?: boolean }> {
   const res = await authedFetch(`/functions/v1/coach?api=send`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
