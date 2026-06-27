@@ -112,10 +112,10 @@ export type KaiItem = { name: string; qty: number; unit: string; grams?: number 
 // Schedule/target reschedule + target-adjust share this action shape; `payload` carries
 // the per-type fields (food: meal_type/date/items; schedule: session_id/new_date/new_start_time;
 // target: metric/target_id/from/to/unit), and `from`/`to` describe a schedule move.
-export type KaiActionWhen = { activity?: string; date: string; time: string };
+export type KaiActionWhen = { activity?: string; name?: string; date?: string; time?: string };
 export type KaiAction = {
   id: string;
-  type: "food" | "schedule" | "target" | string;
+  type: "food" | "schedule" | "target" | "swap" | "pantry" | "reminder" | "memory" | string;
   title: string;
   delta_badge?: { text: string; color: string };
   status: "proposed" | "editing" | "applied" | "dismissed";
@@ -123,11 +123,20 @@ export type KaiAction = {
     meal_type?: string; date?: string; items?: KaiItem[];
     session_id?: string; new_date?: string; new_start_time?: string | null;
     metric?: string; target_id?: string; from?: number; to?: number; unit?: string;
+    // swap
+    target?: string; remove_log_id?: string; new_activity?: string;
+    // pantry
+    row?: Record<string, unknown>;
+    // reminder / check-in
+    kind?: string; title?: string; body?: string | null; seed_prompt?: string | null; recurrence?: string; due_at?: string | null; recur_time?: string | null;
+    // memory
+    text?: string; category?: string;
   };
   impact?: { metric: string; from: number; to: number; target: number; color: string } | null;
   summary?: { kcal: number; protein: number };
+  display?: { title?: string; body?: string | null; seed?: string | null; when?: string };
   from?: KaiActionWhen;
-  to?: { date: string; time: string };
+  to?: { date?: string; time?: string; activity?: string; items?: KaiItem[] };
   reason?: string | null;
   applied_log_ids?: string[];
 };
@@ -196,6 +205,32 @@ export async function coachThreadOp(op: "rename" | "pin" | "delete_thread", body
 export async function coachDailyCard(): Promise<{ card: KaiDailyCard; cached: boolean }> {
   const res = await authedFetch(`/functions/v1/coach?api=daily_card`);
   if (!res.ok) throw new Error(`Couldn't load your daily card (${res.status})`);
+  return res.json();
+}
+
+// ---- coach: reminders + check-ins (in-app) ----
+export type KaiReminder = { id: string; kind: string; title: string; body?: string | null; due_at?: string | null; recurrence: string; recur_time?: string | null; recur_days?: number[] | null; seed_prompt?: string | null; status: string; last_fired_at?: string | null; created_at?: string; due: boolean };
+export async function coachReminders(): Promise<{ reminders: KaiReminder[]; due_count: number }> {
+  const res = await authedFetch(`/functions/v1/coach?api=reminders`);
+  if (!res.ok) throw new Error(`Couldn't load reminders (${res.status})`);
+  return res.json();
+}
+export async function coachReminderOp(body: { id: string; op: "done" | "snooze" | "dismiss" | "delete"; snooze_mins?: number }): Promise<{ ok: boolean }> {
+  const res = await authedFetch(`/functions/v1/coach?api=reminder_op`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  return res.json();
+}
+
+// ---- coach: long-term memory ("What Kai remembers") ----
+export type KaiMemoryItem = { id: string; category: string; text: string; source?: string; strength?: string; created_at?: string };
+export async function coachMemory(): Promise<{ memory: KaiMemoryItem[] }> {
+  const res = await authedFetch(`/functions/v1/coach?api=memory`);
+  if (!res.ok) throw new Error(`Couldn't load memory (${res.status})`);
+  return res.json();
+}
+export async function coachMemoryOp(body: { op: "add" | "edit" | "delete"; id?: string; text?: string; category?: string }): Promise<{ ok: boolean; item?: KaiMemoryItem }> {
+  const res = await authedFetch(`/functions/v1/coach?api=memory_op`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
   return res.json();
 }
 
