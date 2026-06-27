@@ -40,9 +40,18 @@ function relTime(iso?: string) {
   if (mins < 1) return "just now"; if (mins < 60) return mins + "m"; const h = Math.round(mins / 60);
   if (h < 24) return h + "h"; return Math.round(h / 24) + "d";
 }
+function dayLabel(date?: string): string {
+  if (!date) return "";
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+  const tmr = new Date(Date.now() + 864e5).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+  if (date === today) return "Today";
+  if (date === tmr) return "Tomorrow";
+  try { return new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }); } catch { return date; }
+}
+const fmtTime = (t?: string | null) => (t || "").slice(0, 5);
 
-// ===================== Action card =====================
-function ActionCard({ msg, onApplied, onUndone }: { msg: KaiMessage; onApplied: (m: KaiMessage) => void; onUndone: (m: KaiMessage) => void }) {
+// ===================== Food action card =====================
+function FoodActionCard({ msg, onApplied, onUndone }: { msg: KaiMessage; onApplied: (m: KaiMessage) => void; onUndone: (m: KaiMessage) => void }) {
   const a = msg.action as KaiAction;
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -158,6 +167,159 @@ function ActionCard({ msg, onApplied, onUndone }: { msg: KaiMessage; onApplied: 
     </div>
   );
 }
+
+// ===================== Schedule action card =====================
+function ScheduleActionCard({ msg, onApplied, onUndone }: { msg: KaiMessage; onApplied: (m: KaiMessage) => void; onUndone: (m: KaiMessage) => void }) {
+  const a = msg.action as KaiAction;
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [kept, setKept] = useState(false);
+  const from = a.from; const to = a.to;
+
+  async function apply() {
+    setBusy(true); setErr(null);
+    try { const r = await coachApply(msg.id); onApplied({ ...msg, action: r.action }); }
+    catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  }
+  async function undo() {
+    setBusy(true); setErr(null);
+    try { const r = await coachUndo(msg.id); onUndone({ ...msg, action: r.action }); }
+    catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  }
+
+  if (a.status === "applied") {
+    return (
+      <div style={{ marginTop: 8, borderRadius: 16, padding: 13, background: "rgba(79,156,249,.08)", border: "1px solid rgba(79,156,249,.35)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ width: 22, height: 22, borderRadius: "50%", background: ACCENT, color: "#08182e", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 900 }}>✓</span>
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: H }}>Session moved</span>
+          <span style={{ marginLeft: "auto", fontSize: 10.5, color: FAINT }}>{relTime(msg.created_at)} ago</span>
+        </div>
+        <div style={{ fontSize: 12.5, color: BODY, marginTop: 8 }}>
+          {from?.activity ? <span style={{ fontWeight: 600 }}>{from.activity}</span> : "Session"} → <span style={{ color: ACCENT_LT, fontWeight: 700 }}>{dayLabel(to?.date)} {fmtTime(to?.time)}</span>
+        </div>
+        <button onClick={undo} disabled={busy} style={{ marginTop: 8, background: "none", border: "none", color: ACCENT_LT, fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0 }}>↶ {busy ? "Undoing…" : "Undo"}</button>
+        {err && <div style={{ fontSize: 11, color: FAT, marginTop: 4 }}>{err}</div>}
+      </div>
+    );
+  }
+  if (kept) {
+    return <div style={{ marginTop: 8, fontSize: 11.5, color: FAINT, fontStyle: "italic" }}>Kept the current time.</div>;
+  }
+  return (
+    <div style={{ marginTop: 8, borderRadius: 16, padding: 13, background: RAISED, border: "1px solid " + BORDER_STRONG }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <span style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(79,156,249,.16)", color: ACCENT, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>🗓</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: H }}>{a.title || "Reschedule session"}</span>
+      </div>
+
+      <div style={{ background: SUNKEN, borderRadius: 12, padding: "11px 13px" }}>
+        {from?.activity ? <div style={{ fontSize: 13, fontWeight: 700, color: H, marginBottom: 8 }}>{from.activity}</div> : null}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 9.5, color: FAINT, textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 2 }}>From</div>
+            <div style={{ fontSize: 13, color: SECOND, textDecoration: "line-through", textDecorationColor: "#54607a" }}>{dayLabel(from?.date)} {fmtTime(from?.time)}</div>
+          </div>
+          <span style={{ color: ACCENT, fontSize: 18, fontWeight: 800 }}>→</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 9.5, color: FAINT, textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 2 }}>To</div>
+            <div style={{ fontSize: 14, color: ACCENT_LT, fontWeight: 800 }}>{dayLabel(to?.date)} {fmtTime(to?.time)}</div>
+          </div>
+        </div>
+      </div>
+      {a.reason ? <div style={{ fontSize: 11.5, color: MUTED, marginTop: 8, lineHeight: 1.45 }}>{a.reason}</div> : null}
+
+      {err && <div style={{ fontSize: 11, color: FAT, marginTop: 8 }}>{err}</div>}
+
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <button onClick={apply} disabled={busy} style={{ ...primaryBtn, flex: 2, opacity: busy ? 0.6 : 1 }}>{busy ? "Moving…" : "Move session"}</button>
+        <button onClick={() => setKept(true)} disabled={busy} style={ghostBtn}>Keep</button>
+      </div>
+      <div style={{ fontSize: 10, color: FAINTER, marginTop: 8 }}>Updates your plan. You can undo after.</div>
+    </div>
+  );
+}
+
+// ===================== Target action card =====================
+function TargetActionCard({ msg, onApplied, onUndone }: { msg: KaiMessage; onApplied: (m: KaiMessage) => void; onUndone: (m: KaiMessage) => void }) {
+  const a = msg.action as KaiAction;
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [kept, setKept] = useState(false);
+  const p = a.payload || {};
+  const metric = String(p.metric || "target");
+  const unit = p.unit ?? "g";
+  const badge = a.delta_badge;
+
+  async function apply() {
+    setBusy(true); setErr(null);
+    try { const r = await coachApply(msg.id); onApplied({ ...msg, action: r.action }); }
+    catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  }
+  async function undo() {
+    setBusy(true); setErr(null);
+    try { const r = await coachUndo(msg.id); onUndone({ ...msg, action: r.action }); }
+    catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  }
+
+  if (a.status === "applied") {
+    return (
+      <div style={{ marginTop: 8, borderRadius: 16, padding: 13, background: "rgba(91,155,255,.08)", border: "1px solid rgba(91,155,255,.35)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ width: 22, height: 22, borderRadius: "50%", background: PROT, color: "#08182e", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 900 }}>✓</span>
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: H }}>Target updated</span>
+          <span style={{ marginLeft: "auto", fontSize: 10.5, color: FAINT }}>{relTime(msg.created_at)} ago</span>
+        </div>
+        <div style={{ fontSize: 12.5, color: BODY, marginTop: 8, textTransform: "capitalize" }}>
+          {metric}: {p.from} → <span style={{ color: PROT, fontWeight: 700 }}>{p.to}{unit}</span>
+        </div>
+        <button onClick={undo} disabled={busy} style={{ marginTop: 8, background: "none", border: "none", color: ACCENT_LT, fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0 }}>↶ {busy ? "Undoing…" : "Undo"}</button>
+        {err && <div style={{ fontSize: 11, color: FAT, marginTop: 4 }}>{err}</div>}
+      </div>
+    );
+  }
+  if (kept) {
+    return <div style={{ marginTop: 8, fontSize: 11.5, color: FAINT, fontStyle: "italic" }}>Kept your current target.</div>;
+  }
+  return (
+    <div style={{ marginTop: 8, borderRadius: 16, padding: 13, background: RAISED, border: "1px solid " + BORDER_STRONG }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <span style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(91,155,255,.16)", color: PROT, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>◎</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: H, textTransform: "capitalize" }}>{a.title || `Adjust ${metric} target`}</span>
+        {badge ? <span style={{ marginLeft: "auto", fontSize: 10.5, fontWeight: 800, color: badge.color, background: "rgba(91,155,255,.12)", border: "1px solid rgba(91,155,255,.3)", borderRadius: 999, padding: "3px 8px" }}>{badge.text}</span> : null}
+      </div>
+
+      <div style={{ background: SUNKEN, borderRadius: 12, padding: "13px", display: "flex", alignItems: "center", justifyContent: "center", gap: 14 }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 9.5, color: FAINT, textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 3 }}>Now</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: SECOND, fontVariantNumeric: "tabular-nums" }}>{p.from}<span style={{ fontSize: 12, color: FAINT }}>{unit}</span></div>
+        </div>
+        <span style={{ color: PROT, fontSize: 20, fontWeight: 800 }}>→</span>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 9.5, color: FAINT, textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 3 }}>New</div>
+          <div style={{ fontSize: 24, fontWeight: 900, color: ACCENT_LT, fontVariantNumeric: "tabular-nums" }}>{p.to}<span style={{ fontSize: 12, color: PROT }}>{unit}</span></div>
+        </div>
+      </div>
+
+      {err && <div style={{ fontSize: 11, color: FAT, marginTop: 8 }}>{err}</div>}
+
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <button onClick={apply} disabled={busy} style={{ ...primaryBtn, flex: 2, opacity: busy ? 0.6 : 1 }}>{busy ? "Updating…" : "Update target"}</button>
+        <button onClick={() => setKept(true)} disabled={busy} style={ghostBtn}>Not now</button>
+      </div>
+      <div style={{ fontSize: 10, color: FAINTER, marginTop: 8 }}>Changes your daily target. You can undo after.</div>
+    </div>
+  );
+}
+
+// ===================== Action card dispatch =====================
+function ActionCard(props: { msg: KaiMessage; onApplied: (m: KaiMessage) => void; onUndone: (m: KaiMessage) => void }) {
+  const t = props.msg.action?.type;
+  if (t === "schedule") return <ScheduleActionCard {...props} />;
+  if (t === "target") return <TargetActionCard {...props} />;
+  return <FoodActionCard {...props} />;
+}
+
 const stepBtn: CSSProperties = { width: 26, height: 26, borderRadius: 7, border: "1px solid " + BORDER, background: INPUTBG, color: SECOND, fontSize: 14, cursor: "pointer", lineHeight: 1 };
 const primaryBtn: CSSProperties = { padding: "10px 0", borderRadius: 11, border: "none", background: ACCENT, color: "#0c1422", fontSize: 13, fontWeight: 800, cursor: "pointer" };
 const ghostBtn: CSSProperties = { flex: 1, padding: "10px 0", borderRadius: 11, border: "1px solid " + BORDER_STRONG, background: "transparent", color: SECOND, fontSize: 13, fontWeight: 700, cursor: "pointer" };
