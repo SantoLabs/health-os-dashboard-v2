@@ -3,6 +3,7 @@ import "./globals.css";
 import "./auth.css";
 import BottomNav from "./components/BottomNav";
 import AuthGate from "./components/AuthGate";
+import KaiFab from "./components/KaiFab";
 
 export const metadata: Metadata = {
   title: "Health OS",
@@ -23,6 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthGate>
           {children}
           <BottomNav />
+          <KaiFab />
         </AuthGate>
       </body>
     </html>
