@@ -368,6 +368,18 @@ export default function AskPage() {
 
   useEffect(() => { loadThreads(true); }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, busy]);
+  // If we arrived from a Home daily-card chip, auto-open a chat and ask it.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let seed: string | null = null;
+    try { seed = window.sessionStorage.getItem("kai_seed"); } catch { seed = null; }
+    if (seed) {
+      try { window.sessionStorage.removeItem("kai_seed"); } catch { /* ignore */ }
+      setView("chat"); setThreadId(null); setMessages([]);
+      send(seed);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function loadThreads(first = false) {
     try {
