@@ -109,19 +109,42 @@ export async function coachAsk(
 // ---- coach (Kai: agentic AI coach — threads, grounded turns, confirm-first actions) ----
 export type KaiCitation = { label: string; color: string; source: string };
 export type KaiItem = { name: string; qty: number; unit: string; grams?: number | null; kcal: number; protein: number; carbs: number; fats: number; fiber: number };
+// Schedule/target reschedule + target-adjust share this action shape; `payload` carries
+// the per-type fields (food: meal_type/date/items; schedule: session_id/new_date/new_start_time;
+// target: metric/target_id/from/to/unit), and `from`/`to` describe a schedule move.
+export type KaiActionWhen = { activity?: string; date: string; time: string };
 export type KaiAction = {
   id: string;
-  type: string;
+  type: "food" | "schedule" | "target" | string;
   title: string;
   delta_badge?: { text: string; color: string };
   status: "proposed" | "editing" | "applied" | "dismissed";
-  payload?: { meal_type: string; date: string; items: KaiItem[] };
+  payload?: {
+    meal_type?: string; date?: string; items?: KaiItem[];
+    session_id?: string; new_date?: string; new_start_time?: string | null;
+    metric?: string; target_id?: string; from?: number; to?: number; unit?: string;
+  };
   impact?: { metric: string; from: number; to: number; target: number; color: string } | null;
   summary?: { kcal: number; protein: number };
+  from?: KaiActionWhen;
+  to?: { date: string; time: string };
+  reason?: string | null;
   applied_log_ids?: string[];
 };
 export type KaiMessage = { id: string; role: "user" | "kai"; text: string; citations?: KaiCitation[]; action?: KaiAction | null; created_at?: string };
 export type KaiThread = { id: string; title: string; pinned: boolean; last_message?: string; last_role?: string; updated_at?: string };
+export type KaiDailyCard = {
+  date: string;
+  greeting: string;
+  generated_at?: string;
+  readiness?: { current: number; label?: string | null } | null;
+  streak?: number;
+  headline: string;
+  body: string;
+  lever: string;
+  tone: "positive" | "neutral" | "off" | string;
+  chips?: string[];
+};
 
 export async function coachThreads(): Promise<{ threads: KaiThread[] }> {
   const res = await authedFetch(`/functions/v1/coach?api=threads`);
@@ -142,7 +165,7 @@ export async function coachSend(body: { text: string; thread_id?: string; contex
   if (!res.ok) throw new Error(`Kai is unavailable (${res.status})`);
   return res.json();
 }
-export async function coachApply(message_id: string, items?: KaiItem[]): Promise<{ ok: boolean; applied_log_ids: string[]; action: KaiAction }> {
+export async function coachApply(message_id: string, items?: KaiItem[]): Promise<{ ok: boolean; applied_log_ids?: string[]; action: KaiAction }> {
   const res = await authedFetch(`/functions/v1/coach?api=apply_action`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -167,6 +190,12 @@ export async function coachThreadOp(op: "rename" | "pin" | "delete_thread", body
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  return res.json();
+}
+// GET today's proactive home-screen card (generated once per day, cached server-side).
+export async function coachDailyCard(): Promise<{ card: KaiDailyCard; cached: boolean }> {
+  const res = await authedFetch(`/functions/v1/coach?api=daily_card`);
+  if (!res.ok) throw new Error(`Couldn't load your daily card (${res.status})`);
   return res.json();
 }
 
