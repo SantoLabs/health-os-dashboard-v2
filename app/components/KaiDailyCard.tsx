@@ -39,7 +39,7 @@ function Ring({ value, color }: { value: number; color: string }) {
   );
 }
 
-export default function KaiDailyCard() {
+export default function KaiDailyCard({ liveReadiness }: { liveReadiness?: { score: number | null; label?: string | null } | null }) {
   const router = useRouter();
   const [card, setCard] = useState<Card | null>(null);
   const [failed, setFailed] = useState(false);
@@ -56,6 +56,9 @@ export default function KaiDailyCard() {
   if (failed || !card) return null;
 
   const tc = toneColor(card.tone);
+  const liveScore = liveReadiness && liveReadiness.score != null ? liveReadiness.score : null;
+  const ringValue = liveScore != null ? liveScore : (card.readiness ? card.readiness.current : null);
+  const ringLabel = liveScore != null ? (liveReadiness?.label ?? null) : (card.readiness?.label ?? null);
 
   function go(seed?: string) {
     if (seed && typeof window !== "undefined") {
@@ -78,10 +81,10 @@ export default function KaiDailyCard() {
           <div style={{ fontSize: 13.5, fontWeight: 800, color: H }}>{card.greeting}</div>
           <div style={{ fontSize: 10.5, color: SECOND }}>Kai · your daily note</div>
         </div>
-        {card.readiness ? (
+        {ringValue != null ? (
           <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-            <Ring value={card.readiness.current} color={tc} />
-            {card.readiness.label ? <span style={{ fontSize: 10.5, color: SECOND, maxWidth: 64, lineHeight: 1.2 }}>{card.readiness.label}</span> : null}
+            <Ring value={ringValue} color={tc} />
+            {ringLabel ? <span style={{ fontSize: 10.5, color: SECOND, maxWidth: 64, lineHeight: 1.2 }}>{ringLabel}</span> : null}
           </div>
         ) : null}
       </div>
@@ -102,9 +105,9 @@ export default function KaiDailyCard() {
         </div>
       ) : null}
 
-      {card.readiness ? (
+      {ringValue != null ? (
         <div style={{ marginTop: 11 }}>
-          <WhyChip metric="readiness" value={card.readiness.current} label="Why this readiness?" />
+          <WhyChip metric="readiness" value={ringValue} label="Why this readiness?" />
         </div>
       ) : null}
 
