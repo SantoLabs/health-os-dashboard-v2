@@ -115,7 +115,7 @@ export type KaiItem = { name: string; qty: number; unit: string; grams?: number 
 export type KaiActionWhen = { activity?: string; name?: string; date?: string; time?: string };
 export type KaiAction = {
   id: string;
-  type: "food" | "schedule" | "target" | "swap" | "pantry" | "reminder" | "memory" | string;
+  type: "food" | "schedule" | "target" | "swap" | "pantry" | "reminder" | "memory" | "capability" | string;
   title: string;
   delta_badge?: { text: string; color: string };
   status: "proposed" | "editing" | "applied" | "dismissed";
@@ -131,12 +131,14 @@ export type KaiAction = {
     kind?: string; title?: string; body?: string | null; seed_prompt?: string | null; recurrence?: string; due_at?: string | null; recur_time?: string | null;
     // memory
     text?: string; category?: string;
+    // capability (kind reused from reminder above)
+    started_on?: string; note?: string | null;
     // plan (schedule week)
     week_start?: string; sessions?: Array<{ session_date?: string; activity?: string; session_type?: string; planned_duration?: number | null; intensity?: string | null; focus?: string | null; is_rest_day?: boolean; notes?: string | null }>;
   };
   impact?: { metric: string; from: number; to: number; target: number; color: string } | null;
   summary?: { kcal: number; protein: number };
-  display?: { title?: string; body?: string | null; seed?: string | null; when?: string; week_start?: string; sessions?: Array<{ day?: string; date?: string; line?: string; is_rest?: boolean }> };
+  display?: { title?: string; body?: string | null; seed?: string | null; when?: string; week_start?: string; sessions?: Array<{ day?: string; date?: string; line?: string; is_rest?: boolean }>; kind?: string; started_on?: string; note?: string | null };
   from?: KaiActionWhen;
   to?: { date?: string; time?: string; activity?: string; items?: KaiItem[] };
   reason?: string | null;
