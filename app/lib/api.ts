@@ -258,6 +258,12 @@ export async function coachUnsaveInsight(id: string): Promise<{ ok: boolean }> {
   return res.json();
 }
 
+export async function coachVision(args: { text?: string; image: { mime: string; data: string }; thread_id?: string; context_route?: string }): Promise<{ thread_id: string; message: KaiMessage }> {
+  const res = await authedFetch(`${AUX}?api=vision`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(args) });
+  if (!res.ok) throw new Error(`Couldn't read the photo (${res.status})`);
+  return res.json();
+}
+
 // ---- health-plan (Schedule: AI plan + calendar + history) ----
 // GET week (optionally a past/future week via Monday-anchored week_start).
 export async function planWeek<T>(weekStart?: string): Promise<T> {
