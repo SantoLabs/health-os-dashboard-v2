@@ -476,8 +476,79 @@ function MemoryActionCard({ msg, onApplied, onUndone }: CardProps) {
 }
 
 // ===================== Action card dispatch =====================
+// ===================== Plan (schedule week) action card =====================
+function PlanActionCard({ msg, onApplied, onUndone }: CardProps) {
+  const a = msg.action as KaiAction;
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [kept, setKept] = useState(false);
+  const sessions = a.display?.sessions || [];
+  const count = sessions.filter((x) => !x.is_rest).length;
+
+  async function apply() {
+    setBusy(true); setErr(null);
+    try { const r = await coachApply(msg.id); onApplied({ ...msg, action: r.action }); }
+    catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  }
+  async function undo() {
+    setBusy(true); setErr(null);
+    try { const r = await coachUndo(msg.id); onUndone({ ...msg, action: r.action }); }
+    catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  }
+
+  if (a.status === "applied") {
+    return (
+      <div style={{ marginTop: 8, borderRadius: 16, padding: 13, background: "rgba(79,156,249,.08)", border: "1px solid rgba(79,156,249,.35)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ width: 22, height: 22, borderRadius: "50%", background: ACCENT, color: "#08182e", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 900 }}>✓</span>
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: H }}>Added to your schedule</span>
+          <span style={{ marginLeft: "auto", fontSize: 10.5, color: FAINT }}>{relTime(msg.created_at)} ago</span>
+        </div>
+        <div style={{ fontSize: 12.5, color: BODY, marginTop: 8 }}>{count} session{count === 1 ? "" : "s"} added to your plan.</div>
+        <button onClick={undo} disabled={busy} style={{ marginTop: 8, background: "none", border: "none", color: ACCENT_LT, fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0 }}>↶ {busy ? "Removing…" : "Undo"}</button>
+        {err && <div style={{ fontSize: 11, color: FAT, marginTop: 4 }}>{err}</div>}
+      </div>
+    );
+  }
+  if (kept) {
+    return <div style={{ marginTop: 8, fontSize: 11.5, color: FAINT, fontStyle: "italic" }}>Left your schedule unchanged.</div>;
+  }
+  return (
+    <div style={{ marginTop: 8, borderRadius: 16, padding: 13, background: RAISED, border: "1px solid " + BORDER_STRONG }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <span style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(79,156,249,.16)", color: ACCENT, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>🗓</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: H }}>{a.title || "Add to schedule"}</span>
+        {a.delta_badge?.text ? <span style={{ marginLeft: "auto", fontSize: 10.5, fontWeight: 700, color: ACCENT_LT, background: "rgba(79,156,249,.14)", borderRadius: 999, padding: "3px 9px" }}>{a.delta_badge.text}</span> : null}
+      </div>
+
+      <div style={{ background: SUNKEN, borderRadius: 12, padding: 6, display: "flex", flexDirection: "column", gap: 1 }}>
+        {sessions.map((sx, i) => {
+          const ln = sx.line || "";
+          const dash = ln.indexOf("—");
+          const rest = dash >= 0 ? ln.slice(dash + 1).trim() : ln;
+          return (
+            <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "5px 8px", borderRadius: 8, opacity: sx.is_rest ? 0.62 : 1 }}>
+              <span style={{ fontSize: 11, fontWeight: 800, color: sx.is_rest ? FAINT : ACCENT_LT, minWidth: 28 }}>{sx.day}</span>
+              <span style={{ fontSize: 12.5, color: BODY, lineHeight: 1.4 }}>{rest}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {err && <div style={{ fontSize: 11, color: FAT, marginTop: 8 }}>{err}</div>}
+
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <button onClick={apply} disabled={busy} style={{ ...primaryBtn, flex: 2, opacity: busy ? 0.6 : 1 }}>{busy ? "Adding…" : "Add to schedule"}</button>
+        <button onClick={() => setKept(true)} disabled={busy} style={ghostBtn}>Not now</button>
+      </div>
+      <div style={{ fontSize: 10, color: FAINTER, marginTop: 8 }}>Adds these sessions to your plan. You can undo after.</div>
+    </div>
+  );
+}
+
 export function ActionCard(props: { msg: KaiMessage; onApplied: (m: KaiMessage) => void; onUndone: (m: KaiMessage) => void }) {
   const t = props.msg.action?.type;
+  if (t === "plan") return <PlanActionCard {...props} />;
   if (t === "schedule") return <ScheduleActionCard {...props} />;
   if (t === "target") return <TargetActionCard {...props} />;
   if (t === "swap") return <SwapActionCard {...props} />;
