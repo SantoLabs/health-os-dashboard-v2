@@ -217,7 +217,7 @@ export default function NutritionPage() {
         </div>
       )}
 
-      <button onClick={openAdd} aria-label="Add food" style={{ position: "fixed", right: 18, bottom: 90, width: 56, height: 56, borderRadius: 28, border: "none", background: ACCENT, color: "#fff", fontSize: 28, lineHeight: 1, cursor: "pointer", boxShadow: "0 6px 18px rgba(79,156,249,.45)", zIndex: 30 }}>＋</button>
+      <button onClick={openAdd} aria-label="Add food" style={{ position: "fixed", right: 16, bottom: "calc(140px + env(safe-area-inset-bottom, 0px))", width: 56, height: 56, borderRadius: 28, border: "none", background: ACCENT, color: "#fff", fontSize: 28, lineHeight: 1, cursor: "pointer", boxShadow: "0 6px 18px rgba(79,156,249,.45)", zIndex: 30 }}>＋</button>
 
       {addOpen && <AddFlow date={sel} editMeal={editMeal} onClose={() => setAddOpen(false)} onSaved={onSaved} />}
       {adhOpen && <Adherence onClose={() => setAdhOpen(false)} />}
