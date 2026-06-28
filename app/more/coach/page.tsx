@@ -8,7 +8,8 @@ import { useRouter } from "next/navigation";
 import { Screen } from "../../components/Screen";
 import {
   coachReminders, coachReminderOp, coachMemory, coachMemoryOp,
-  type KaiReminder, type KaiMemoryItem,
+  coachInsights, coachUnsaveInsight,
+  type KaiReminder, type KaiMemoryItem, type KaiSavedInsight,
 } from "../../lib/api";
 import {
   H, BODY, SECOND, MUTED, FAINT, SURF, RAISED, SUNKEN, BORDER, BORDER_STRONG,
@@ -28,9 +29,10 @@ function whenLabel(r: KaiReminder): string {
 
 export default function CoachHubPage() {
   const router = useRouter();
-  const [tab, setTab] = useState<"reminders" | "memory">("reminders");
+  const [tab, setTab] = useState<"reminders" | "memory" | "saved">("reminders");
   const [reminders, setReminders] = useState<KaiReminder[] | null>(null);
   const [memory, setMemory] = useState<KaiMemoryItem[] | null>(null);
+  const [insights, setInsights] = useState<KaiSavedInsight[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [newText, setNewText] = useState("");
@@ -39,7 +41,9 @@ export default function CoachHubPage() {
 
   async function loadReminders() { try { const r = await coachReminders(); setReminders(r.reminders || []); } catch (e) { setErr((e as Error).message); } }
   async function loadMemory() { try { const r = await coachMemory(); setMemory(r.memory || []); } catch (e) { setErr((e as Error).message); } }
-  useEffect(() => { loadReminders(); loadMemory(); }, []);
+  async function loadInsights() { try { const r = await coachInsights(); setInsights(r.insights || []); } catch (e) { setErr((e as Error).message); } }
+  useEffect(() => { loadReminders(); loadMemory(); loadInsights(); }, []);
+  async function unsave(it: KaiSavedInsight) { setBusyId(it.id); try { await coachUnsaveInsight(it.id); await loadInsights(); } catch (e) { setErr((e as Error).message); } finally { setBusyId(null); } }
 
   async function remOp(r: KaiReminder, op: "done" | "snooze" | "dismiss" | "delete", snooze_mins?: number) {
     setBusyId(r.id); setErr(null);
@@ -77,10 +81,10 @@ export default function CoachHubPage() {
   return (
     <Screen title="Kai">
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        {(["reminders", "memory"] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: "9px 0", borderRadius: 11, border: "1px solid " + (tab === t ? BORDER_STRONG : BORDER), background: tab === t ? RAISED : "transparent", color: tab === t ? H : SECOND, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-            {t === "reminders" ? "Reminders" : "Memory"}
-            {t === "reminders" && due.length ? <span style={{ marginLeft: 7, fontSize: 10.5, fontWeight: 800, color: "#0c1422", background: ACCENT, borderRadius: 999, padding: "1px 7px" }}>{due.length}</span> : null}
+        {(["reminders", "memory", "saved"] as const).map((t) => (
+          <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: "9px 0", borderRadius: 11, border: "1px solid " + (tab === t ? BORDER_STRONG : BORDER), background: tab === t ? RAISED : "transparent", color: tab === t ? H : SECOND, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
+            {t === "reminders" ? "Reminders" : t === "memory" ? "Memory" : "Saved"}
+            {t === "reminders" && due.length ? <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 800, color: "#0c1422", background: ACCENT, borderRadius: 999, padding: "1px 6px" }}>{due.length}</span> : null}
           </button>
         ))}
       </div>
@@ -108,7 +112,7 @@ export default function CoachHubPage() {
             </>
           )}
         </div>
-      ) : (
+      ) : tab === "memory" ? (
         <div>
           <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
             <span style={{ fontSize: 11.5, color: MUTED, flex: 1, lineHeight: 1.5 }}>Durable facts Kai uses to personalize advice. A wrong memory is worse than none — edit freely.</span>
@@ -141,6 +145,22 @@ export default function CoachHubPage() {
                   </span>
                 </div>
                 <div style={{ fontSize: 13.5, color: BODY, lineHeight: 1.5 }}>{m.text}</div>
+              </div>
+            ))
+          )}
+        </div>
+      ) : (
+        <div>
+          {insights === null ? <Sk /> : insights.length === 0 ? (
+            <Empty icon="★" title="No saved insights yet" sub="Tap “Save” under any Kai answer to keep it here for quick reference." />
+          ) : (
+            insights.map((it) => (
+              <div key={it.id} style={{ background: SURF, border: "1px solid " + BORDER, borderRadius: 14, padding: "12px 13px", marginBottom: 10 }}>
+                <div style={{ fontSize: 13, color: BODY, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{it.body}</div>
+                <div style={{ display: "flex", alignItems: "center", marginTop: 8 }}>
+                  <span style={{ fontSize: 10.5, color: FAINT }}>{it.created_at ? new Date(it.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : ""}</span>
+                  <button onClick={() => unsave(it)} disabled={busyId === it.id} style={{ ...iconLink, color: FAT, marginLeft: "auto" }}>Remove</button>
+                </div>
               </div>
             ))
           )}
