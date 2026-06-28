@@ -234,6 +234,30 @@ export async function coachMemoryOp(body: { op: "add" | "edit" | "delete"; id?: 
   return res.json();
 }
 
+// ---- coach-aux: "why?" explainer + saved insights ----
+const AUX = "/functions/v1/coach-aux";
+export async function coachExplain(metric: string, value?: string | number): Promise<{ text: string }> {
+  const res = await authedFetch(`${AUX}?api=explain`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ metric, value }) });
+  if (!res.ok) throw new Error(`Couldn't explain that (${res.status})`);
+  return res.json();
+}
+export type KaiSavedInsight = { id: string; title?: string; body: string; pinned?: boolean; message_id?: string; thread_id?: string; created_at?: string };
+export async function coachInsights(): Promise<{ insights: KaiSavedInsight[] }> {
+  const res = await authedFetch(`${AUX}?api=insights`);
+  if (!res.ok) throw new Error(`Couldn't load saved insights (${res.status})`);
+  return res.json();
+}
+export async function coachSaveInsight(message_id: string): Promise<{ ok: boolean; insight?: KaiSavedInsight; already?: boolean }> {
+  const res = await authedFetch(`${AUX}?api=save_insight`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message_id }) });
+  if (!res.ok) throw new Error(`Couldn't save (${res.status})`);
+  return res.json();
+}
+export async function coachUnsaveInsight(id: string): Promise<{ ok: boolean }> {
+  const res = await authedFetch(`${AUX}?api=unsave_insight`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+  if (!res.ok) throw new Error(`Couldn't remove (${res.status})`);
+  return res.json();
+}
+
 // ---- health-plan (Schedule: AI plan + calendar + history) ----
 // GET week (optionally a past/future week via Monday-anchored week_start).
 export async function planWeek<T>(weekStart?: string): Promise<T> {
