@@ -475,6 +475,52 @@ function MemoryActionCard({ msg, onApplied, onUndone }: CardProps) {
   );
 }
 
+function fmtStartedOn(raw?: string): string {
+  if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return "";
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+  if (raw === today) return "today";
+  const d = new Date(raw + "T00:00:00+05:30");
+  if (isNaN(d.getTime())) return raw;
+  const sameYear = d.getUTCFullYear() === new Date(today + "T00:00:00+05:30").getUTCFullYear();
+  return d.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", ...(sameYear ? {} : { year: "numeric" }) });
+}
+function CapabilityActionCard({ msg, onApplied, onUndone }: CardProps) {
+  const a = msg.action as KaiAction;
+  const { busy, err, apply, undo } = useAct(msg, onApplied, onUndone);
+  const [kept, setKept] = useState(false);
+  const d = a.display || a.payload || {};
+  const kind = String(d.kind || "").trim();
+  const kindLabel = kind ? kind.charAt(0).toUpperCase() + kind.slice(1) : "Discipline";
+  const since = fmtStartedOn(d.started_on);
+  const note = d.note ? String(d.note) : "";
+
+  if (a.status === "applied") {
+    return (
+      <AppliedShell tint={FIBR} tick={FIBR} label={`${kindLabel} marked as a new build`} created={msg.created_at} busy={busy} onUndo={undo}>
+        <div style={{ fontSize: 12.5, color: BODY, marginTop: 8 }}>{since ? `Building since ${since}.` : "Tracked as a fresh build."}{note ? ` ${note}` : ""}</div>
+        {err && <div style={errStyle}>{err}</div>}
+      </AppliedShell>
+    );
+  }
+  if (kept) return <div style={keptStyle}>Won't track that as a new build.</div>;
+  return (
+    <div style={{ marginTop: 8, borderRadius: 16, padding: 13, background: "rgba(70,199,154,.07)", border: "1px solid rgba(70,199,154,.3)" }}>
+      <div style={cardHead}><span style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(70,199,154,.16)", color: FIBR, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>🌱</span><span style={cardTitle}>{a.title || `Mark ${kindLabel} as a new capability`}</span>{a.delta_badge?.text ? <span style={{ marginLeft: "auto", fontSize: 10.5, fontWeight: 800, color: FIBR, background: "rgba(70,199,154,.12)", border: "1px solid rgba(70,199,154,.3)", borderRadius: 999, padding: "3px 8px" }}>{a.delta_badge.text}</span> : null}</div>
+      <div style={{ background: SUNKEN, borderRadius: 12, padding: "11px 13px", display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: 14, fontWeight: 800, color: H }}>{kindLabel}</span>
+        {since ? <span style={{ fontSize: 12, color: SECOND }}>started {since}</span> : null}
+      </div>
+      {note ? <div style={{ fontSize: 12.5, color: BODY, lineHeight: 1.5, marginTop: 9 }}>{note}</div> : null}
+      {err && <div style={errStyle}>{err}</div>}
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <button onClick={apply} disabled={busy} style={{ ...primaryBtn, flex: 2, background: FIBR, opacity: busy ? 0.6 : 1 }}>{busy ? "Saving…" : "Mark as started"}</button>
+        <button onClick={() => setKept(true)} disabled={busy} style={ghostBtn}>Not now</button>
+      </div>
+      <div style={fineprint}>Kai treats this discipline as a fresh build from its start date — not a weekly shortfall. You can undo after.</div>
+    </div>
+  );
+}
+
 // ===================== Action card dispatch =====================
 // ===================== Plan (schedule week) action card =====================
 function PlanActionCard({ msg, onApplied, onUndone }: CardProps) {
@@ -555,6 +601,7 @@ export function ActionCard(props: { msg: KaiMessage; onApplied: (m: KaiMessage) 
   if (t === "pantry") return <PantryActionCard {...props} />;
   if (t === "reminder") return <ReminderActionCard {...props} />;
   if (t === "memory") return <MemoryActionCard {...props} />;
+  if (t === "capability") return <CapabilityActionCard {...props} />;
   return <FoodActionCard {...props} />;
 }
 
