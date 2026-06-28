@@ -3,11 +3,11 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Screen } from "../../components/Screen";
 import {
-  coachThreads, coachThread, coachSend, coachThreadOp,
+  coachThreads, coachThread, coachSend, coachVision, coachThreadOp,
   type KaiThread, type KaiMessage,
 } from "../../lib/api";
 import {
-  KaiMark, MessageRow, relTime, primaryBtn, useVoiceInput,
+  KaiMark, MessageRow, relTime, primaryBtn, useVoiceInput, CameraButton, type PickedImage,
   SURF, INPUTBG, BORDER, BORDER_STRONG, BORDER_ACCENT,
   H, BODY, SECOND, MUTED, FAINT, FAINTER, ACCENT, ACCENT_LT, FAT, FIBR,
 } from "../../components/KaiChat";
@@ -32,6 +32,7 @@ export default function AskPage() {
   const [swiped, setSwiped] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const voice = useVoiceInput((t) => setInput((cur) => (cur ? cur.trim() + " " : "") + t));
+  const [img, setImg] = useState<PickedImage | null>(null);
 
   useEffect(() => { loadThreads(true); }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, busy]);
@@ -63,12 +64,15 @@ export default function AskPage() {
   function newChat() { setView("chat"); setThreadId(null); setMessages([]); setErr(null); setInput(""); }
 
   async function send(q: string) {
-    const text = q.trim(); if (!text || busy) return;
+    const text = q.trim(); if ((!text && !img) || busy) return;
     setErr(null); setInput("");
-    setMessages((m) => [...m, { id: "tmp-" + Date.now(), role: "user", text }]);
+    const staged = img; setImg(null);
+    setMessages((m) => [...m, { id: "tmp-" + Date.now(), role: "user", text: staged ? (text || "\uD83D\uDCF7 Photo") : text }]);
     setBusy(true);
     try {
-      const r = await coachSend({ text, thread_id: threadId || undefined });
+      const r = staged
+        ? await coachVision({ text, image: { mime: staged.mime, data: staged.data }, thread_id: threadId || undefined })
+        : await coachSend({ text, thread_id: threadId || undefined });
       if (!threadId) setThreadId(r.thread_id);
       setMessages((m) => [...m, r.message]);
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); loadThreads(); }
@@ -165,20 +169,29 @@ export default function AskPage() {
       <div ref={endRef} />
 
       <div style={{ position: "sticky", bottom: 0, paddingTop: 8, paddingBottom: 4, background: "linear-gradient(180deg,transparent,#0e1320 22%)" }}>
+        {img ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8, background: SURF, border: "1px solid " + BORDER, borderRadius: 12, padding: 7 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={img.preview} alt="attached" style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover" }} />
+            <span style={{ flex: 1, fontSize: 12.5, color: SECOND }}>Photo attached \u2014 Kai will read it</span>
+            <button onClick={() => setImg(null)} aria-label="Remove photo" style={{ background: "none", border: "none", color: FAINT, fontSize: 18, cursor: "pointer", lineHeight: 1, padding: "0 4px" }}>\u00D7</button>
+          </div>
+        ) : null}
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <CameraButton onImage={setImg} disabled={busy} />
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") send(input); }}
-            placeholder="Message Kai…"
+            placeholder={img ? "Add a note (optional)\u2026" : "Message Kai\u2026"}
             style={{ flex: 1, padding: "12px 15px", borderRadius: 999, border: "1px solid " + BORDER_STRONG, background: INPUTBG, color: BODY, fontSize: 14, outline: "none", fontFamily: "inherit" }}
           />
           {voice.supported ? (
             <button onClick={voice.toggle} aria-label="Voice input"
-              style={{ width: 44, height: 44, borderRadius: "50%", border: "1px solid " + BORDER_STRONG, background: voice.listening ? ACCENT : INPUTBG, color: voice.listening ? "#fff" : SECOND, fontSize: 16, cursor: "pointer", flexShrink: 0 }}>{voice.listening ? "■" : "🎤"}</button>
+              style={{ width: 44, height: 44, borderRadius: "50%", border: "1px solid " + BORDER_STRONG, background: voice.listening ? ACCENT : INPUTBG, color: voice.listening ? "#fff" : SECOND, fontSize: 16, cursor: "pointer", flexShrink: 0 }}>{voice.listening ? "\u25A0" : "\uD83C\uDFA4"}</button>
           ) : null}
-          <button onClick={() => send(input)} disabled={busy || !input.trim()} aria-label="Send"
-            style={{ width: 44, height: 44, borderRadius: "50%", border: "none", background: input.trim() && !busy ? ACCENT : "#1c2740", color: "#fff", fontSize: 17, cursor: input.trim() && !busy ? "pointer" : "default", flexShrink: 0 }}>↑</button>
+          <button onClick={() => send(input)} disabled={busy || (!input.trim() && !img)} aria-label="Send"
+            style={{ width: 44, height: 44, borderRadius: "50%", border: "none", background: (input.trim() || img) && !busy ? ACCENT : "#1c2740", color: "#fff", fontSize: 17, cursor: (input.trim() || img) && !busy ? "pointer" : "default", flexShrink: 0 }}>\u2191</button>
         </div>
         <div style={{ fontSize: 10, color: FAINTER, textAlign: "center", marginTop: 6 }}>Not medical advice · clinical questions → your physician</div>
       </div>
