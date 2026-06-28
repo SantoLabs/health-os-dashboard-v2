@@ -555,14 +555,14 @@ export function CameraButton({ onImage, disabled }: { onImage: (img: PickedImage
       {/* choose an existing photo */}
       <input ref={upRef} type="file" accept="image/*" onChange={onChange} style={{ display: "none" }} />
       <button onClick={() => setMenu((m) => !m)} disabled={disabled} aria-label="Add photo"
-        style={{ width: 44, height: 44, borderRadius: "50%", border: "1px solid " + (menu ? BORDER_ACCENT : BORDER_STRONG), background: INPUTBG, color: SECOND, fontSize: 16, cursor: disabled ? "default" : "pointer", flexShrink: 0, opacity: disabled ? 0.5 : 1 }}>\uD83D\uDCF7</button>
+        style={{ width: 44, height: 44, borderRadius: "50%", border: "1px solid " + (menu ? BORDER_ACCENT : BORDER_STRONG), background: INPUTBG, color: SECOND, fontSize: 16, cursor: disabled ? "default" : "pointer", flexShrink: 0, opacity: disabled ? 0.5 : 1 }}>📷</button>
       {menu ? (
         <>
           <div onClick={() => setMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 80 }} />
           <div style={{ position: "absolute", bottom: 52, left: 0, zIndex: 81, background: RAISED, border: "1px solid " + BORDER_STRONG, borderRadius: 13, boxShadow: "0 8px 28px rgba(0,0,0,.5)", overflow: "hidden", minWidth: 168 }}>
-            <button style={item} onClick={() => { setMenu(false); camRef.current?.click(); }}>\uD83D\uDCF7 Take photo</button>
+            <button style={item} onClick={() => { setMenu(false); camRef.current?.click(); }}>📷 Take photo</button>
             <div style={{ height: 1, background: BORDER }} />
-            <button style={item} onClick={() => { setMenu(false); upRef.current?.click(); }}>\uD83D\uDDBC\uFE0F Upload photo</button>
+            <button style={item} onClick={() => { setMenu(false); upRef.current?.click(); }}>🖼️ Upload photo</button>
           </div>
         </>
       ) : null}
