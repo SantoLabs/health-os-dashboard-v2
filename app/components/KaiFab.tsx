@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { coachSend, type KaiMessage } from "../lib/api";
+import { coachSend, coachVision, type KaiMessage } from "../lib/api";
 import {
-  KaiMark, MessageRow,
+  KaiMark, MessageRow, useVoiceInput, CameraButton, type PickedImage,
   PAGE, SURF, INPUTBG, BORDER, BORDER_STRONG,
   H, BODY, SECOND, MUTED, FAINT, ACCENT, ACCENT_LT,
 } from "./KaiChat";
@@ -41,11 +41,13 @@ export default function KaiFab() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const voice = useVoiceInput((t) => setInput((cur) => (cur ? cur.trim() + " " : "") + t));
+  const [img, setImg] = useState<PickedImage | null>(null);
 
   const ctx = ctxFor(path);
 
   // New page = fresh context. Reset the ephemeral conversation when the route changes.
-  useEffect(() => { setMessages([]); setThreadId(null); setErr(null); setInput(""); }, [path]);
+  useEffect(() => { setMessages([]); setThreadId(null); setErr(null); setInput(""); setImg(null); }, [path]);
   // Close the sheet when navigating.
   useEffect(() => { setOpen(false); }, [path]);
   useEffect(() => { if (open) endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, busy, open]);
@@ -54,12 +56,15 @@ export default function KaiFab() {
   if (path === "/more/ask") return null;
 
   async function send(q: string) {
-    const text = q.trim(); if (!text || busy) return;
+    const text = q.trim(); if ((!text && !img) || busy) return;
     setErr(null); setInput("");
-    setMessages((m) => [...m, { id: "tmp-" + Date.now(), role: "user", text }]);
+    const staged = img; setImg(null);
+    setMessages((m) => [...m, { id: "tmp-" + Date.now(), role: "user", text: staged ? (text || "\uD83D\uDCF7 Photo") : text }]);
     setBusy(true);
     try {
-      const r = await coachSend({ text, thread_id: threadId || undefined, context_route: path, page_context: { label: ctx.label, hint: ctx.hint } });
+      const r = staged
+        ? await coachVision({ text, image: { mime: staged.mime, data: staged.data }, thread_id: threadId || undefined, context_route: path })
+        : await coachSend({ text, thread_id: threadId || undefined, context_route: path, page_context: { label: ctx.label, hint: ctx.hint } });
       if (!threadId) setThreadId(r.thread_id);
       setMessages((m) => [...m, r.message]);
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
@@ -141,20 +146,35 @@ export default function KaiFab() {
             </div>
 
             {/* Input */}
-            <div style={{ display: "flex", gap: 8, padding: "12px 15px calc(14px + env(safe-area-inset-bottom, 0px))", borderTop: "1px solid " + BORDER }}>
-              <input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") send(input); }}
-                placeholder={ctx.label ? `Ask about ${ctx.label}…` : "Ask Kai…"}
-                style={{ flex: 1, background: INPUTBG, border: "1px solid " + BORDER_STRONG, borderRadius: 12, padding: "11px 13px", color: H, fontSize: 14, outline: "none" }}
-              />
-              <button
-                onClick={() => send(input)}
-                disabled={busy || !input.trim()}
-                aria-label="Send"
-                style={{ width: 44, borderRadius: 12, border: "none", background: ACCENT, color: "#0c1422", fontSize: 17, fontWeight: 800, cursor: busy || !input.trim() ? "default" : "pointer", opacity: busy || !input.trim() ? 0.5 : 1 }}
-              >↑</button>
+            <div style={{ padding: "12px 15px calc(14px + env(safe-area-inset-bottom, 0px))", borderTop: "1px solid " + BORDER }}>
+              {img ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8, background: SURF, border: "1px solid " + BORDER, borderRadius: 12, padding: 7 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={img.preview} alt="attached" style={{ width: 38, height: 38, borderRadius: 8, objectFit: "cover" }} />
+                  <span style={{ flex: 1, fontSize: 12, color: SECOND }}>Photo attached \u2014 Kai will read it</span>
+                  <button onClick={() => setImg(null)} aria-label="Remove photo" style={{ background: "none", border: "none", color: FAINT, fontSize: 18, cursor: "pointer", lineHeight: 1, padding: "0 4px" }}>\u00D7</button>
+                </div>
+              ) : null}
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <CameraButton onImage={setImg} disabled={busy} />
+                <input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") send(input); }}
+                  placeholder={img ? "Add a note (optional)\u2026" : ctx.label ? `Ask about ${ctx.label}\u2026` : "Ask Kai\u2026"}
+                  style={{ flex: 1, background: INPUTBG, border: "1px solid " + BORDER_STRONG, borderRadius: 12, padding: "11px 13px", color: H, fontSize: 14, outline: "none" }}
+                />
+                {voice.supported ? (
+                  <button onClick={voice.toggle} aria-label="Voice input"
+                    style={{ width: 44, height: 44, borderRadius: 12, border: "1px solid " + BORDER_STRONG, background: voice.listening ? ACCENT : INPUTBG, color: voice.listening ? "#0c1422" : SECOND, fontSize: 16, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{voice.listening ? "\u25A0" : "\uD83C\uDFA4"}</button>
+                ) : null}
+                <button
+                  onClick={() => send(input)}
+                  disabled={busy || (!input.trim() && !img)}
+                  aria-label="Send"
+                  style={{ width: 44, height: 44, borderRadius: 12, border: "none", background: ACCENT, color: "#0c1422", fontSize: 17, fontWeight: 800, cursor: busy || (!input.trim() && !img) ? "default" : "pointer", opacity: busy || (!input.trim() && !img) ? 0.5 : 1, flexShrink: 0 }}
+                >\u2191</button>
+              </div>
             </div>
           </div>
         </div>
