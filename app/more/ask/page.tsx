@@ -67,7 +67,7 @@ export default function AskPage() {
     const text = q.trim(); if ((!text && !img) || busy) return;
     setErr(null); setInput("");
     const staged = img; setImg(null);
-    setMessages((m) => [...m, { id: "tmp-" + Date.now(), role: "user", text: staged ? (text || "\uD83D\uDCF7 Photo") : text }]);
+    setMessages((m) => [...m, { id: "tmp-" + Date.now(), role: "user", text: staged ? (text || "📷 Photo") : text }]);
     setBusy(true);
     try {
       const r = staged
@@ -173,8 +173,8 @@ export default function AskPage() {
           <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8, background: SURF, border: "1px solid " + BORDER, borderRadius: 12, padding: 7 }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={img.preview} alt="attached" style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover" }} />
-            <span style={{ flex: 1, fontSize: 12.5, color: SECOND }}>Photo attached \u2014 Kai will read it</span>
-            <button onClick={() => setImg(null)} aria-label="Remove photo" style={{ background: "none", border: "none", color: FAINT, fontSize: 18, cursor: "pointer", lineHeight: 1, padding: "0 4px" }}>\u00D7</button>
+            <span style={{ flex: 1, fontSize: 12.5, color: SECOND }}>Photo attached</span>
+            <button onClick={() => setImg(null)} aria-label="Remove photo" style={{ background: "none", border: "none", color: FAINT, fontSize: 18, cursor: "pointer", lineHeight: 1, padding: "0 4px" }}>×</button>
           </div>
         ) : null}
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -191,7 +191,7 @@ export default function AskPage() {
               style={{ width: 44, height: 44, borderRadius: "50%", border: "1px solid " + BORDER_STRONG, background: voice.listening ? ACCENT : INPUTBG, color: voice.listening ? "#fff" : SECOND, fontSize: 16, cursor: "pointer", flexShrink: 0 }}>{voice.listening ? "\u25A0" : "\uD83C\uDFA4"}</button>
           ) : null}
           <button onClick={() => send(input)} disabled={busy || (!input.trim() && !img)} aria-label="Send"
-            style={{ width: 44, height: 44, borderRadius: "50%", border: "none", background: (input.trim() || img) && !busy ? ACCENT : "#1c2740", color: "#fff", fontSize: 17, cursor: (input.trim() || img) && !busy ? "pointer" : "default", flexShrink: 0 }}>\u2191</button>
+            style={{ width: 44, height: 44, borderRadius: "50%", border: "none", background: (input.trim() || img) && !busy ? ACCENT : "#1c2740", color: "#fff", fontSize: 17, cursor: (input.trim() || img) && !busy ? "pointer" : "default", flexShrink: 0 }}>↑</button>
         </div>
         <div style={{ fontSize: 10, color: FAINTER, textAlign: "center", marginTop: 6 }}>Not medical advice · clinical questions → your physician</div>
       </div>
