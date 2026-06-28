@@ -59,7 +59,7 @@ export default function KaiFab() {
     const text = q.trim(); if ((!text && !img) || busy) return;
     setErr(null); setInput("");
     const staged = img; setImg(null);
-    setMessages((m) => [...m, { id: "tmp-" + Date.now(), role: "user", text: staged ? (text || "\uD83D\uDCF7 Photo") : text }]);
+    setMessages((m) => [...m, { id: "tmp-" + Date.now(), role: "user", text: staged ? (text || "📷 Photo") : text }]);
     setBusy(true);
     try {
       const r = staged
@@ -151,8 +151,8 @@ export default function KaiFab() {
                 <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8, background: SURF, border: "1px solid " + BORDER, borderRadius: 12, padding: 7 }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={img.preview} alt="attached" style={{ width: 38, height: 38, borderRadius: 8, objectFit: "cover" }} />
-                  <span style={{ flex: 1, fontSize: 12, color: SECOND }}>Photo attached \u2014 Kai will read it</span>
-                  <button onClick={() => setImg(null)} aria-label="Remove photo" style={{ background: "none", border: "none", color: FAINT, fontSize: 18, cursor: "pointer", lineHeight: 1, padding: "0 4px" }}>\u00D7</button>
+                  <span style={{ flex: 1, fontSize: 12, color: SECOND }}>Photo attached</span>
+                  <button onClick={() => setImg(null)} aria-label="Remove photo" style={{ background: "none", border: "none", color: FAINT, fontSize: 18, cursor: "pointer", lineHeight: 1, padding: "0 4px" }}>×</button>
                 </div>
               ) : null}
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -173,7 +173,7 @@ export default function KaiFab() {
                   disabled={busy || (!input.trim() && !img)}
                   aria-label="Send"
                   style={{ width: 44, height: 44, borderRadius: 12, border: "none", background: ACCENT, color: "#0c1422", fontSize: 17, fontWeight: 800, cursor: busy || (!input.trim() && !img) ? "default" : "pointer", opacity: busy || (!input.trim() && !img) ? 0.5 : 1, flexShrink: 0 }}
-                >\u2191</button>
+                >↑</button>
               </div>
             </div>
           </div>
