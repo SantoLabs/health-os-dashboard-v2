@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { coachDailyCard, type KaiDailyCard as Card } from "../lib/api";
+import { WhyChip } from "./KaiChat";
 
 const ACCENT = "#4f9cf9", ACCENT_LT = "#7fb0ff";
 const GREEN = "#46c79a", BLUE = "#5b9bff", AMBER = "#f3b14e";
@@ -98,6 +99,12 @@ export default function KaiDailyCard() {
         <div style={{ display: "flex", gap: 9, alignItems: "flex-start", background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.06)", borderRadius: 12, padding: "9px 11px" }}>
           <span style={{ color: tc, fontSize: 14, lineHeight: 1.3, flexShrink: 0 }}>↳</span>
           <span style={{ fontSize: 12.5, color: BODY, lineHeight: 1.45 }}>{card.lever}</span>
+        </div>
+      ) : null}
+
+      {card.readiness ? (
+        <div style={{ marginTop: 11 }}>
+          <WhyChip metric="readiness" value={card.readiness.current} label="Why this readiness?" />
         </div>
       ) : null}
 
