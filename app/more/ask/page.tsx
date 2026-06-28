@@ -7,7 +7,7 @@ import {
   type KaiThread, type KaiMessage,
 } from "../../lib/api";
 import {
-  KaiMark, MessageRow, relTime, primaryBtn,
+  KaiMark, MessageRow, relTime, primaryBtn, useVoiceInput,
   SURF, INPUTBG, BORDER, BORDER_STRONG, BORDER_ACCENT,
   H, BODY, SECOND, MUTED, FAINT, FAINTER, ACCENT, ACCENT_LT, FAT, FIBR,
 } from "../../components/KaiChat";
@@ -31,6 +31,7 @@ export default function AskPage() {
   const [err, setErr] = useState<string | null>(null);
   const [swiped, setSwiped] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const voice = useVoiceInput((t) => setInput((cur) => (cur ? cur.trim() + " " : "") + t));
 
   useEffect(() => { loadThreads(true); }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, busy]);
@@ -172,6 +173,10 @@ export default function AskPage() {
             placeholder="Message Kai…"
             style={{ flex: 1, padding: "12px 15px", borderRadius: 999, border: "1px solid " + BORDER_STRONG, background: INPUTBG, color: BODY, fontSize: 14, outline: "none", fontFamily: "inherit" }}
           />
+          {voice.supported ? (
+            <button onClick={voice.toggle} aria-label="Voice input"
+              style={{ width: 44, height: 44, borderRadius: "50%", border: "1px solid " + BORDER_STRONG, background: voice.listening ? ACCENT : INPUTBG, color: voice.listening ? "#fff" : SECOND, fontSize: 16, cursor: "pointer", flexShrink: 0 }}>{voice.listening ? "■" : "🎤"}</button>
+          ) : null}
           <button onClick={() => send(input)} disabled={busy || !input.trim()} aria-label="Send"
             style={{ width: 44, height: 44, borderRadius: "50%", border: "none", background: input.trim() && !busy ? ACCENT : "#1c2740", color: "#fff", fontSize: 17, cursor: input.trim() && !busy ? "pointer" : "default", flexShrink: 0 }}>↑</button>
         </div>
