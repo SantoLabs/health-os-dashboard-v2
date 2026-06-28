@@ -5,8 +5,8 @@
 // dispatcher, and MessageRow. Used by both the full Ask tab (/more/ask) and the
 // global floating coach widget (KaiFab), so the chat looks and behaves identically.
 
-import { useState, type CSSProperties, type ReactNode } from "react";
-import { coachApply, coachUndo, type KaiMessage, type KaiAction, type KaiItem } from "../lib/api";
+import { useState, useRef, useEffect, type CSSProperties, type ReactNode } from "react";
+import { coachApply, coachUndo, coachSaveInsight, coachExplain, type KaiMessage, type KaiAction, type KaiItem } from "../lib/api";
 
 export const PAGE = "#0e1320", SURF = "#161d2c", RAISED = "#1a2232", INPUTBG = "#171f2e", SUNKEN = "#0f1622";
 export const BORDER = "#232c40", BORDER_STRONG = "#2a3550", BORDER_ACCENT = "#2f4a78";
@@ -499,6 +499,77 @@ const fineprint: CSSProperties = { fontSize: 10, color: FAINTER, marginTop: 8 };
 function cardIcon(color: string): CSSProperties { return { width: 24, height: 24, borderRadius: 7, background: "rgba(79,156,249,.16)", color, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13 }; }
 function badgePill(color: string): CSSProperties { return { marginLeft: "auto", fontSize: 10.5, fontWeight: 800, color, background: "rgba(91,155,255,.12)", border: "1px solid rgba(91,155,255,.3)", borderRadius: 999, padding: "3px 8px" }; }
 
+// ===================== Voice input (Wave 2) =====================
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export function useVoiceInput(onResult: (text: string) => void) {
+  const [listening, setListening] = useState(false);
+  const [supported, setSupported] = useState(false);
+  const recRef = useRef<any>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const SR = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    if (SR) setSupported(true);
+  }, []);
+  function toggle() {
+    if (typeof window === "undefined") return;
+    const SR = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    if (!SR) return;
+    if (listening) { try { recRef.current?.stop(); } catch { /* noop */ } setListening(false); return; }
+    const rec = new SR();
+    rec.lang = "en-IN"; rec.interimResults = false; rec.maxAlternatives = 1;
+    rec.onresult = (e: any) => { const t = e.results?.[0]?.[0]?.transcript; if (t) onResult(String(t)); };
+    rec.onend = () => setListening(false);
+    rec.onerror = () => setListening(false);
+    recRef.current = rec; setListening(true);
+    try { rec.start(); } catch { setListening(false); }
+  }
+  return { listening, supported, toggle };
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+// ===================== "Why?" explainer chip (Wave 2) =====================
+export function WhyChip({ metric, value, label = "Why?" }: { metric: string; value?: string | number; label?: string }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  async function go() {
+    if (open) { setOpen(false); return; }
+    setOpen(true);
+    if (text || busy) return;
+    setBusy(true); setErr(null);
+    try { const r = await coachExplain(metric, value); setText(r.text); }
+    catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  }
+  return (
+    <span style={{ display: "inline-block" }}>
+      <button onClick={go} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(79,156,249,.1)", border: "1px solid " + BORDER_ACCENT, color: ACCENT_LT, fontSize: 11, fontWeight: 700, borderRadius: 999, padding: "3px 9px", cursor: "pointer" }}>
+        <KaiMark size={13} /> {label}
+      </button>
+      {open ? (
+        <div style={{ marginTop: 8, background: SURF, border: "1px solid " + BORDER, borderRadius: 12, padding: "11px 13px", fontSize: 12.5, color: BODY, lineHeight: 1.5 }}>
+          {busy ? "Thinking\u2026" : err ? <span style={{ color: FAT }}>{err}</span> : text}
+        </div>
+      ) : null}
+    </span>
+  );
+}
+
+function SaveButton({ messageId }: { messageId: string }) {
+  const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+  async function save() {
+    if (saved || busy) return;
+    setBusy(true);
+    try { await coachSaveInsight(messageId); setSaved(true); } catch { /* ignore */ } finally { setBusy(false); }
+  }
+  return (
+    <button onClick={save} disabled={busy || saved} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "none", border: "none", color: saved ? FIBR : FAINT, fontSize: 11, fontWeight: 700, cursor: saved ? "default" : "pointer", padding: 0, marginTop: 7 }}>
+      {saved ? "\u2605 Saved" : busy ? "Saving\u2026" : "\u2606 Save"}
+    </button>
+  );
+}
+
 // ===================== Message row =====================
 export function MessageRow({ msg, onApplied, onUndone }: { msg: KaiMessage; onApplied: (m: KaiMessage) => void; onUndone: (m: KaiMessage) => void }) {
   if (msg.role === "user") {
@@ -523,6 +594,7 @@ export function MessageRow({ msg, onApplied, onUndone }: { msg: KaiMessage; onAp
           </div>
         )}
         {msg.action ? <ActionCard msg={msg} onApplied={onApplied} onUndone={onUndone} /> : null}
+        {msg.id && !String(msg.id).startsWith("tmp-") && msg.text ? <div><SaveButton messageId={msg.id} /></div> : null}
       </div>
     </div>
   );
