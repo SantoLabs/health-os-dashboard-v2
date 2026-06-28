@@ -5,6 +5,7 @@
 // dispatcher, and MessageRow. Used by both the full Ask tab (/more/ask) and the
 // global floating coach widget (KaiFab), so the chat looks and behaves identically.
 
+import * as React from "react";
 import { useState, useRef, useEffect, type CSSProperties, type ReactNode } from "react";
 import { coachApply, coachUndo, coachSaveInsight, coachExplain, type KaiMessage, type KaiAction, type KaiItem } from "../lib/api";
 
@@ -526,6 +527,32 @@ export function useVoiceInput(onResult: (text: string) => void) {
   return { listening, supported, toggle };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
+
+// ===================== Camera / photo attach (Wave 2) =====================
+export type PickedImage = { mime: string; data: string; preview: string };
+export function CameraButton({ onImage, disabled }: { onImage: (img: PickedImage) => void; disabled?: boolean }) {
+  const ref = useRef<HTMLInputElement>(null);
+  function onChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const u = String(reader.result || "");
+      const comma = u.indexOf(",");
+      if (comma < 0) return;
+      onImage({ mime: f.type || "image/jpeg", data: u.slice(comma + 1), preview: u });
+    };
+    reader.readAsDataURL(f);
+    e.target.value = "";
+  }
+  return (
+    <>
+      <input ref={ref} type="file" accept="image/*" capture="environment" onChange={onChange} style={{ display: "none" }} />
+      <button onClick={() => ref.current?.click()} disabled={disabled} aria-label="Add photo"
+        style={{ width: 44, height: 44, borderRadius: "50%", border: "1px solid " + BORDER_STRONG, background: INPUTBG, color: SECOND, fontSize: 16, cursor: disabled ? "default" : "pointer", flexShrink: 0, opacity: disabled ? 0.5 : 1 }}>\uD83D\uDCF7</button>
+    </>
+  );
+}
 
 // ===================== "Why?" explainer chip (Wave 2) =====================
 export function WhyChip({ metric, value, label = "Why?" }: { metric: string; value?: string | number; label?: string }) {
