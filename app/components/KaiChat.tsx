@@ -531,9 +531,12 @@ export function useVoiceInput(onResult: (text: string) => void) {
 // ===================== Camera / photo attach (Wave 2) =====================
 export type PickedImage = { mime: string; data: string; preview: string };
 export function CameraButton({ onImage, disabled }: { onImage: (img: PickedImage) => void; disabled?: boolean }) {
-  const ref = useRef<HTMLInputElement>(null);
+  const camRef = useRef<HTMLInputElement>(null);
+  const upRef = useRef<HTMLInputElement>(null);
+  const [menu, setMenu] = useState(false);
   function onChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
+    e.target.value = "";
     if (!f) return;
     const reader = new FileReader();
     reader.onload = () => {
@@ -543,14 +546,27 @@ export function CameraButton({ onImage, disabled }: { onImage: (img: PickedImage
       onImage({ mime: f.type || "image/jpeg", data: u.slice(comma + 1), preview: u });
     };
     reader.readAsDataURL(f);
-    e.target.value = "";
   }
+  const item: React.CSSProperties = { display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", background: "none", border: "none", color: BODY, fontSize: 13.5, fontFamily: "inherit", padding: "10px 13px", cursor: "pointer", whiteSpace: "nowrap" };
   return (
-    <>
-      <input ref={ref} type="file" accept="image/*" capture="environment" onChange={onChange} style={{ display: "none" }} />
-      <button onClick={() => ref.current?.click()} disabled={disabled} aria-label="Add photo"
-        style={{ width: 44, height: 44, borderRadius: "50%", border: "1px solid " + BORDER_STRONG, background: INPUTBG, color: SECOND, fontSize: 16, cursor: disabled ? "default" : "pointer", flexShrink: 0, opacity: disabled ? 0.5 : 1 }}>\uD83D\uDCF7</button>
-    </>
+    <div style={{ position: "relative", flexShrink: 0 }}>
+      {/* take a photo with the camera */}
+      <input ref={camRef} type="file" accept="image/*" capture="environment" onChange={onChange} style={{ display: "none" }} />
+      {/* choose an existing photo */}
+      <input ref={upRef} type="file" accept="image/*" onChange={onChange} style={{ display: "none" }} />
+      <button onClick={() => setMenu((m) => !m)} disabled={disabled} aria-label="Add photo"
+        style={{ width: 44, height: 44, borderRadius: "50%", border: "1px solid " + (menu ? BORDER_ACCENT : BORDER_STRONG), background: INPUTBG, color: SECOND, fontSize: 16, cursor: disabled ? "default" : "pointer", flexShrink: 0, opacity: disabled ? 0.5 : 1 }}>\uD83D\uDCF7</button>
+      {menu ? (
+        <>
+          <div onClick={() => setMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 80 }} />
+          <div style={{ position: "absolute", bottom: 52, left: 0, zIndex: 81, background: RAISED, border: "1px solid " + BORDER_STRONG, borderRadius: 13, boxShadow: "0 8px 28px rgba(0,0,0,.5)", overflow: "hidden", minWidth: 168 }}>
+            <button style={item} onClick={() => { setMenu(false); camRef.current?.click(); }}>\uD83D\uDCF7 Take photo</button>
+            <div style={{ height: 1, background: BORDER }} />
+            <button style={item} onClick={() => { setMenu(false); upRef.current?.click(); }}>\uD83D\uDDBC\uFE0F Upload photo</button>
+          </div>
+        </>
+      ) : null}
+    </div>
   );
 }
 
