@@ -131,14 +131,17 @@ export type KaiAction = {
     kind?: string; title?: string; body?: string | null; seed_prompt?: string | null; recurrence?: string; due_at?: string | null; recur_time?: string | null;
     // memory
     text?: string; category?: string;
+    // plan (schedule week)
+    week_start?: string; sessions?: Array<{ session_date?: string; activity?: string; session_type?: string; planned_duration?: number | null; intensity?: string | null; focus?: string | null; is_rest_day?: boolean; notes?: string | null }>;
   };
   impact?: { metric: string; from: number; to: number; target: number; color: string } | null;
   summary?: { kcal: number; protein: number };
-  display?: { title?: string; body?: string | null; seed?: string | null; when?: string };
+  display?: { title?: string; body?: string | null; seed?: string | null; when?: string; week_start?: string; sessions?: Array<{ day?: string; date?: string; line?: string; is_rest?: boolean }> };
   from?: KaiActionWhen;
   to?: { date?: string; time?: string; activity?: string; items?: KaiItem[] };
   reason?: string | null;
   applied_log_ids?: string[];
+  inserted_ids?: string[];
 };
 export type KaiMessage = { id: string; role: "user" | "kai"; text: string; citations?: KaiCitation[]; action?: KaiAction | null; created_at?: string };
 export type KaiThread = { id: string; title: string; pinned: boolean; last_message?: string; last_role?: string; updated_at?: string };
