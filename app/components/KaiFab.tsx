@@ -50,6 +50,16 @@ export default function KaiFab() {
   useEffect(() => { setMessages([]); setThreadId(null); setErr(null); setInput(""); setImg(null); }, [path]);
   // Close the sheet when navigating.
   useEffect(() => { setOpen(false); }, [path]);
+  useEffect(() => {
+    function onKaiOpen(e: Event) {
+      const d = ((e as CustomEvent).detail || {}) as { thread_id?: string; message?: KaiMessage };
+      if (d.thread_id) setThreadId(d.thread_id);
+      setMessages(d.message ? [d.message] : []);
+      setErr(null); setInput(""); setImg(null); setOpen(true);
+    }
+    window.addEventListener("kai:open", onKaiOpen as EventListener);
+    return () => window.removeEventListener("kai:open", onKaiOpen as EventListener);
+  }, []);
   useEffect(() => { if (open) endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, busy, open]);
 
   // Don't show the FAB on the full Ask tab (it would be redundant there).
