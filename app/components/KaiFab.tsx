@@ -89,6 +89,7 @@ export default function KaiFab() {
         <button
           type="button"
           aria-label="Ask Kai"
+          className="app-fab"
           onClick={() => setOpen(true)}
           style={{
             position: "fixed", right: "max(16px, calc(50vw - 224px))", bottom: "calc(72px + env(safe-area-inset-bottom, 0px))",
