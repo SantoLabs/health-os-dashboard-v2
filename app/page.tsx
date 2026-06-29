@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useApi, actionGet, fetchApi, dashPost } from "./lib/api";
 import { Screen } from "./components/Screen";
 import KaiDailyCard from "./components/KaiDailyCard";
+import TodayNotosChip from "./components/TodayNotosChip";
 
 type Goal = { id: string; label: string; when_text?: string; target_date: string | null; days_away: number | null };
 
@@ -183,6 +184,7 @@ export default function TodayPage() {
       {data && (
         <>
           <KaiDailyCard liveReadiness={{ score: data.score, label: data.label }} />
+          <TodayNotosChip />
           <section className="card readiness">
             <div className="ring" style={{ ["--c" as string]: scoreColor(data.score), ["--p" as string]: data.score / 100 }}>
               <span className="ring-num">{data.score}</span>
