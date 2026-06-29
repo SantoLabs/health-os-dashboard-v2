@@ -91,7 +91,7 @@ export default function KaiFab() {
           aria-label="Ask Kai"
           onClick={() => setOpen(true)}
           style={{
-            position: "fixed", right: 16, bottom: "calc(72px + env(safe-area-inset-bottom, 0px))",
+            position: "fixed", right: "max(16px, calc(50vw - 224px))", bottom: "calc(72px + env(safe-area-inset-bottom, 0px))",
             width: 54, height: 54, borderRadius: "50%", border: "none", cursor: "pointer", zIndex: 60,
             background: "radial-gradient(circle at 30% 26%, #86b8ff, #4f9cf9 52%, #2a6bd0)",
             boxShadow: "0 6px 20px rgba(20,80,170,.45), 0 2px 6px rgba(0,0,0,.3)",
@@ -107,11 +107,11 @@ export default function KaiFab() {
 
       {/* Bottom sheet */}
       {open && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 70, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 70, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end" }}>
           <div onClick={() => setOpen(false)} style={{ position: "absolute", inset: 0, background: "rgba(4,8,16,.55)", backdropFilter: "blur(2px)" }} />
           <div
             style={{
-              position: "relative", background: PAGE, borderTopLeftRadius: 20, borderTopRightRadius: 20,
+              position: "relative", width: "100%", maxWidth: 480, margin: "0 auto", background: PAGE, borderTopLeftRadius: 20, borderTopRightRadius: 20,
               border: "1px solid " + BORDER, borderBottom: "none", maxHeight: "82vh", height: "82vh",
               display: "flex", flexDirection: "column", boxShadow: "0 -8px 40px rgba(0,0,0,.5)",
             }}
