@@ -63,7 +63,7 @@ export default function NotificationBell() {
         )}
       </button>
       {open && (
-        <div style={{ position: "fixed", top: 58, right: 10, width: 300, maxWidth: "calc(100vw - 20px)", background: RAISED, border: "1px solid " + BORDER_STRONG, borderRadius: 14, boxShadow: "0 12px 32px rgba(0,0,0,.4)", zIndex: 60, overflow: "hidden" }}>
+        <div style={{ position: "fixed", top: 58, right: "max(10px, calc(50vw - 230px))", width: 300, maxWidth: "calc(100vw - 20px)", background: RAISED, border: "1px solid " + BORDER_STRONG, borderRadius: 14, boxShadow: "0 12px 32px rgba(0,0,0,.4)", zIndex: 60, overflow: "hidden" }}>
           <div style={{ padding: "11px 13px", borderBottom: "1px solid " + BORDER, fontSize: 12, fontWeight: 800, color: H }}>{count > 0 ? `${count} due now` : "Notifications"}</div>
           <div style={{ maxHeight: 320, overflowY: "auto" }}>
             {due.length === 0 ? (
