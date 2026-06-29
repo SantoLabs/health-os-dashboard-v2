@@ -2,6 +2,7 @@
 
 import { ReactNode } from "react";
 import RefreshButton from "./RefreshButton";
+import NotificationBell from "./NotificationBell";
 
 export function Screen({
   title,
@@ -24,6 +25,7 @@ export function Screen({
           <span className="brand-logo" aria-hidden>🏃</span>
           <span className="brand">Health OS</span>
         </div>
+        <NotificationBell />
         <RefreshButton />
       </header>
 
