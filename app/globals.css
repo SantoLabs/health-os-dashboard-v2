@@ -104,6 +104,8 @@ html, body {
 @media (min-width: 640px) {
   .app { padding-top: 28px; }
   .bottomnav { max-width: 480px; margin: 0 auto; border-radius: 16px 16px 0 0; }
+  .app-fab { width: 44px !important; height: 44px !important; font-size: 23px !important; }
+  .app-fab svg { width: 22px !important; height: 22px !important; }
 }
 
 /* ---- Train / shared screen components ---- */
