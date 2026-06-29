@@ -25,8 +25,10 @@ export function Screen({
           <span className="brand-logo" aria-hidden>🏃</span>
           <span className="brand">Health OS</span>
         </div>
-        <NotificationBell />
-        <RefreshButton />
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <NotificationBell />
+          <RefreshButton />
+        </div>
       </header>
 
       {title && (
