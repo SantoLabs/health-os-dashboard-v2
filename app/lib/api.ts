@@ -145,7 +145,7 @@ export type KaiAction = {
   applied_log_ids?: string[];
   inserted_ids?: string[];
 };
-export type KaiMessage = { id: string; role: "user" | "kai"; text: string; citations?: KaiCitation[]; action?: KaiAction | null; created_at?: string };
+export type KaiMessage = { id: string; role: "user" | "kai"; text: string; citations?: KaiCitation[]; action?: KaiAction | null; created_at?: string; feedback?: number | null };
 export type KaiThread = { id: string; title: string; pinned: boolean; last_message?: string; last_role?: string; updated_at?: string };
 export type KaiDailyCard = {
   date: string;
@@ -168,7 +168,12 @@ export async function coachThreads(): Promise<{ threads: KaiThread[] }> {
 export async function coachThread(id: string): Promise<{ thread: KaiThread | null; messages: KaiMessage[] }> {
   const res = await authedFetch(`/functions/v1/coach?api=thread&id=${encodeURIComponent(id)}`);
   if (!res.ok) throw new Error(`Couldn't load chat (${res.status})`);
-  return res.json();
+  const data = await res.json();
+  try {
+    const fb = await coachThreadFeedback(id);
+    if (fb && fb.feedback) data.messages = (data.messages || []).map((m: KaiMessage) => (fb.feedback[m.id] ? { ...m, feedback: fb.feedback[m.id].rating } : m));
+  } catch { /* feedback merge is best-effort */ }
+  return data;
 }
 export async function coachSend(body: { text: string; thread_id?: string; context_route?: string; page_context?: { label: string; hint?: string } }): Promise<{ thread_id: string; message: KaiMessage; degraded?: boolean }> {
   const res = await authedFetch(`/functions/v1/coach?api=send`, {
@@ -263,6 +268,16 @@ export async function coachUnsaveInsight(id: string): Promise<{ ok: boolean }> {
   return res.json();
 }
 
+export async function coachFeedback(message_id: string, rating: number | null, note?: string): Promise<{ ok?: boolean; feedback?: number | null }> {
+  const res = await authedFetch(`${AUX}?api=feedback`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message_id, rating, note }) });
+  if (!res.ok) throw new Error(`Couldn't save feedback (${res.status})`);
+  return res.json();
+}
+export async function coachThreadFeedback(thread_id: string): Promise<{ feedback: Record<string, { rating: number; note: string | null }> }> {
+  const res = await authedFetch(`${AUX}?api=feedback&thread_id=${encodeURIComponent(thread_id)}`);
+  if (!res.ok) throw new Error(`Couldn't load feedback (${res.status})`);
+  return res.json();
+}
 export async function coachVision(args: { text?: string; image: { mime: string; data: string }; thread_id?: string; context_route?: string }): Promise<{ thread_id: string; message: KaiMessage }> {
   const res = await authedFetch(`${AUX}?api=vision`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(args) });
   if (!res.ok) throw new Error(`Couldn't read the photo (${res.status})`);
