@@ -7,7 +7,7 @@
 
 import * as React from "react";
 import { useState, useRef, useEffect, type CSSProperties, type ReactNode } from "react";
-import { coachApply, coachUndo, coachSaveInsight, coachExplain, type KaiMessage, type KaiAction, type KaiItem } from "../lib/api";
+import { coachApply, coachUndo, coachSaveInsight, coachExplain, coachFeedback, type KaiMessage, type KaiAction, type KaiItem } from "../lib/api";
 
 export const PAGE = "#0e1320", SURF = "#161d2c", RAISED = "#1a2232", INPUTBG = "#171f2e", SUNKEN = "#0f1622";
 export const BORDER = "#232c40", BORDER_STRONG = "#2a3550", BORDER_ACCENT = "#2f4a78";
@@ -716,6 +716,41 @@ export function WhyChip({ metric, value, label = "Why?" }: { metric: string; val
   );
 }
 
+function FeedbackBar({ messageId, initial }: { messageId: string; initial?: number | null }) {
+  const [rating, setRating] = useState<number | null>(initial ?? null);
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function persist(r: number | null, n?: string) {
+    setBusy(true);
+    try { await coachFeedback(messageId, r, n); } catch { /* ignore */ } finally { setBusy(false); }
+  }
+  function tap(r: number) {
+    const next = rating === r ? null : r;
+    setRating(next);
+    setNoteOpen(next === -1);
+    persist(next);
+  }
+  function saveNote() {
+    const n = note.trim();
+    setNoteOpen(false);
+    if (n) persist(-1, n);
+  }
+  const thumb = (active: boolean, kind: "up" | "down"): CSSProperties => ({
+    background: active ? (kind === "up" ? "rgba(70,199,154,.16)" : "rgba(240,115,90,.16)") : "none",
+    border: "1px solid " + (active ? (kind === "up" ? "rgba(70,199,154,.42)" : "rgba(240,115,90,.42)") : "transparent"),
+    borderRadius: 8, cursor: busy ? "default" : "pointer", padding: "2px 7px", fontSize: 12, lineHeight: 1, opacity: active ? 1 : 0.55,
+  });
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 7, marginTop: 7, marginLeft: 14 }}>
+      <button onClick={() => tap(1)} disabled={busy} title="Helpful" style={thumb(rating === 1, "up")}>{"\uD83D\uDC4D"}</button>
+      <button onClick={() => tap(-1)} disabled={busy} title="Not helpful" style={thumb(rating === -1, "down")}>{"\uD83D\uDC4E"}</button>
+      {noteOpen ? (
+        <input autoFocus value={note} onChange={(e) => setNote(e.target.value)} onBlur={saveNote} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} placeholder="what was off? (optional)" style={{ fontSize: 11, color: BODY, background: SUNKEN, border: "1px solid " + BORDER, borderRadius: 8, padding: "4px 8px", outline: "none", width: 168 }} />
+      ) : null}
+    </span>
+  );
+}
 function SaveButton({ messageId }: { messageId: string }) {
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -755,7 +790,7 @@ export function MessageRow({ msg, onApplied, onUndone }: { msg: KaiMessage; onAp
           </div>
         )}
         {msg.action ? <ActionCard msg={msg} onApplied={onApplied} onUndone={onUndone} /> : null}
-        {msg.id && !String(msg.id).startsWith("tmp-") && msg.text ? <div><SaveButton messageId={msg.id} /></div> : null}
+        {msg.id && !String(msg.id).startsWith("tmp-") && msg.text ? <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap" }}><SaveButton messageId={msg.id} /><FeedbackBar messageId={msg.id} initial={msg.feedback} /></div> : null}
       </div>
     </div>
   );
