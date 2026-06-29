@@ -26,12 +26,6 @@ export default function BottomNav() {
   const path = usePathname();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
-  const hoverCapable = useRef(false);
-
-  useEffect(() => {
-    hoverCapable.current =
-      typeof window !== "undefined" && window.matchMedia("(hover: hover)").matches;
-  }, []);
 
   // close when the route changes
   useEffect(() => { setOpen(false); }, [path]);
@@ -63,8 +57,6 @@ export default function BottomNav() {
       <div
         className="more-wrap"
         ref={wrapRef}
-        onMouseEnter={() => { if (hoverCapable.current) setOpen(true); }}
-        onMouseLeave={() => { if (hoverCapable.current) setOpen(false); }}
       >
         {open && (
           <div className="more-pop" role="menu">
