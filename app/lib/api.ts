@@ -230,6 +230,22 @@ export async function coachReminderOp(body: { id: string; op: "done" | "snooze" 
   if (!res.ok) throw new Error(`Request failed (${res.status})`);
   return res.json();
 }
+export type KaiNotifications = { due: KaiReminder[]; upcoming: KaiReminder[]; history: KaiReminder[]; due_count: number };
+export async function coachNotifications(): Promise<KaiNotifications> {
+  const res = await authedFetch(`${AUX}?api=notifications`);
+  if (!res.ok) throw new Error(`Couldn't load notifications (${res.status})`);
+  return res.json();
+}
+export async function coachReminderSnooze(id: string, preset: string): Promise<{ ok?: boolean; due_at?: string }> {
+  const res = await authedFetch(`${AUX}?api=reminder_snooze`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, preset }) });
+  if (!res.ok) throw new Error(`Couldn't snooze (${res.status})`);
+  return res.json();
+}
+export async function coachCheckinOpen(reminder_id: string): Promise<{ thread_id: string; message: KaiMessage }> {
+  const res = await authedFetch(`${AUX}?api=checkin_open`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reminder_id }) });
+  if (!res.ok) throw new Error(`Couldn't open check-in (${res.status})`);
+  return res.json();
+}
 
 // ---- coach: long-term memory ("What Kai remembers") ----
 export type KaiMemoryItem = { id: string; category: string; text: string; source?: string; strength?: string; created_at?: string };
