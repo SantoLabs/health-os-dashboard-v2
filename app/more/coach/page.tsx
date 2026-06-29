@@ -1,15 +1,16 @@
 "use client";
 
-// Kai hub — in-app Reminders & check-ins surface (with due highlighting) plus the
-// editable "What Kai remembers" memory manager. Reached from the More menu.
+// Kai hub — leads with a Notifications ingress (the full Due/Upcoming/History list
+// lives in the Notification Center) plus the editable "What Kai remembers" memory
+// manager and saved insights. Reached from the More menu.
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { Screen } from "../../components/Screen";
 import {
-  coachReminders, coachReminderOp, coachMemory, coachMemoryOp,
+  coachNotifications, coachMemory, coachMemoryOp,
   coachInsights, coachUnsaveInsight,
-  type KaiReminder, type KaiMemoryItem, type KaiSavedInsight,
+  type KaiMemoryItem, type KaiSavedInsight,
 } from "../../lib/api";
 import {
   H, BODY, SECOND, MUTED, FAINT, SURF, RAISED, SUNKEN, BORDER, BORDER_STRONG,
@@ -19,18 +20,10 @@ import {
 const MEM_CATS = ["preference", "nutrition", "training", "health", "goal", "context"];
 const CAT_COLOR: Record<string, string> = { preference: FIBR, nutrition: CARB, training: ACCENT, health: FAT, goal: PROT, context: MUTED };
 
-function whenLabel(r: KaiReminder): string {
-  if (r.recurrence && r.recurrence !== "none") return `${r.recur_time || ""} · ${r.recurrence}`;
-  if (r.due_at) {
-    try { return new Date(r.due_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); } catch { return r.due_at; }
-  }
-  return "";
-}
-
 export default function CoachHubPage() {
   const router = useRouter();
-  const [tab, setTab] = useState<"reminders" | "memory" | "saved">("reminders");
-  const [reminders, setReminders] = useState<KaiReminder[] | null>(null);
+  const [tab, setTab] = useState<"memory" | "saved">("memory");
+  const [dueCount, setDueCount] = useState(0);
   const [memory, setMemory] = useState<KaiMemoryItem[] | null>(null);
   const [insights, setInsights] = useState<KaiSavedInsight[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -39,23 +32,11 @@ export default function CoachHubPage() {
   const [newCat, setNewCat] = useState("preference");
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  async function loadReminders() { try { const r = await coachReminders(); setReminders(r.reminders || []); } catch (e) { setErr((e as Error).message); } }
+  async function loadDue() { try { const r = await coachNotifications(); setDueCount(r.due_count || 0); } catch { /* ignore */ } }
   async function loadMemory() { try { const r = await coachMemory(); setMemory(r.memory || []); } catch (e) { setErr((e as Error).message); } }
   async function loadInsights() { try { const r = await coachInsights(); setInsights(r.insights || []); } catch (e) { setErr((e as Error).message); } }
-  useEffect(() => { loadReminders(); loadMemory(); loadInsights(); }, []);
+  useEffect(() => { loadDue(); loadMemory(); loadInsights(); }, []);
   async function unsave(it: KaiSavedInsight) { setBusyId(it.id); try { await coachUnsaveInsight(it.id); await loadInsights(); } catch (e) { setErr((e as Error).message); } finally { setBusyId(null); } }
-
-  async function remOp(r: KaiReminder, op: "done" | "snooze" | "dismiss" | "delete", snooze_mins?: number) {
-    setBusyId(r.id); setErr(null);
-    try { await coachReminderOp({ id: r.id, op, snooze_mins }); await loadReminders(); }
-    catch (e) { setErr((e as Error).message); } finally { setBusyId(null); }
-  }
-  function openCheckin(r: KaiReminder) {
-    const seed = r.seed_prompt || `About my check-in: ${r.title}`;
-    try { window.sessionStorage.setItem("kai_seed", seed); } catch { /* ignore */ }
-    if (r.recurrence !== "none" || r.due) coachReminderOp({ id: r.id, op: "done" }).catch(() => {});
-    router.push("/more/ask");
-  }
 
   async function addMemory() {
     const text = newText.trim(); if (!text) return;
@@ -75,44 +56,30 @@ export default function CoachHubPage() {
     catch (e) { setErr((e as Error).message); } finally { setBusyId(null); }
   }
 
-  const due = (reminders || []).filter((r) => r.due);
-  const rest = (reminders || []).filter((r) => !r.due);
-
   return (
     <Screen title="Kai">
+      <button onClick={() => router.push("/more/coach/notifications")}
+        style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, background: dueCount > 0 ? "rgba(79,156,249,.08)" : SURF, border: "1px solid " + (dueCount > 0 ? "rgba(79,156,249,.4)" : BORDER), borderRadius: 14, padding: "13px 14px", marginBottom: 16, cursor: "pointer", textAlign: "left" }}>
+        <span style={{ fontSize: 20 }}>🔔</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 800, color: H }}>Notifications</div>
+          <div style={{ fontSize: 11.5, color: dueCount > 0 ? ACCENT_LT : MUTED, marginTop: 2, fontWeight: dueCount > 0 ? 700 : 500 }}>{dueCount > 0 ? `${dueCount} due now` : "Reminders & check-ins"}</div>
+        </div>
+        {dueCount > 0 ? <span style={{ minWidth: 20, height: 20, padding: "0 6px", boxSizing: "border-box", borderRadius: 999, background: FAT, color: "#1a0c08", fontSize: 11, fontWeight: 900, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{dueCount > 9 ? "9+" : dueCount}</span> : null}
+        <span style={{ fontSize: 18, color: FAINT }}>›</span>
+      </button>
+
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        {(["reminders", "memory", "saved"] as const).map((t) => (
+        {(["memory", "saved"] as const).map((t) => (
           <button key={t} onClick={() => setTab(t)} style={{ flex: 1, padding: "9px 0", borderRadius: 11, border: "1px solid " + (tab === t ? BORDER_STRONG : BORDER), background: tab === t ? RAISED : "transparent", color: tab === t ? H : SECOND, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
-            {t === "reminders" ? "Reminders" : t === "memory" ? "Memory" : "Saved"}
-            {t === "reminders" && due.length ? <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 800, color: "#0c1422", background: ACCENT, borderRadius: 999, padding: "1px 6px" }}>{due.length}</span> : null}
+            {t === "memory" ? "Memory" : "Saved"}
           </button>
         ))}
       </div>
 
       {err && <div style={{ fontSize: 12, color: FAT, marginBottom: 12 }}>{err}</div>}
 
-      {tab === "reminders" ? (
-        <div>
-          {reminders === null ? <Sk /> : reminders.length === 0 ? (
-            <Empty icon="🔔" title="No reminders yet" sub="Ask Kai things like “remind me to take creatine at 9pm” or “check in on my knee each morning.”" />
-          ) : (
-            <>
-              {due.length > 0 && (
-                <>
-                  <Label>Due now</Label>
-                  {due.map((r) => <ReminderRow key={r.id} r={r} busy={busyId === r.id} onOp={remOp} onOpen={openCheckin} due />)}
-                </>
-              )}
-              {rest.length > 0 && (
-                <>
-                  <Label>{due.length ? "Scheduled" : "All reminders"}</Label>
-                  {rest.map((r) => <ReminderRow key={r.id} r={r} busy={busyId === r.id} onOp={remOp} onOpen={openCheckin} />)}
-                </>
-              )}
-            </>
-          )}
-        </div>
-      ) : tab === "memory" ? (
+      {tab === "memory" ? (
         <div>
           <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
             <span style={{ fontSize: 11.5, color: MUTED, flex: 1, lineHeight: 1.5 }}>Durable facts Kai uses to personalize advice. A wrong memory is worse than none — edit freely.</span>
@@ -170,32 +137,6 @@ export default function CoachHubPage() {
   );
 }
 
-function ReminderRow({ r, busy, onOp, onOpen, due }: { r: KaiReminder; busy: boolean; onOp: (r: KaiReminder, op: "done" | "snooze" | "dismiss" | "delete", mins?: number) => void; onOpen: (r: KaiReminder) => void; due?: boolean }) {
-  const isCheckin = r.kind === "checkin";
-  return (
-    <div style={{ background: due ? "rgba(79,156,249,.08)" : SURF, border: "1px solid " + (due ? "rgba(79,156,249,.4)" : BORDER), borderRadius: 14, padding: "12px 13px", marginBottom: 10 }}>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-        <span style={{ fontSize: 17, lineHeight: 1.2 }}>{isCheckin ? "💬" : "🔔"}</span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: H }}>{r.title}</div>
-          {r.body ? <div style={{ fontSize: 11.5, color: SECOND, marginTop: 2 }}>{r.body}</div> : null}
-          {isCheckin && r.seed_prompt ? <div style={{ fontSize: 11.5, color: MUTED, marginTop: 3, fontStyle: "italic" }}>“{r.seed_prompt}”</div> : null}
-          <div style={{ fontSize: 11, color: due ? ACCENT_LT : FAINT, marginTop: 5, fontWeight: due ? 700 : 500 }}>{due ? "Due now" : whenLabel(r)}{r.recurrence !== "none" && due ? ` · ${whenLabel(r)}` : ""}</div>
-        </div>
-      </div>
-      <div style={{ display: "flex", gap: 8, marginTop: 11, flexWrap: "wrap" }}>
-        {due && isCheckin ? <button onClick={() => onOpen(r)} disabled={busy} style={{ ...primaryBtn, padding: "8px 16px", fontSize: 12.5 }}>Open with Kai</button> : null}
-        {due ? <button onClick={() => onOp(r, "done")} disabled={busy} style={pillBtn}>{isCheckin ? "Done" : "✓ Done"}</button> : null}
-        {due ? <button onClick={() => onOp(r, "snooze", 60)} disabled={busy} style={pillBtn}>Snooze 1h</button> : null}
-        <button onClick={() => onOp(r, r.recurrence === "none" ? "delete" : "dismiss")} disabled={busy} style={{ ...pillBtn, color: FAINT, marginLeft: due ? 0 : "auto" }}>{r.recurrence === "none" ? "Delete" : "Stop"}</button>
-      </div>
-    </div>
-  );
-}
-
-const Label = ({ children }: { children: ReactNode }) => (
-  <div style={{ fontSize: 10.5, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".6px", color: FAINT, margin: "4px 2px 9px" }}>{children}</div>
-);
 const Sk = () => <div style={{ height: 80, borderRadius: 14, background: SURF, border: "1px solid " + BORDER, opacity: 0.5 }} />;
 const Empty = ({ icon, title, sub }: { icon: string; title: string; sub: string }) => (
   <div style={{ textAlign: "center", padding: "40px 20px", color: SECOND }}>
@@ -204,5 +145,4 @@ const Empty = ({ icon, title, sub }: { icon: string; title: string; sub: string 
     <div style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.5, maxWidth: 300, margin: "0 auto" }}>{sub}</div>
   </div>
 );
-const pillBtn: CSSProperties = { padding: "8px 13px", borderRadius: 999, border: "1px solid " + BORDER_STRONG, background: "transparent", color: SECOND, fontSize: 12, fontWeight: 700, cursor: "pointer" };
 const iconLink: CSSProperties = { background: "none", border: "none", color: ACCENT_LT, fontSize: 12, fontWeight: 700, cursor: "pointer", padding: 0 };
