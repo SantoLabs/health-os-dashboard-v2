@@ -436,3 +436,58 @@ export async function nutriProfile<T>(): Promise<T> {
   if (!res.ok) throw new Error(`Couldn't load profile (${res.status})`);
   return res.json();
 }
+
+// ---- training (Training tab revamp v2 — standalone `training` edge fn, read-only intelligence) ----
+const TRAIN = "/functions/v1/training";
+export async function trainGet<T>(route: string): Promise<T> {
+  const res = await authedFetch(`${TRAIN}?api=${route}`);
+  if (!res.ok) throw new Error(`Couldn't load training (${res.status})`);
+  return res.json();
+}
+// Route-driven fetch hook (mirrors useApi). Pass null to skip (e.g. no lift selected yet).
+export function useTrain<T>(route: string | null) {
+  const [data, setData] = useState<T | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!route) { setData(null); setError(null); return; }
+    let alive = true;
+    setData(null); setError(null);
+    trainGet<T>(route).then((d) => alive && setData(d)).catch((e) => alive && setError(e.message));
+    return () => { alive = false; };
+  }, [route]);
+  return { data, error };
+}
+
+// ---- training response types ----
+export type TrnLiftSummary = {
+  title: string; muscle_group: string; sessions: number; first_done?: string; last_done: string;
+  max_weight: number | null; best_e1rm: number | null; recent_e1rm: number | null; recent_top_weight: number | null;
+  last_session_e1rm?: number | null; lifetime_sets: number; peak_e1rm: number | null;
+};
+export type TrnWeekStrength = { week_start: string; sessions: number; volume_kg: number; total_sets: number; duration_mins: number };
+export type TrnCardioWeek = {
+  week_start: string; sessions: number; distance_km: number; duration_mins: number; avg_hr: number | null;
+  long_distance_km: number; z2_mins: number; zoned_mins: number; avg_pace_min_km: number | null; avg_m_per_beat: number | null;
+};
+export type TrnOverview = {
+  kai_summary: string;
+  strength: { weekly: TrnWeekStrength[]; top_lifts: TrnLiftSummary[]; muscle_balance?: unknown; muscle_balance_week?: unknown };
+  cardio: { weekly: { running: TrnCardioWeek[]; swimming: TrnCardioWeek[] } };
+};
+export type TrnStrength = { lifts: TrnLiftSummary[] };
+export type TrnLiftSession = { date: string; workout_id?: string; working_sets: number; total_reps: number; top_weight: number | null; est_1rm: number | null; volume_kg: number };
+export type TrnLift = { title: string; summary: TrnLiftSummary; sessions: TrnLiftSession[] };
+export type TrnActivity = {
+  date: string; name?: string; distance_km: number; pace_min_km: number | null; avg_hr: number | null; max_hr?: number | null;
+  z1: number; z2: number; z3: number; z4: number; z5: number; m_per_beat: number | null;
+  avg_run_cadence?: number | null; avg_swolf?: number | null; duration_mins?: number | null;
+};
+export type TrnCardio = { sport: string; weekly: TrnCardioWeek[]; activities: TrnActivity[] };
+export type TrnRecord = { category: string; metric: string; scope_label: string; value: number; unit: string; achieved_on: string };
+export type TrnProjection = { distance: string; projected_time: string; projected_pace_min_km: number };
+export type TrnStats = { total_workouts: number; workouts_2026: number; week_streak: number; first_workout: string };
+export type TrnPrs = { records: { strength: TrnRecord[]; running: TrnRecord[]; swim: TrnRecord[] }; projections: TrnProjection[]; projection_base_km: number; stats: TrnStats };
+export type TrnGoal = { label: string; target_date: string; status: string; days_to_go: number };
+export type TrnBody = { date: string; weight_kg: number | null; body_fat_pct: number | null; lean_mass_kg: number | null };
+export type TrnProgress = { next_race: TrnGoal | null; goals: TrnGoal[]; body_latest: TrnBody | null; body_trend: TrnBody[] };
+
