@@ -334,3 +334,6 @@ html, body {
 /* phase-2 hint chip */
 .trn-soon { font-size:10px; font-weight:700; color:var(--t-amber); background:rgba(255,181,71,.1); border:1px solid rgba(255,181,71,.28); border-radius:999px; padding:3px 9px; display:inline-block; }
 
+/* section label (scoped) */
+.trainv2 .eyebrow { font-size:10.5px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--muted); margin:16px 2px 9px; display:block; }
+
