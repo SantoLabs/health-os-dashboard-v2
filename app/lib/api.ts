@@ -530,7 +530,8 @@ export type WkRoutineItem = { id?: string; exercise_index?: number; exercise_nam
 export type WkRoutine = { routine: { id: string; name: string; notes?: string | null; focus?: string | null; est_duration_mins?: number | null } | null; items: WkRoutineItem[] };
 export type WkPR = { exercise: string; type: string; value: number; prev: number | null; unit: string };
 export type WkFinish = { ok: boolean; session_id: string; title: string | null; summary: { sets: number; exercises: number; volume_kg: number; duration_mins: number | null; top_sets: { exercise: string; top_weight: number; best_e1rm: number }[] }; prs: WkPR[]; error?: string };
-export type WkExercise = { name: string; muscle_group: string };
+export type WkExercise = { name: string; muscle_group: string; equipment?: string | null; type?: string | null; movement_pattern?: string | null; mechanic?: string | null; unilateral?: boolean | null; difficulty?: string | null; prescription?: string | null; is_recovery?: boolean | null; secondary?: string | null; body_region?: string | null; media_status?: string | null };
+export type WkFacets = { equipment: string[]; muscle: string[]; type: string[] };
 
 async function wkGet<T>(route: string): Promise<T> { const res = await authedFetch(`${WK}?api=${route}`); if (!res.ok) throw new Error(`Couldn't load (${res.status})`); return res.json(); }
 async function wkPost<T>(route: string, body: unknown): Promise<T> { const res = await authedFetch(`${WK}?api=${route}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); if (!res.ok) throw new Error(`Request failed (${res.status})`); return res.json(); }
@@ -538,7 +539,13 @@ export function wkActive() { return wkGet<WkBundle>("active"); }
 export function wkRoutines() { return wkGet<{ routines: WkRoutineSummary[] }>("routines"); }
 export function wkRoutine(id: string) { return wkGet<WkRoutine>(`routine&id=${encodeURIComponent(id)}`); }
 export function wkHistory(limit = 20) { return wkGet<{ sessions: WkSession[] }>(`history&limit=${limit}`); }
-export function wkExercises(q: string) { return wkGet<{ exercises: WkExercise[] }>(`exercises&q=${encodeURIComponent(q)}`); }
+export function wkExercises(q: string, filters?: { equipment?: string; muscle?: string; type?: string }) {
+  const qs = [`q=${encodeURIComponent(q || "")}`];
+  if (filters?.equipment) qs.push(`equipment=${encodeURIComponent(filters.equipment)}`);
+  if (filters?.muscle) qs.push(`muscle=${encodeURIComponent(filters.muscle)}`);
+  if (filters?.type) qs.push(`type=${encodeURIComponent(filters.type)}`);
+  return wkGet<{ exercises: WkExercise[]; facets?: WkFacets; source?: string }>(`exercises&${qs.join("&")}`);
+}
 export function wkStart(body: { plan_id?: string; routine_id?: string; title?: string }) { return wkPost<WkBundle>("start", body); }
 export function wkLogSet(body: { session_id: string; exercise_name: string; muscle_group?: string | null; weight_kg?: number | null; reps?: number | null; rpe?: number | null; rir?: number | null; set_type?: string }) { return wkPost<{ ok: boolean; set?: WkSet; error?: string }>("log_set", body); }
 export function wkCompleteSet(body: { id: string; weight_kg?: number | null; reps?: number | null; rpe?: number | null; rir?: number | null }) { return wkPost<{ ok: boolean; set?: WkSet; error?: string }>("complete_set", body); }
@@ -550,6 +557,25 @@ export function wkDiscard(session_id: string) { return wkPost<{ ok: boolean; dis
 export function wkFinish(body: { session_id: string; session_rpe?: number | null; notes?: string | null }) { return wkPost<WkFinish>("finish", body); }
 export function wkSaveRoutine(body: { id?: string; name: string; notes?: string | null; focus?: string | null; est_duration_mins?: number | null; items: WkRoutineItem[] }) { return wkPost<{ ok: boolean; id: string }>("save_routine", body); }
 export function wkDeleteRoutine(id: string) { return wkPost<{ ok: boolean }>("delete_routine", { id }); }
+export function wkRename(body: { session_id: string; title: string }) { return wkPost<{ ok: boolean; session?: { id: string; title: string } }>("rename", body); }
+export function wkReconcile() { return wkPost<{ ok: boolean; matched: number; sessions: unknown[] }>("reconcile", {}); }
+
+export function fmtVolume(kg: number | null | undefined): string { const n = Math.round(Number(kg) || 0); return `${n.toLocaleString("en-US")} kg`; }
+
+const CARD = "/functions/v1/cardio";
+async function cardGet<T>(route: string): Promise<T> { const res = await authedFetch(`${CARD}?api=${route}`); if (!res.ok) throw new Error(`Couldn't load (${res.status})`); return res.json(); }
+async function cardPost<T>(route: string, body: unknown): Promise<T> { const res = await authedFetch(`${CARD}?api=${route}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); if (!res.ok) throw new Error(`Request failed (${res.status})`); return res.json(); }
+export type CardioSegment = { role: string; distance_m?: number | null; duration_s?: number | null; intensity?: string | null; pace?: string | null; note?: string | null };
+export type CardioBlock = { label?: string | null; reps: number; segments: CardioSegment[] };
+export type CardioStructure = { blocks: CardioBlock[] };
+export type CardioRoutine = { id: string; name: string; sport: string | null; structure: CardioStructure; total_distance_m?: number | null; total_duration_s?: number | null; source?: string; updated_at?: string };
+export type CardioParsed = { ok: boolean; name?: string; sport?: string; structure?: CardioStructure; total_distance_m?: number; total_duration_s?: number; error?: string };
+export function cardioParse(text: string, sport?: string) { return cardPost<CardioParsed>("parse", { text, sport }); }
+export function cardioList() { return cardGet<{ routines: CardioRoutine[] }>("list"); }
+export function cardioGet(id: string) { return cardGet<{ routine: CardioRoutine | null }>(`get&id=${encodeURIComponent(id)}`); }
+export function cardioSave(body: { id?: string; name: string; sport?: string; structure: CardioStructure; source?: string; notes?: string }) { return cardPost<{ ok: boolean; id?: string; total_distance_m?: number; total_duration_s?: number; error?: string }>("save", body); }
+export function cardioDelete(id: string) { return cardPost<{ ok: boolean }>("delete", { id }); }
+export function cardioPrescribe(body: { sport?: string; date?: string; routine_id?: string; structure?: CardioStructure; name?: string; duration_min?: number; distance_m?: number }) { return cardPost<{ ok: boolean; plan_id?: string; session_type?: string; date?: string; planned_duration?: number | null; distance_m?: number | null; error?: string }>("prescribe", body); }
 
 
 
