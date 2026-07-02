@@ -519,4 +519,34 @@ export async function planDecline(id: string, reason = ""): Promise<{ ok: boolea
   return planPost("decline", { id, reason });
 }
 
+// ---- workout (Phase 3: live logger + saved routines) ----
+const WK = "/functions/v1/workout";
+export type WkSet = { id: string; session_id: string; exercise_name: string; muscle_group?: string | null; exercise_index: number; set_number: number; set_type: string; weight_kg: number | null; reps: number | null; rpe: number | null; rir: number | null; target_reps: number | null; target_weight_kg: number | null; completed: boolean; note?: string | null };
+export type WkSession = { id: string; date: string; title: string | null; status: string; source?: string; started_at?: string | null; ended_at?: string | null; duration_mins: number | null; total_volume_kg: number | null; muscles_worked?: Record<string, number> | null; session_rpe: number | null; notes?: string | null; linked_session_id?: string | null };
+export type WkBundle = { session: WkSession | null; sets: WkSet[]; already_active?: boolean; error?: string };
+export type WkRoutineSummary = { id: string; name: string; notes?: string | null; focus?: string | null; est_duration_mins?: number | null; item_count: number };
+export type WkRoutineItem = { id?: string; exercise_index?: number; exercise_name: string; muscle_group?: string | null; target_sets?: number; target_reps?: string | null; target_weight_kg?: number | null; rest_s?: number | null; notes?: string | null };
+export type WkRoutine = { routine: { id: string; name: string; notes?: string | null; focus?: string | null; est_duration_mins?: number | null } | null; items: WkRoutineItem[] };
+export type WkPR = { exercise: string; type: string; value: number; prev: number | null; unit: string };
+export type WkFinish = { ok: boolean; session_id: string; title: string | null; summary: { sets: number; exercises: number; volume_kg: number; duration_mins: number | null; top_sets: { exercise: string; top_weight: number; best_e1rm: number }[] }; prs: WkPR[]; error?: string };
+export type WkExercise = { name: string; muscle_group: string };
+
+async function wkGet<T>(route: string): Promise<T> { const res = await authedFetch(`${WK}?api=${route}`); if (!res.ok) throw new Error(`Couldn't load (${res.status})`); return res.json(); }
+async function wkPost<T>(route: string, body: unknown): Promise<T> { const res = await authedFetch(`${WK}?api=${route}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); if (!res.ok) throw new Error(`Request failed (${res.status})`); return res.json(); }
+export function wkActive() { return wkGet<WkBundle>("active"); }
+export function wkRoutines() { return wkGet<{ routines: WkRoutineSummary[] }>("routines"); }
+export function wkRoutine(id: string) { return wkGet<WkRoutine>(`routine&id=${encodeURIComponent(id)}`); }
+export function wkHistory(limit = 20) { return wkGet<{ sessions: WkSession[] }>(`history&limit=${limit}`); }
+export function wkExercises(q: string) { return wkGet<{ exercises: WkExercise[] }>(`exercises&q=${encodeURIComponent(q)}`); }
+export function wkStart(body: { plan_id?: string; routine_id?: string; title?: string }) { return wkPost<WkBundle>("start", body); }
+export function wkLogSet(body: { session_id: string; exercise_name: string; muscle_group?: string | null; weight_kg?: number | null; reps?: number | null; rpe?: number | null; rir?: number | null; set_type?: string }) { return wkPost<{ ok: boolean; set?: WkSet; error?: string }>("log_set", body); }
+export function wkCompleteSet(body: { id: string; weight_kg?: number | null; reps?: number | null; rpe?: number | null; rir?: number | null }) { return wkPost<{ ok: boolean; set?: WkSet; error?: string }>("complete_set", body); }
+export function wkEditSet(body: { id: string; weight_kg?: number | null; reps?: number | null; rpe?: number | null; set_type?: string; completed?: boolean }) { return wkPost<{ ok: boolean; set?: WkSet }>("edit_set", body); }
+export function wkDeleteSet(id: string) { return wkPost<{ ok: boolean }>("delete_set", { id }); }
+export function wkAddExercise(body: { session_id: string; exercise_name: string; muscle_group?: string | null }) { return wkPost<{ ok: boolean; set?: WkSet }>("add_exercise", body); }
+export function wkFinish(body: { session_id: string; session_rpe?: number | null; notes?: string | null }) { return wkPost<WkFinish>("finish", body); }
+export function wkSaveRoutine(body: { id?: string; name: string; notes?: string | null; focus?: string | null; est_duration_mins?: number | null; items: WkRoutineItem[] }) { return wkPost<{ ok: boolean; id: string }>("save_routine", body); }
+export function wkDeleteRoutine(id: string) { return wkPost<{ ok: boolean }>("delete_routine", { id }); }
+
+
 
