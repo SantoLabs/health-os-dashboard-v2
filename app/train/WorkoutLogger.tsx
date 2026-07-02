@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   wkActive, wkStart, wkAddSet, wkCompleteSet, wkEditSet, wkDeleteSet, wkAddExercise, wkFinish, wkDiscard,
-  wkRoutines, wkRoutine, wkSaveRoutine, wkDeleteRoutine, wkExercises, planWeek,
+  wkRoutines, wkRoutine, wkSaveRoutine, wkDeleteRoutine, wkExercises, planWeek, fmtVolume,
 } from "../lib/api";
 import type { WkBundle, WkSet, WkFinish, WkRoutineSummary, WkRoutineItem, WkExercise, WkPrevSet } from "../lib/api";
 
@@ -202,7 +202,7 @@ export default function WorkoutLogger() {
           <div className="trn-cell"><div className="v tnum">{s.duration_mins ?? "—"}<span style={{ fontSize: 11 }}>m</span></div><div className="l">time</div></div>
           <div className="trn-cell"><div className="v tnum">{s.exercises}</div><div className="l">exercises</div></div>
           <div className="trn-cell"><div className="v tnum">{s.sets}</div><div className="l">sets</div></div>
-          <div className="trn-cell"><div className="v tnum">{(s.volume_kg / 1000).toFixed(1)}<span style={{ fontSize: 11 }}>t</span></div><div className="l">volume</div></div>
+          <div className="trn-cell"><div className="v tnum" style={{ fontSize: 14 }}>{fmtVolume(s.volume_kg)}</div><div className="l">volume</div></div>
         </div>
         {celebrate.prs.length > 0 ? (
           <div style={{ marginTop: 12 }}>
@@ -233,8 +233,7 @@ export default function WorkoutLogger() {
     const doneSets = (bundle.sets || []).filter((x) => x.completed);
     const done = doneSets.length;
     const liveVol = doneSets.filter((x) => x.set_type === "normal").reduce((a, x) => a + ((Number(x.weight_kg) || 0) * (Number(x.reps) || 0)), 0);
-    const volVal = liveVol >= 1000 ? (liveVol / 1000).toFixed(1) : String(Math.round(liveVol));
-    const volUnit = liveVol >= 1000 ? "t" : "kg";
+
     return (
       <div className="card" style={{ padding: 14 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
@@ -244,7 +243,7 @@ export default function WorkoutLogger() {
 
         <div className="trn-statgrid" style={{ gridTemplateColumns: "repeat(3,1fr)", marginTop: 12 }}>
           <div className="trn-cell"><div className="v tnum" style={{ color: "#8ab4ff" }}>{fmtClock(bundle.session.started_at)}</div><div className="l">duration</div></div>
-          <div className="trn-cell"><div className="v tnum">{volVal}<span style={{ fontSize: 11 }}>{volUnit}</span></div><div className="l">volume</div></div>
+          <div className="trn-cell"><div className="v tnum" style={{ fontSize: 15 }}>{fmtVolume(liveVol)}</div><div className="l">volume</div></div>
           <div className="trn-cell"><div className="v tnum">{done}</div><div className="l">sets</div></div>
         </div>
 
@@ -264,22 +263,22 @@ export default function WorkoutLogger() {
                   <span className="tiny" style={{ width: 50, textAlign: "center" }}>reps</span>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
-                  {g.sets.map((s) => {
+                  {g.sets.map((s, si) => {
                     const v = inputs[s.id] || { kg: "", reps: "" };
-                    const pv = prevList.find((p) => p.set_number === s.set_number);
+                    const pv = prevList[si];
                     const prevTxt = pv && pv.weight_kg != null ? `${pv.weight_kg}×${pv.reps ?? "—"}` : "–";
                     const kgPh = pv?.weight_kg != null ? String(pv.weight_kg) : "kg";
                     const repsPh = pv?.reps != null ? String(pv.reps) : "reps";
                     const temp = isTemp(s.id);
                     return (
                       <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, opacity: temp ? 0.55 : 1 }}>
-                        <span className="tnum subtle" style={{ width: 16, fontSize: 12 }}>{s.set_number}</span>
-                        <span className="tnum" style={{ width: 52, fontSize: 12, opacity: 0.55, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{prevTxt}</span>
+                        <span className="tnum subtle" style={{ width: 16, fontSize: 12 }}>{si + 1}</span>
+                        <span onClick={() => { if (pv) setInputs((m) => ({ ...m, [s.id]: { kg: pv.weight_kg != null ? String(pv.weight_kg) : "", reps: pv.reps != null ? String(pv.reps) : "" } })); }} className="tnum" style={{ width: 52, fontSize: 12, opacity: 0.55, cursor: pv ? "pointer" : "default", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{prevTxt}</span>
                         <input inputMode="decimal" value={v.kg} placeholder={kgPh} onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, kg: e.target.value } }))} onBlur={() => commitEdit(s)}
-                          style={{ ...inp, background: s.completed ? "rgba(121,224,168,0.10)" : (inp.background as string) }} />
+                          style={{ ...inp, fontWeight: v.kg ? 700 : 400, background: s.completed ? "rgba(121,224,168,0.10)" : (inp.background as string) }} />
                         <span className="subtle" style={{ fontSize: 12, width: 10, textAlign: "center" }}>×</span>
                         <input inputMode="numeric" value={v.reps} placeholder={repsPh} onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, reps: e.target.value } }))} onBlur={() => commitEdit(s)}
-                          style={{ ...inp, background: s.completed ? "rgba(121,224,168,0.10)" : (inp.background as string) }} />
+                          style={{ ...inp, fontWeight: v.reps ? 700 : 400, background: s.completed ? "rgba(121,224,168,0.10)" : (inp.background as string) }} />
                         <button aria-label="complete set" onClick={() => toggleComplete(s)} disabled={temp}
                           style={{ marginLeft: "auto", width: 30, height: 30, borderRadius: 8, cursor: temp ? "default" : "pointer", flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 15, color: s.completed ? "#04110a" : "#8a90a6", background: s.completed ? "#79e0a8" : "rgba(255,255,255,0.05)", border: s.completed ? "none" : "1px solid rgba(255,255,255,0.18)" }}>
                           {s.completed ? "✓" : ""}
