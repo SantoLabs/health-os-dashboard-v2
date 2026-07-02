@@ -187,9 +187,10 @@ export default function WorkoutLogger() {
   async function saveTitle() {
     const t = (titleEdit || "").trim();
     setTitleEdit(null);
-    if (!bundle?.session || !t || t === bundle.session.title) return;
+    const sess = bundle?.session;
+    if (!sess || !t || t === sess.title) return;
     setBundle((b) => (b && b.session ? { ...b, session: { ...b.session, title: t } } : b));
-    try { await wkRename({ session_id: bundle.session.id, title: t }); } catch { /* best-effort */ }
+    try { await wkRename({ session_id: sess.id, title: t }); } catch { /* best-effort */ }
   }
 
   const groups = useMemo(() => {
@@ -240,6 +241,7 @@ export default function WorkoutLogger() {
     const prevMap = bundle.prev || {};
     const doneSets = (bundle.sets || []).filter((x) => x.completed);
     const done = doneSets.length;
+    const sessTitle = bundle.session.title || "Workout";
     const liveVol = doneSets.filter((x) => x.set_type === "normal").reduce((a, x) => a + ((Number(x.weight_kg) || 0) * (Number(x.reps) || 0)), 0);
 
     return (
@@ -249,7 +251,7 @@ export default function WorkoutLogger() {
           {titleEdit !== null ? (
             <input autoFocus value={titleEdit} onChange={(e) => setTitleEdit(e.target.value)} onBlur={saveTitle} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} style={{ flex: 1, minWidth: 0, background: "rgba(255,255,255,0.06)", color: "inherit", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 8, padding: "7px 10px", fontSize: 15, fontWeight: 800, fontFamily: "inherit" }} />
           ) : (
-            <button onClick={() => setTitleEdit(bundle.session.title || "Workout")} style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", cursor: "text", color: "inherit", fontSize: 15, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", padding: 0 }}>{bundle.session.title || "Workout"}<span className="subtle" style={{ fontSize: 12, marginLeft: 6, fontWeight: 400 }}>✎</span></button>
+            <button onClick={() => setTitleEdit(sessTitle)} style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", cursor: "text", color: "inherit", fontSize: 15, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", padding: 0 }}>{sessTitle}<span className="subtle" style={{ fontSize: 12, marginLeft: 6, fontWeight: 400 }}>✎</span></button>
           )}
           <button onClick={() => setFinishing(true)} style={btn("rgba(121,224,168,0.9)")} disabled={busy}>Finish</button>
         </div>
