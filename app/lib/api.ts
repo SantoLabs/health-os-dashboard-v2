@@ -545,6 +545,7 @@ export function wkCompleteSet(body: { id: string; weight_kg?: number | null; rep
 export function wkEditSet(body: { id: string; weight_kg?: number | null; reps?: number | null; rpe?: number | null; set_type?: string; completed?: boolean }) { return wkPost<{ ok: boolean; set?: WkSet }>("edit_set", body); }
 export function wkDeleteSet(id: string) { return wkPost<{ ok: boolean }>("delete_set", { id }); }
 export function wkAddExercise(body: { session_id: string; exercise_name: string; muscle_group?: string | null }) { return wkPost<{ ok: boolean; set?: WkSet }>("add_exercise", body); }
+export function wkAddSet(body: { session_id: string; exercise_name: string; muscle_group?: string | null; target_reps?: number | null; target_weight_kg?: number | null }) { return wkPost<{ ok: boolean; set?: WkSet }>("add_set", body); }
 export function wkDiscard(session_id: string) { return wkPost<{ ok: boolean; discarded?: string }>("discard", { session_id }); }
 export function wkFinish(body: { session_id: string; session_rpe?: number | null; notes?: string | null }) { return wkPost<WkFinish>("finish", body); }
 export function wkSaveRoutine(body: { id?: string; name: string; notes?: string | null; focus?: string | null; est_duration_mins?: number | null; items: WkRoutineItem[] }) { return wkPost<{ ok: boolean; id: string }>("save_routine", body); }
