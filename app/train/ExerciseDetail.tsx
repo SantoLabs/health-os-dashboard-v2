@@ -53,6 +53,20 @@ export default function ExerciseDetail({ title, onBack }: { title: string; onBac
   if (!data) return (<><BackHead title={title} onBack={onBack} /><div className="muted center pad">Loading…</div></>);
 
   const s = data.summary;
+  if (!s) {
+    return (
+      <>
+        <BackHead title={title} onBack={onBack} />
+        <div className="trn-subs" style={{ marginBottom: 12 }}>
+          <button className={tab === "history" ? "trn-sub on" : "trn-sub"} onClick={() => setTab("history")}>History</button>
+          <button className={tab === "howto" ? "trn-sub on" : "trn-sub"} onClick={() => setTab("howto")}>How-to</button>
+        </div>
+        {tab === "howto" ? <HowTo title={title} cat={cat} /> : (
+          <div className="card"><div className="subtle tiny" style={{ lineHeight: 1.5 }}>No logged strength history for {title} yet — once you log a set here, your e1RM and trends will show up. Check the How-to tab for the movement profile.</div></div>
+        )}
+      </>
+    );
+  }
   const sessions = data.sessions || [];
   const rangeDays = RANGES.find((r) => r.k === range)!.days;
   const cutoff = Date.now() - rangeDays * 86400000;
