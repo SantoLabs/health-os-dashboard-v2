@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  wkActive, wkStart, wkLogSet, wkCompleteSet, wkEditSet, wkDeleteSet, wkAddExercise, wkFinish, wkDiscard,
+  wkActive, wkStart, wkAddSet, wkCompleteSet, wkEditSet, wkDeleteSet, wkAddExercise, wkFinish, wkDiscard,
   wkRoutines, wkRoutine, wkSaveRoutine, wkDeleteRoutine, wkExercises, planWeek,
 } from "../lib/api";
 import type { WkBundle, WkSet, WkFinish, WkRoutineSummary, WkRoutineItem, WkExercise, WkPrevSet } from "../lib/api";
@@ -12,8 +12,11 @@ type PlanToday = { id: string; session_type: string; activity: string; session_d
 
 const ACCENT = "linear-gradient(135deg,#5f7dff,#a274ff)";
 const btn = (bg: string): React.CSSProperties => ({ padding: 10, borderRadius: 10, border: "none", cursor: "pointer", color: "#fff", fontWeight: 700, fontSize: 12, background: bg });
-const inp: React.CSSProperties = { width: 52, textAlign: "center", background: "rgba(255,255,255,0.05)", color: "inherit", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "7px 4px", fontSize: 14, fontVariantNumeric: "tabular-nums" };
+const inp: React.CSSProperties = { width: 50, textAlign: "center", background: "rgba(255,255,255,0.05)", color: "inherit", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "7px 4px", fontSize: 14, fontVariantNumeric: "tabular-nums" };
 const todayISO = () => new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().split("T")[0];
+const isStrength = (t?: string) => /strength/i.test(t || "");
+const isTemp = (id: string) => id.startsWith("temp:");
+const tmpId = () => "temp:" + Math.random().toString(36).slice(2, 9);
 
 function elapsed(startTs?: string | null): string {
   if (!startTs) return "";
@@ -29,7 +32,6 @@ function fmtClock(startTs?: string | null): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(ss)}` : `${m}:${pad(ss)}`;
 }
 
-// -------- Exercise autocomplete --------
 function ExercisePicker({ onPick, placeholder }: { onPick: (e: { name: string; muscle_group: string }) => void; placeholder?: string }) {
   const [q, setQ] = useState("");
   const [opts, setOpts] = useState<WkExercise[]>([]);
@@ -78,6 +80,13 @@ export default function WorkoutLogger() {
     for (const s of sets) m[s.id] = { kg: s.weight_kg != null ? String(s.weight_kg) : "", reps: s.reps != null ? String(s.reps) : "" };
     setInputs(m);
   }, []);
+  const mergeSeed = useCallback((sets: WkSet[]) => {
+    setInputs((prev) => {
+      const m: Record<string, { kg: string; reps: string }> = {};
+      for (const s of sets) m[s.id] = prev[s.id] || { kg: s.weight_kg != null ? String(s.weight_kg) : "", reps: s.reps != null ? String(s.reps) : "" };
+      return m;
+    });
+  }, []);
 
   const loadHome = useCallback(async () => {
     setLoading(true);
@@ -89,14 +98,14 @@ export default function WorkoutLogger() {
       ]);
       setBundle(b); setRoutines(r.routines || []);
       const t = todayISO();
-      setPlanToday(((wk?.sessions) || []).filter((s) => s.session_date === t && s.committed && !s.completed && !s.skipped && !s.is_rest_day));
-      if (b.session) { seedInputs(b.sets); }
+      // Manual "start" is only for strength — cardio (Swim/Run/Cycle) is auto-detected from the tracker.
+      setPlanToday(((wk?.sessions) || []).filter((s) => s.session_date === t && s.committed && !s.completed && !s.skipped && !s.is_rest_day && isStrength(s.session_type)));
+      if (b.session) seedInputs(b.sets);
     } finally { setLoading(false); }
   }, [seedInputs]);
 
   useEffect(() => { loadHome(); }, [loadHome]);
 
-  // live 1s timer while logging
   useEffect(() => {
     if (view === "log" && bundle?.session?.started_at) {
       tick.current = setInterval(() => force((n) => n + 1), 1000);
@@ -104,37 +113,70 @@ export default function WorkoutLogger() {
     }
   }, [view, bundle?.session?.started_at]);
 
-  const refresh = useCallback(async () => { const b = await wkActive(); setBundle(b); seedInputs(b.sets); }, [seedInputs]);
+  function patchSets(fn: (s: WkSet[]) => WkSet[]) { setBundle((b) => (b && b.session ? { ...b, sets: fn(b.sets) } : b)); }
+  const reloadActive = useCallback(async () => { const b = await wkActive(); setBundle(b); mergeSeed(b.sets); }, [mergeSeed]);
 
   async function startFrom(opts: { plan_id?: string; routine_id?: string; title?: string }) {
     setBusy(true);
     try { const b = await wkStart(opts); setBundle(b); seedInputs(b.sets); setView("log"); } finally { setBusy(false); }
   }
-  async function completeSet(s: WkSet) {
-    const v = inputs[s.id] || { kg: "", reps: "" };
-    setBusy(true);
-    try { await wkCompleteSet({ id: s.id, weight_kg: v.kg === "" ? null : Number(v.kg), reps: v.reps === "" ? null : Number(v.reps) }); await refresh(); } finally { setBusy(false); }
-  }
-  async function editSet(s: WkSet) {
-    const v = inputs[s.id]; if (!v) return;
-    await wkEditSet({ id: s.id, weight_kg: v.kg === "" ? null : Number(v.kg), reps: v.reps === "" ? null : Number(v.reps) }).catch(() => {});
-  }
-  async function addSet(exName: string, muscle: string | null | undefined, lastId?: string) {
-    const last = lastId ? inputs[lastId] : undefined;
-    setBusy(true);
+
+  // ---- optimistic set ops (instant local update, background persist) ----
+  async function addSetRow(g: { idx: number; name: string; muscle: string | null | undefined; sets: WkSet[] }) {
+    if (!bundle?.session) return;
+    const sid = bundle.session.id;
+    const nextNum = (g.sets[g.sets.length - 1]?.set_number || 0) + 1;
+    const id = tmpId();
+    const row: WkSet = { id, session_id: sid, exercise_name: g.name, muscle_group: g.muscle ?? null, exercise_index: g.idx, set_number: nextNum, set_type: "normal", weight_kg: null, reps: null, rpe: null, rir: null, target_reps: null, target_weight_kg: null, completed: false };
+    patchSets((s) => [...s, row]);
+    setInputs((m) => ({ ...m, [id]: { kg: "", reps: "" } }));
     try {
-      await wkLogSet({ session_id: bundle!.session!.id, exercise_name: exName, muscle_group: muscle || null, weight_kg: last?.kg ? Number(last.kg) : null, reps: last?.reps ? Number(last.reps) : null });
-      await refresh();
-    } finally { setBusy(false); }
+      const r = await wkAddSet({ session_id: sid, exercise_name: g.name, muscle_group: g.muscle ?? null });
+      if (r.ok && r.set) {
+        const real = r.set;
+        patchSets((s) => s.map((x) => (x.id === id ? real : x)));
+        setInputs((m) => { const cur = m[id] || { kg: "", reps: "" }; const cp = { ...m }; delete cp[id]; cp[real.id] = cur; return cp; });
+      } else patchSets((s) => s.filter((x) => x.id !== id));
+    } catch { patchSets((s) => s.filter((x) => x.id !== id)); }
+  }
+  async function toggleComplete(s: WkSet) {
+    if (isTemp(s.id)) return;
+    const v = inputs[s.id] || { kg: "", reps: "" };
+    const target = !s.completed;
+    patchSets((list) => list.map((x) => (x.id === s.id ? { ...x, completed: target, weight_kg: v.kg === "" ? x.weight_kg : Number(v.kg), reps: v.reps === "" ? x.reps : Number(v.reps) } : x)));
+    try {
+      if (target) await wkCompleteSet({ id: s.id, weight_kg: v.kg === "" ? null : Number(v.kg), reps: v.reps === "" ? null : Number(v.reps) });
+      else await wkEditSet({ id: s.id, completed: false });
+    } catch { patchSets((list) => list.map((x) => (x.id === s.id ? { ...x, completed: !target } : x))); }
+  }
+  function commitEdit(s: WkSet) {
+    if (isTemp(s.id) || !s.completed) return;
+    const v = inputs[s.id]; if (!v) return;
+    const kg = v.kg === "" ? null : Number(v.kg); const reps = v.reps === "" ? null : Number(v.reps);
+    patchSets((list) => list.map((x) => (x.id === s.id ? { ...x, weight_kg: kg, reps } : x)));
+    wkEditSet({ id: s.id, weight_kg: kg, reps }).catch(() => {});
+  }
+  async function deleteSetRow(s: WkSet) {
+    if (isTemp(s.id) || !bundle) return;
+    const snap = bundle.sets;
+    patchSets((list) => list.filter((x) => x.id !== s.id));
+    try { await wkDeleteSet(s.id); } catch { setBundle((b) => (b ? { ...b, sets: snap } : b)); }
   }
   async function addExercise(e: { name: string; muscle_group: string }) {
-    setBusy(true);
-    try { await wkAddExercise({ session_id: bundle!.session!.id, exercise_name: e.name, muscle_group: e.muscle_group || null }); await refresh(); } finally { setBusy(false); }
+    if (!bundle?.session) return;
+    const sid = bundle.session.id;
+    const maxIdx = (bundle.sets || []).reduce((mx, x) => Math.max(mx, x.exercise_index ?? 0), -1);
+    const id = tmpId();
+    const row: WkSet = { id, session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null, exercise_index: maxIdx + 1, set_number: 1, set_type: "normal", weight_kg: null, reps: null, rpe: null, rir: null, target_reps: null, target_weight_kg: null, completed: false };
+    patchSets((s) => [...s, row]);
+    setInputs((m) => ({ ...m, [id]: { kg: "", reps: "" } }));
+    try { await wkAddExercise({ session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null }); await reloadActive(); }
+    catch { patchSets((s) => s.filter((x) => x.id !== id)); }
   }
-  async function delSet(id: string) { setBusy(true); try { await wkDeleteSet(id); await refresh(); } finally { setBusy(false); } }
   async function doFinish(rpe: number | null) {
+    if (!bundle?.session) return;
     setBusy(true);
-    try { const r = await wkFinish({ session_id: bundle!.session!.id, session_rpe: rpe }); setCelebrate(r); setFinishing(false); setView("celebrate"); } finally { setBusy(false); }
+    try { const r = await wkFinish({ session_id: bundle.session.id, session_rpe: rpe }); setCelebrate(r); setFinishing(false); setView("celebrate"); } finally { setBusy(false); }
   }
   async function doDiscard() {
     if (!bundle?.session) return;
@@ -142,7 +184,6 @@ export default function WorkoutLogger() {
     try { await wkDiscard(bundle.session.id); setDiscarding(false); setView("home"); await loadHome(); } finally { setBusy(false); }
   }
 
-  // group sets by exercise_index (ordered)
   const groups = useMemo(() => {
     const sets = bundle?.sets || [];
     const map = new Map<number, WkSet[]>();
@@ -181,12 +222,12 @@ export default function WorkoutLogger() {
     );
   }
 
-  // ---------------- BUILD (routine builder) ----------------
+  // ---------------- BUILD ----------------
   if (view === "build") {
     return <RoutineBuilder routineId={buildId} onExit={() => { setBuildId(null); setView("home"); loadHome(); }} />;
   }
 
-  // ---------------- LOG (live logger) ----------------
+  // ---------------- LOG ----------------
   if (view === "log" && bundle?.session) {
     const prevMap = bundle.prev || {};
     const doneSets = (bundle.sets || []).filter((x) => x.completed);
@@ -201,7 +242,6 @@ export default function WorkoutLogger() {
           <button onClick={() => setFinishing(true)} style={btn("rgba(121,224,168,0.9)")} disabled={busy}>Finish</button>
         </div>
 
-        {/* Live Duration · Volume · Sets (ticks every second) */}
         <div className="trn-statgrid" style={{ gridTemplateColumns: "repeat(3,1fr)", marginTop: 12 }}>
           <div className="trn-cell"><div className="v tnum" style={{ color: "#8ab4ff" }}>{fmtClock(bundle.session.started_at)}</div><div className="l">duration</div></div>
           <div className="trn-cell"><div className="v tnum">{volVal}<span style={{ fontSize: 11 }}>{volUnit}</span></div><div className="l">volume</div></div>
@@ -216,41 +256,41 @@ export default function WorkoutLogger() {
             return (
               <div key={g.idx} style={{ padding: 12, borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
                 <div style={{ fontWeight: 700, fontSize: 13 }}>{g.name}{g.muscle ? <span className="subtle tiny" style={{ fontWeight: 400 }}> · {g.muscle}</span> : null}</div>
-                {/* column header */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, opacity: 0.5 }}>
                   <span className="tiny" style={{ width: 16 }}>#</span>
-                  <span className="tiny" style={{ width: 62 }}>prev</span>
-                  <span className="tiny" style={{ width: 52, textAlign: "center" }}>kg</span>
-                  <span className="tiny" style={{ width: 12 }} />
-                  <span className="tiny" style={{ width: 52, textAlign: "center" }}>reps</span>
+                  <span className="tiny" style={{ width: 52 }}>prev</span>
+                  <span className="tiny" style={{ width: 50, textAlign: "center" }}>kg</span>
+                  <span className="tiny" style={{ width: 10 }} />
+                  <span className="tiny" style={{ width: 50, textAlign: "center" }}>reps</span>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
                   {g.sets.map((s) => {
                     const v = inputs[s.id] || { kg: "", reps: "" };
                     const pv = prevList.find((p) => p.set_number === s.set_number);
                     const prevTxt = pv && pv.weight_kg != null ? `${pv.weight_kg}×${pv.reps ?? "—"}` : "–";
-                    const kgPh = pv?.weight_kg != null ? String(pv.weight_kg) : (s.target_weight_kg != null ? String(s.target_weight_kg) : "kg");
-                    const repsPh = pv?.reps != null ? String(pv.reps) : (s.target_reps != null ? String(s.target_reps) : "reps");
+                    const kgPh = pv?.weight_kg != null ? String(pv.weight_kg) : "kg";
+                    const repsPh = pv?.reps != null ? String(pv.reps) : "reps";
+                    const temp = isTemp(s.id);
                     return (
-                      <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, opacity: temp ? 0.55 : 1 }}>
                         <span className="tnum subtle" style={{ width: 16, fontSize: 12 }}>{s.set_number}</span>
-                        <span className="tnum" style={{ width: 62, fontSize: 12, opacity: 0.55, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{prevTxt}</span>
-                        <input inputMode="decimal" value={v.kg} placeholder={kgPh} onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, kg: e.target.value } }))} onBlur={() => s.completed && editSet(s)} style={inp} />
-                        <span className="subtle" style={{ fontSize: 12, width: 12, textAlign: "center" }}>×</span>
-                        <input inputMode="numeric" value={v.reps} placeholder={repsPh} onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, reps: e.target.value } }))} onBlur={() => s.completed && editSet(s)} style={inp} />
-                        {s.completed ? (
-                          <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-                            <span style={{ color: "#79e0a8", fontWeight: 700 }}>✓</span>
-                            <button className="trn-sub" onClick={() => delSet(s.id)} style={{ padding: "4px 8px" }}>✕</button>
-                          </span>
-                        ) : (
-                          <button onClick={() => completeSet(s)} disabled={busy} style={{ ...btn(ACCENT), marginLeft: "auto", padding: "7px 12px" }}>Log</button>
-                        )}
+                        <span className="tnum" style={{ width: 52, fontSize: 12, opacity: 0.55, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{prevTxt}</span>
+                        <input inputMode="decimal" value={v.kg} placeholder={kgPh} onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, kg: e.target.value } }))} onBlur={() => commitEdit(s)}
+                          style={{ ...inp, background: s.completed ? "rgba(121,224,168,0.10)" : (inp.background as string) }} />
+                        <span className="subtle" style={{ fontSize: 12, width: 10, textAlign: "center" }}>×</span>
+                        <input inputMode="numeric" value={v.reps} placeholder={repsPh} onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, reps: e.target.value } }))} onBlur={() => commitEdit(s)}
+                          style={{ ...inp, background: s.completed ? "rgba(121,224,168,0.10)" : (inp.background as string) }} />
+                        <button aria-label="complete set" onClick={() => toggleComplete(s)} disabled={temp}
+                          style={{ marginLeft: "auto", width: 30, height: 30, borderRadius: 8, cursor: temp ? "default" : "pointer", flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 15, color: s.completed ? "#04110a" : "#8a90a6", background: s.completed ? "#79e0a8" : "rgba(255,255,255,0.05)", border: s.completed ? "none" : "1px solid rgba(255,255,255,0.18)" }}>
+                          {s.completed ? "✓" : ""}
+                        </button>
+                        <button aria-label="delete set" onClick={() => deleteSetRow(s)} disabled={temp}
+                          style={{ width: 24, height: 30, borderRadius: 8, cursor: temp ? "default" : "pointer", flex: "0 0 auto", background: "none", border: "none", color: "rgba(255,138,138,0.7)", fontSize: 13 }}>✕</button>
                       </div>
                     );
                   })}
                 </div>
-                <button className="trn-sub" style={{ marginTop: 8 }} disabled={busy} onClick={() => addSet(g.name, g.muscle, g.sets[g.sets.length - 1]?.id)}>+ Set</button>
+                <button className="trn-sub" style={{ marginTop: 8 }} onClick={() => addSetRow(g)}>+ Set</button>
               </div>
             );
           })}
@@ -265,16 +305,13 @@ export default function WorkoutLogger() {
           <div style={{ marginTop: 14, padding: 12, borderRadius: 12, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)" }}>
             <div className="tiny" style={{ fontWeight: 700, marginBottom: 8 }}>How hard was that? (session RPE)</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {[6, 7, 8, 9, 10].map((r) => (
-                <button key={r} className="trn-sub" disabled={busy} onClick={() => doFinish(r)}>{r}</button>
-              ))}
+              {[6, 7, 8, 9, 10].map((r) => (<button key={r} className="trn-sub" disabled={busy} onClick={() => doFinish(r)}>{r}</button>))}
               <button className="trn-sub" disabled={busy} onClick={() => doFinish(null)}>Skip</button>
             </div>
             <button className="trn-sub" style={{ marginTop: 8 }} onClick={() => setFinishing(false)}>Keep logging</button>
           </div>
         ) : null}
 
-        {/* Discard */}
         <div style={{ marginTop: 16, borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 12 }}>
           {discarding ? (
             <div>
@@ -285,7 +322,7 @@ export default function WorkoutLogger() {
               </div>
             </div>
           ) : (
-            <button onClick={() => setDiscarding(true)} disabled={busy} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", color: "#ff8a8a", fontSize: 12, fontWeight: 600, padding: 4 }}>Discard workout</button>
+            <button onClick={() => setDiscarding(true)} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", color: "#ff8a8a", fontSize: 12, fontWeight: 600, padding: 4 }}>Discard workout</button>
           )}
         </div>
       </div>
@@ -318,6 +355,7 @@ export default function WorkoutLogger() {
                 </div>
               ) : null}
               <button onClick={() => startFrom({ title: "Quick workout" })} disabled={busy} className="trn-sub" style={{ marginTop: 10, width: "100%", padding: 11 }}>+ Empty workout</button>
+              <div className="subtle tiny" style={{ marginTop: 8, opacity: 0.75 }}>Cardio the coach scheduled (swim, run, ride) is detected automatically from your watch — no need to log it here.</div>
             </div>
           )}
 
@@ -347,7 +385,7 @@ export default function WorkoutLogger() {
   );
 }
 
-// ================= Routine builder (2c) =================
+// ================= Routine builder =================
 function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExit: () => void }) {
   const [name, setName] = useState("");
   const [focus, setFocus] = useState("");
