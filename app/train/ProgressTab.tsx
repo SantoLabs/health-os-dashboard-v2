@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useTrain, type TrnPrs, type TrnProgress, type TrnGoal, type TrnRecord } from "../lib/api";
+import { useEffect, useState } from "react";
+import { useTrain, planHistory, type TrnPrs, type TrnProgress, type TrnGoal, type TrnRecord } from "../lib/api";
 import { Spark, SubPills, kg, dShort } from "./ui";
 
 const goalIcon = (label: string): string => {
@@ -128,17 +128,76 @@ function Body({ p }: { p: TrnProgress }) {
   );
 }
 
-export default function ProgressTab() {
-  const [sub, setSub] = useState<"Goals" | "History" | "Body">("Goals");
-  const { data: prs, error: e1 } = useTrain<TrnPrs>("prs");
-  const { data: prog, error: e2 } = useTrain<TrnProgress>("progress");
-  const error = e1 || e2;
+type OvType = {
+  strength: { weekly: { week_start: string; sessions: number; volume_kg: number; total_sets: number; duration_mins: number }[] };
+  cardio: { weekly: Record<string, { week_start: string; distance_km: number; duration_mins: number; sessions: number }[]> };
+};
+type PlanHist = { windows: { week: { planned: number; completed: number; pct: number | null; planned_min: number; completed_min: number } }; current_streak: number };
+
+function mondayISO(): string { const n = new Date(Date.now() + 5.5 * 3600000); const d = (n.getUTCDay() + 6) % 7; n.setUTCDate(n.getUTCDate() - d); return n.toISOString().slice(0, 10); }
+function addDaysISO(s: string, n: number): string { const [y, m, d] = s.split("-").map(Number); const dt = new Date(Date.UTC(y, m - 1, d)); dt.setUTCDate(dt.getUTCDate() + n); return dt.toISOString().slice(0, 10); }
+
+function WeeklyRecap({ ov }: { ov: OvType }) {
+  const [hist, setHist] = useState<PlanHist | null>(null);
+  useEffect(() => { let a = true; planHistory<PlanHist>().then((h) => { if (a) setHist(h); }).catch(() => {}); return () => { a = false; }; }, []);
+
+  const sWeekly = ov.strength?.weekly || [];
+  const cur = sWeekly.length ? sWeekly[sWeekly.length - 1] : null;
+  const prev = sWeekly.length > 1 ? sWeekly[sWeekly.length - 2] : null;
+  const curWk = cur?.week_start || mondayISO();
+  const volDelta = cur && prev ? cur.volume_kg - prev.volume_kg : null;
+
+  let cDist = 0, cMin = 0, cSess = 0;
+  const cw = ov.cardio?.weekly || {};
+  for (const sp of Object.keys(cw)) { for (const r of cw[sp]) { if (r.week_start === curWk) { cDist += r.distance_km || 0; cMin += r.duration_mins || 0; cSess += r.sessions || 0; } } }
+
+  const wkAdh = hist?.windows?.week || null;
+  const streak = hist?.current_streak ?? 0;
+  const end = addDaysISO(curWk, 6);
 
   return (
     <div>
-      <SubPills items={["Goals", "History", "Body"] as const} value={sub} onChange={setSub} />
+      <div className="card">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <div style={{ fontSize: 16, fontWeight: 800 }}>This week</div>
+          <div className="subtle tiny">{dShort(curWk)} – {dShort(end)}</div>
+        </div>
+        {wkAdh && wkAdh.planned > 0 ? (
+          <div className="subtle tiny" style={{ marginTop: 4 }}>{wkAdh.completed}/{wkAdh.planned} planned sessions done{wkAdh.pct != null ? ` · ${wkAdh.pct}%` : ""}</div>
+        ) : (
+          <div className="subtle tiny" style={{ marginTop: 4 }}>No committed plan this week — log freely, or send sessions from Coach.</div>
+        )}
+      </div>
+
+      <div className="trn-statgrid">
+        <div className="trn-cell hl"><div className="v tnum">{cur ? Math.round(cur.volume_kg).toLocaleString() : "—"}</div><div className="l">strength kg{volDelta != null && Math.round(volDelta) !== 0 ? ` (${volDelta >= 0 ? "+" : "−"}${Math.abs(Math.round(volDelta)).toLocaleString()})` : ""}</div></div>
+        <div className="trn-cell"><div className="v tnum">{cur ? cur.sessions : 0}</div><div className="l">lift sessions</div></div>
+        <div className="trn-cell"><div className="v tnum">{cDist > 0 ? cDist.toFixed(1) : "—"}</div><div className="l">cardio km</div></div>
+        <div className="trn-cell good"><div className="v tnum">🔥 {streak}</div><div className="l">wk streak</div></div>
+      </div>
+
+      <div className="card">
+        <div className="trn-eyebrow">Week at a glance</div>
+        <div className="subtle tiny" style={{ lineHeight: 1.6 }}>{cur ? `${cur.sessions} lift session${cur.sessions === 1 ? "" : "s"} · ${cur.total_sets} sets · ${Math.round(cur.volume_kg).toLocaleString()} kg moved${cur.duration_mins ? ` · ${Math.round(cur.duration_mins)} min` : ""}.` : "No strength logged yet this week."} {cDist > 0 ? `${cSess} cardio session${cSess === 1 ? "" : "s"} · ${cDist.toFixed(1)} km · ${Math.round(cMin)} min.` : "No cardio logged yet this week."}</div>
+      </div>
+    </div>
+  );
+}
+
+export default function ProgressTab() {
+  const [sub, setSub] = useState<"Recap" | "Goals" | "History" | "Body">("Recap");
+  const { data: prs, error: e1 } = useTrain<TrnPrs>("prs");
+  const { data: prog, error: e2 } = useTrain<TrnProgress>("progress");
+  const { data: ov, error: e3 } = useTrain<OvType>(sub === "Recap" ? "overview" : null);
+  const error = e1 || e2 || e3;
+
+  return (
+    <div>
+      <SubPills items={["Recap", "Goals", "History", "Body"] as const} value={sub} onChange={setSub} />
       {error ? (
         <div className="card error"><strong>Couldn&apos;t load</strong><div className="subtle">{error}</div></div>
+      ) : sub === "Recap" ? (
+        ov ? <WeeklyRecap ov={ov} /> : <div className="muted center pad">Loading…</div>
       ) : sub === "Goals" ? (
         prog ? <Goals p={prog} prs={prs} /> : <div className="muted center pad">Loading…</div>
       ) : sub === "History" ? (
