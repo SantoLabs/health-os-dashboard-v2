@@ -513,8 +513,9 @@ export async function planPropose(horizon = 3, weekStart?: string): Promise<TrnP
 export async function planAccept(id: string): Promise<{ ok: boolean; id?: string; error?: string }> {
   return planPost("accept", { id });
 }
-// Decline a proposal with an optional reason -> Kai stores it as memory and adapts next time.
-export async function planDecline(id: string, reason = ""): Promise<{ ok: boolean; id?: string; error?: string }> {
+// Decline a proposal with an optional free-text reason. Kai stores it as memory, then immediately
+// re-proposes an adapted session for that same day (returned as `replacement`).
+export async function planDecline(id: string, reason = ""): Promise<{ ok: boolean; declined_id?: string; replacement?: TrnProposal | null; summary?: string; error?: string }> {
   return planPost("decline", { id, reason });
 }
 
