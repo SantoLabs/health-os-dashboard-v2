@@ -491,3 +491,31 @@ export type TrnGoal = { label: string; target_date: string; status: string; days
 export type TrnBody = { date: string; weight_kg: number | null; body_fat_pct: number | null; lean_mass_kg: number | null };
 export type TrnProgress = { next_race: TrnGoal | null; goals: TrnGoal[]; body_latest: TrnBody | null; body_trend: TrnBody[] };
 
+// ---- health-plan Phase 2: Kai prescribes (propose / accept / decline) ----
+export type TrnValidatorFlag = { rule: string; severity: "warn" | "info" | string; message: string; action: string };
+export type TrnProposal = {
+  id: string | null; session_date: string; dow?: number; session_type: string; activity: string;
+  planned_duration: number; intensity: string; distance_m: number | null; is_rest_day: boolean;
+  rationale: string; validator: TrnValidatorFlag[];
+};
+export type TrnProposeContext = {
+  readiness: number | null; readiness_label?: string | null; acwr: number | null;
+  next_race: TrnGoal | null; flag?: string | null; flag_msg?: string | null;
+  validator_inputs?: { readiness: number | null; acwr: number | null; days_to_race: number | null; week_index: number | null };
+};
+export type TrnProposeResp = { ok: boolean; week_start: string; summary: string; proposals: TrnProposal[]; context: TrnProposeContext | null; error?: string };
+
+// Ask Kai to propose the next N upcoming sessions (grounded + validator-checked). Writes uncommitted proposals server-side.
+export async function planPropose(horizon = 3, weekStart?: string): Promise<TrnProposeResp> {
+  return planPost<TrnProposeResp>("propose", { horizon }, weekStart);
+}
+// Accept a proposal -> commits it to the plan and mirrors it onto the calendar.
+export async function planAccept(id: string): Promise<{ ok: boolean; id?: string; error?: string }> {
+  return planPost("accept", { id });
+}
+// Decline a proposal with an optional reason -> Kai stores it as memory and adapts next time.
+export async function planDecline(id: string, reason = ""): Promise<{ ok: boolean; id?: string; error?: string }> {
+  return planPost("decline", { id, reason });
+}
+
+
