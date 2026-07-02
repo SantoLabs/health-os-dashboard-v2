@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   wkActive, wkStart, wkAddSet, wkCompleteSet, wkEditSet, wkDeleteSet, wkAddExercise, wkFinish, wkDiscard,
-  wkRoutines, wkRoutine, wkSaveRoutine, wkDeleteRoutine, wkExercises, planWeek, fmtVolume,
+  wkRoutines, wkRoutine, wkSaveRoutine, wkDeleteRoutine, wkExercises, planWeek, fmtVolume, wkRename,
 } from "../lib/api";
 import type { WkBundle, WkSet, WkFinish, WkRoutineSummary, WkRoutineItem, WkExercise, WkPrevSet } from "../lib/api";
 
@@ -71,6 +71,7 @@ export default function WorkoutLogger() {
   const [inputs, setInputs] = useState<Record<string, { kg: string; reps: string }>>({});
   const [finishing, setFinishing] = useState(false);
   const [discarding, setDiscarding] = useState(false);
+  const [titleEdit, setTitleEdit] = useState<string | null>(null);
   const [buildId, setBuildId] = useState<string | null>(null);
   const [, force] = useState(0);
   const tick = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -183,6 +184,13 @@ export default function WorkoutLogger() {
     setBusy(true);
     try { await wkDiscard(bundle.session.id); setDiscarding(false); setView("home"); await loadHome(); } finally { setBusy(false); }
   }
+  async function saveTitle() {
+    const t = (titleEdit || "").trim();
+    setTitleEdit(null);
+    if (!bundle?.session || !t || t === bundle.session.title) return;
+    setBundle((b) => (b && b.session ? { ...b, session: { ...b.session, title: t } } : b));
+    try { await wkRename({ session_id: bundle.session.id, title: t }); } catch { /* best-effort */ }
+  }
 
   const groups = useMemo(() => {
     const sets = bundle?.sets || [];
@@ -235,11 +243,17 @@ export default function WorkoutLogger() {
     const liveVol = doneSets.filter((x) => x.set_type === "normal").reduce((a, x) => a + ((Number(x.weight_kg) || 0) * (Number(x.reps) || 0)), 0);
 
     return (
-      <div className="card" style={{ padding: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{bundle.session.title || "Workout"}</div>
+      <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "#0b0d12", display: "flex", flexDirection: "column" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderBottom: "1px solid rgba(255,255,255,0.08)", background: "#0b0d12" }}>
+          <button onClick={() => { setView("home"); loadHome(); }} aria-label="Back" style={{ width: 34, height: 34, borderRadius: 9, flex: "0 0 auto", cursor: "pointer", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff", fontSize: 20, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
+          {titleEdit !== null ? (
+            <input autoFocus value={titleEdit} onChange={(e) => setTitleEdit(e.target.value)} onBlur={saveTitle} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} style={{ flex: 1, minWidth: 0, background: "rgba(255,255,255,0.06)", color: "inherit", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 8, padding: "7px 10px", fontSize: 15, fontWeight: 800, fontFamily: "inherit" }} />
+          ) : (
+            <button onClick={() => setTitleEdit(bundle.session.title || "Workout")} style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", cursor: "text", color: "inherit", fontSize: 15, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", padding: 0 }}>{bundle.session.title || "Workout"}<span className="subtle" style={{ fontSize: 12, marginLeft: 6, fontWeight: 400 }}>✎</span></button>
+          )}
           <button onClick={() => setFinishing(true)} style={btn("rgba(121,224,168,0.9)")} disabled={busy}>Finish</button>
         </div>
+        <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", padding: 14, width: "100%", maxWidth: 480, margin: "0 auto" }}>
 
         <div className="trn-statgrid" style={{ gridTemplateColumns: "repeat(3,1fr)", marginTop: 12 }}>
           <div className="trn-cell"><div className="v tnum" style={{ color: "#8ab4ff" }}>{fmtClock(bundle.session.started_at)}</div><div className="l">duration</div></div>
@@ -323,6 +337,7 @@ export default function WorkoutLogger() {
           ) : (
             <button onClick={() => setDiscarding(true)} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", color: "#ff8a8a", fontSize: 12, fontWeight: 600, padding: 4 }}>Discard workout</button>
           )}
+        </div>
         </div>
       </div>
     );
