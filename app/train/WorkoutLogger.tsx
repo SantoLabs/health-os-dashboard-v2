@@ -6,6 +6,7 @@ import {
   wkRoutines, wkRoutine, wkSaveRoutine, wkDeleteRoutine, wkExercises, planWeek, fmtVolume, wkRename,
 } from "../lib/api";
 import type { WkBundle, WkSet, WkFinish, WkRoutineSummary, WkRoutineItem, WkExercise, WkFacets, WkPrevSet } from "../lib/api";
+import ExerciseDetail from "./ExerciseDetail";
 
 type View = "home" | "log" | "celebrate" | "build";
 type PlanToday = { id: string; session_type: string; activity: string; session_date: string; committed: boolean; completed: boolean; skipped: boolean; is_rest_day: boolean };
@@ -32,6 +33,15 @@ function fmtClock(startTs?: string | null): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(ss)}` : `${m}:${pad(ss)}`;
 }
 function fmtSecs(s: number): string { const m = Math.floor(s / 60); const ss = s % 60; return `${m}:${String(ss).padStart(2, "0")}`; }
+function DetailOverlay({ title, onClose }: { title: string; onClose: () => void }) {
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 400, background: "#0b0d12", overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
+      <div style={{ maxWidth: 480, margin: "0 auto", padding: 14 }}>
+        <ExerciseDetail title={title} onBack={onClose} />
+      </div>
+    </div>
+  );
+}
 
 function ExercisePicker({ onPick, placeholder }: { onPick: (e: { name: string; muscle_group: string }) => void; placeholder?: string }) {
   const [q, setQ] = useState("");
@@ -105,6 +115,7 @@ export default function WorkoutLogger() {
   const [discarding, setDiscarding] = useState(false);
   const [titleEdit, setTitleEdit] = useState<string | null>(null);
   const [restEnd, setRestEnd] = useState<number | null>(null);
+  const [detail, setDetail] = useState<string | null>(null);
   const restLen = 90;
   const [buildId, setBuildId] = useState<string | null>(null);
   const [, force] = useState(0);
@@ -308,7 +319,7 @@ export default function WorkoutLogger() {
             const prevList: WkPrevSet[] = prevMap[g.name] || [];
             return (
               <div key={g.idx} style={{ padding: 12, borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                <div style={{ fontWeight: 700, fontSize: 13 }}>{g.name}{g.muscle ? <span className="subtle tiny" style={{ fontWeight: 400 }}> · {g.muscle}</span> : null}</div>
+                <button onClick={() => setDetail(g.name)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit", textAlign: "left", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 5 }}>{g.name}<span className="subtle" style={{ fontSize: 11, fontWeight: 400 }}>ⓘ</span>{g.muscle ? <span className="subtle tiny" style={{ fontWeight: 400 }}> · {g.muscle}</span> : null}</button>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, opacity: 0.5 }}>
                   <span className="tiny" style={{ width: 16 }}>#</span>
                   <span className="tiny" style={{ width: 52 }}>prev</span>
@@ -401,6 +412,7 @@ export default function WorkoutLogger() {
             </div>
           )}
         </div>
+        {detail ? <DetailOverlay title={detail} onClose={() => setDetail(null)} /> : null}
       </div>
     );
   }
@@ -468,6 +480,7 @@ function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExi
   const [items, setItems] = useState<WkRoutineItem[]>([]);
   const [loading, setLoading] = useState(!!routineId);
   const [saving, setSaving] = useState(false);
+  const [detail, setDetail] = useState<string | null>(null);
 
   useEffect(() => {
     if (!routineId) return;
@@ -508,7 +521,7 @@ function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExi
         {items.map((it, i) => (
           <div key={i} style={{ padding: 10, borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>{it.exercise_name}</div>
+              <button onClick={() => setDetail(it.exercise_name)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit", textAlign: "left", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 5 }}>{it.exercise_name}<span className="subtle" style={{ fontSize: 11, fontWeight: 400 }}>ⓘ</span></button>
               <button className="trn-sub" onClick={() => remove(i)} style={{ padding: "4px 8px" }}>✕</button>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
@@ -526,6 +539,7 @@ function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExi
         <button onClick={save} disabled={saving || !name.trim() || items.length === 0} style={{ ...btn(ACCENT), flex: 1, padding: 12 }}>{saving ? "Saving…" : "Save routine"}</button>
         {routineId ? <button onClick={del} disabled={saving} className="trn-sub" style={{ padding: "0 14px" }}>Delete</button> : null}
       </div>
+      {detail ? <DetailOverlay title={detail} onClose={() => setDetail(null)} /> : null}
     </div>
   );
 }
