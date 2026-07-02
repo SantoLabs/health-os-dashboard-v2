@@ -5,7 +5,7 @@ import {
   wkActive, wkStart, wkAddSet, wkCompleteSet, wkEditSet, wkDeleteSet, wkAddExercise, wkFinish, wkDiscard,
   wkRoutines, wkRoutine, wkSaveRoutine, wkDeleteRoutine, wkExercises, planWeek, fmtVolume, wkRename,
 } from "../lib/api";
-import type { WkBundle, WkSet, WkFinish, WkRoutineSummary, WkRoutineItem, WkExercise, WkPrevSet } from "../lib/api";
+import type { WkBundle, WkSet, WkFinish, WkRoutineSummary, WkRoutineItem, WkExercise, WkFacets, WkPrevSet } from "../lib/api";
 
 type View = "home" | "log" | "celebrate" | "build";
 type PlanToday = { id: string; session_type: string; activity: string; session_date: string; committed: boolean; completed: boolean; skipped: boolean; is_rest_day: boolean };
@@ -35,25 +35,56 @@ function fmtClock(startTs?: string | null): string {
 function ExercisePicker({ onPick, placeholder }: { onPick: (e: { name: string; muscle_group: string }) => void; placeholder?: string }) {
   const [q, setQ] = useState("");
   const [opts, setOpts] = useState<WkExercise[]>([]);
+  const [facets, setFacets] = useState<WkFacets | null>(null);
   const [open, setOpen] = useState(false);
+  const [fType, setFType] = useState<string | null>(null);
+  const [fEquip, setFEquip] = useState<string | null>(null);
+  const [fMuscle, setFMuscle] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
     if (!open) return;
-    const t = setTimeout(() => { wkExercises(q).then((r) => alive && setOpts(r.exercises || [])).catch(() => {}); }, 220);
+    const t = setTimeout(() => {
+      wkExercises(q, { type: fType || undefined, equipment: fEquip || undefined, muscle: fMuscle || undefined })
+        .then((r) => { if (!alive) return; setOpts(r.exercises || []); if (r.facets) setFacets(r.facets); })
+        .catch(() => {});
+    }, 220);
     return () => { alive = false; clearTimeout(t); };
-  }, [q, open]);
+  }, [q, open, fType, fEquip, fMuscle]);
+  const reset = () => { setQ(""); setOpen(false); setFType(null); setFEquip(null); setFMuscle(null); };
+  const chip = (active: boolean): React.CSSProperties => ({ padding: "5px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600, whiteSpace: "nowrap", flex: "0 0 auto", cursor: "pointer", border: active ? "1px solid rgba(162,116,255,0.6)" : "1px solid rgba(255,255,255,0.12)", background: active ? "rgba(162,116,255,0.18)" : "rgba(255,255,255,0.04)", color: "inherit" });
+  const row = (label: string, options: string[], val: string | null, set: (v: string | null) => void) => (
+    options.length ? (
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span className="subtle tiny" style={{ width: 60, flex: "0 0 auto", textTransform: "capitalize" }}>{label}</span>
+        <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
+          {options.map((o) => (<button key={o} style={chip(val === o)} onClick={() => set(val === o ? null : o)}>{o}</button>))}
+        </div>
+      </div>
+    ) : null
+  );
   return (
     <div style={{ position: "relative" }}>
       <div style={{ display: "flex", gap: 6 }}>
-        <input value={q} onChange={(e) => setQ(e.target.value)} onFocus={() => setOpen(true)} placeholder={placeholder || "Add exercise…"}
+        <input value={q} onChange={(e) => setQ(e.target.value)} onFocus={() => setOpen(true)} placeholder={placeholder || "Search exercises…"}
           style={{ flex: 1, background: "rgba(255,255,255,0.05)", color: "inherit", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "8px 10px", fontSize: 13, fontFamily: "inherit" }} />
-        {q.trim() ? <button className="trn-sub" onClick={() => { onPick({ name: q.trim(), muscle_group: "" }); setQ(""); setOpen(false); }}>Add</button> : null}
+        {q.trim() ? <button className="trn-sub" onClick={() => { onPick({ name: q.trim(), muscle_group: "" }); reset(); }}>Add</button> : null}
       </div>
-      {open && opts.length > 0 ? (
-        <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {opts.slice(0, 8).map((o) => (
-            <button key={o.name} className="trn-sub" onClick={() => { onPick({ name: o.name, muscle_group: o.muscle_group }); setQ(""); setOpen(false); }}>{o.name}</button>
-          ))}
+      {open ? (
+        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+          {facets ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {row("Type", facets.type, fType, setFType)}
+              {row("Equipment", facets.equipment, fEquip, setFEquip)}
+              {row("Muscle", facets.muscle, fMuscle, setFMuscle)}
+            </div>
+          ) : null}
+          {opts.length > 0 ? (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, maxHeight: 240, overflowY: "auto", marginTop: 2 }}>
+              {opts.map((o) => (
+                <button key={o.name} className="trn-sub" onClick={() => { onPick({ name: o.name, muscle_group: o.muscle_group }); reset(); }}>{o.name}</button>
+              ))}
+            </div>
+          ) : <div className="subtle tiny" style={{ padding: "4px 2px" }}>No matches — type a name and tap Add for a custom exercise.</div>}
         </div>
       ) : null}
     </div>
