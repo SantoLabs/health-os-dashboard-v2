@@ -2,23 +2,31 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  wkActive, wkStart, wkLogSet, wkCompleteSet, wkEditSet, wkDeleteSet, wkAddExercise, wkFinish,
+  wkActive, wkStart, wkLogSet, wkCompleteSet, wkEditSet, wkDeleteSet, wkAddExercise, wkFinish, wkDiscard,
   wkRoutines, wkRoutine, wkSaveRoutine, wkDeleteRoutine, wkExercises, planWeek,
 } from "../lib/api";
-import type { WkBundle, WkSet, WkFinish, WkRoutineSummary, WkRoutineItem, WkExercise } from "../lib/api";
+import type { WkBundle, WkSet, WkFinish, WkRoutineSummary, WkRoutineItem, WkExercise, WkPrevSet } from "../lib/api";
 
 type View = "home" | "log" | "celebrate" | "build";
 type PlanToday = { id: string; session_type: string; activity: string; session_date: string; committed: boolean; completed: boolean; skipped: boolean; is_rest_day: boolean };
 
 const ACCENT = "linear-gradient(135deg,#5f7dff,#a274ff)";
 const btn = (bg: string): React.CSSProperties => ({ padding: 10, borderRadius: 10, border: "none", cursor: "pointer", color: "#fff", fontWeight: 700, fontSize: 12, background: bg });
-const inp: React.CSSProperties = { width: 56, textAlign: "center", background: "rgba(255,255,255,0.05)", color: "inherit", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "7px 4px", fontSize: 14, fontVariantNumeric: "tabular-nums" };
+const inp: React.CSSProperties = { width: 52, textAlign: "center", background: "rgba(255,255,255,0.05)", color: "inherit", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "7px 4px", fontSize: 14, fontVariantNumeric: "tabular-nums" };
 const todayISO = () => new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().split("T")[0];
 
 function elapsed(startTs?: string | null): string {
   if (!startTs) return "";
   const mins = Math.max(0, Math.round((Date.now() - Date.parse(startTs)) / 60000));
   return mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
+}
+function fmtClock(startTs?: string | null): string {
+  if (!startTs) return "0:00";
+  let s = Math.max(0, Math.floor((Date.now() - Date.parse(startTs)) / 1000));
+  const h = Math.floor(s / 3600); s -= h * 3600;
+  const m = Math.floor(s / 60); const ss = s - m * 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return h > 0 ? `${h}:${pad(m)}:${pad(ss)}` : `${m}:${pad(ss)}`;
 }
 
 // -------- Exercise autocomplete --------
@@ -60,13 +68,14 @@ export default function WorkoutLogger() {
   const [celebrate, setCelebrate] = useState<WkFinish | null>(null);
   const [inputs, setInputs] = useState<Record<string, { kg: string; reps: string }>>({});
   const [finishing, setFinishing] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
   const [buildId, setBuildId] = useState<string | null>(null);
   const [, force] = useState(0);
   const tick = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const seedInputs = useCallback((sets: WkSet[]) => {
     const m: Record<string, { kg: string; reps: string }> = {};
-    for (const s of sets) m[s.id] = { kg: s.weight_kg != null ? String(s.weight_kg) : "", reps: s.reps != null ? String(s.reps) : (s.target_reps != null ? String(s.target_reps) : "") };
+    for (const s of sets) m[s.id] = { kg: s.weight_kg != null ? String(s.weight_kg) : "", reps: s.reps != null ? String(s.reps) : "" };
     setInputs(m);
   }, []);
 
@@ -87,10 +96,10 @@ export default function WorkoutLogger() {
 
   useEffect(() => { loadHome(); }, [loadHome]);
 
-  // live elapsed timer while logging
+  // live 1s timer while logging
   useEffect(() => {
     if (view === "log" && bundle?.session?.started_at) {
-      tick.current = setInterval(() => force((n) => n + 1), 30000);
+      tick.current = setInterval(() => force((n) => n + 1), 1000);
       return () => { if (tick.current) clearInterval(tick.current); };
     }
   }, [view, bundle?.session?.started_at]);
@@ -126,6 +135,11 @@ export default function WorkoutLogger() {
   async function doFinish(rpe: number | null) {
     setBusy(true);
     try { const r = await wkFinish({ session_id: bundle!.session!.id, session_rpe: rpe }); setCelebrate(r); setFinishing(false); setView("celebrate"); } finally { setBusy(false); }
+  }
+  async function doDiscard() {
+    if (!bundle?.session) return;
+    setBusy(true);
+    try { await wkDiscard(bundle.session.id); setDiscarding(false); setView("home"); await loadHome(); } finally { setBusy(false); }
   }
 
   // group sets by exercise_index (ordered)
@@ -174,47 +188,72 @@ export default function WorkoutLogger() {
 
   // ---------------- LOG (live logger) ----------------
   if (view === "log" && bundle?.session) {
-    const done = (bundle.sets || []).filter((x) => x.completed).length;
+    const prevMap = bundle.prev || {};
+    const doneSets = (bundle.sets || []).filter((x) => x.completed);
+    const done = doneSets.length;
+    const liveVol = doneSets.filter((x) => x.set_type === "normal").reduce((a, x) => a + ((Number(x.weight_kg) || 0) * (Number(x.reps) || 0)), 0);
+    const volVal = liveVol >= 1000 ? (liveVol / 1000).toFixed(1) : String(Math.round(liveVol));
+    const volUnit = liveVol >= 1000 ? "t" : "kg";
     return (
       <div className="card" style={{ padding: 14 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{bundle.session.title || "Workout"}</div>
-            <div className="subtle tiny">{elapsed(bundle.session.started_at)} · {done} set{done === 1 ? "" : "s"} logged</div>
-          </div>
+          <div style={{ fontSize: 15, fontWeight: 800, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{bundle.session.title || "Workout"}</div>
           <button onClick={() => setFinishing(true)} style={btn("rgba(121,224,168,0.9)")} disabled={busy}>Finish</button>
+        </div>
+
+        {/* Live Duration · Volume · Sets (ticks every second) */}
+        <div className="trn-statgrid" style={{ gridTemplateColumns: "repeat(3,1fr)", marginTop: 12 }}>
+          <div className="trn-cell"><div className="v tnum" style={{ color: "#8ab4ff" }}>{fmtClock(bundle.session.started_at)}</div><div className="l">duration</div></div>
+          <div className="trn-cell"><div className="v tnum">{volVal}<span style={{ fontSize: 11 }}>{volUnit}</span></div><div className="l">volume</div></div>
+          <div className="trn-cell"><div className="v tnum">{done}</div><div className="l">sets</div></div>
         </div>
 
         {groups.length === 0 ? <div className="subtle tiny" style={{ marginTop: 12 }}>Add your first exercise below.</div> : null}
 
         <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
-          {groups.map((g) => (
-            <div key={g.idx} style={{ padding: 12, borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>{g.name}{g.muscle ? <span className="subtle tiny" style={{ fontWeight: 400 }}> · {g.muscle}</span> : null}</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
-                {g.sets.map((s) => {
-                  const v = inputs[s.id] || { kg: "", reps: "" };
-                  return (
-                    <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span className="tnum subtle" style={{ width: 16, fontSize: 12 }}>{s.set_number}</span>
-                      <input inputMode="decimal" value={v.kg} placeholder={s.target_weight_kg != null ? String(s.target_weight_kg) : "kg"} onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, kg: e.target.value } }))} onBlur={() => s.completed && editSet(s)} style={inp} />
-                      <span className="subtle" style={{ fontSize: 12 }}>×</span>
-                      <input inputMode="numeric" value={v.reps} placeholder={s.target_reps != null ? String(s.target_reps) : "reps"} onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, reps: e.target.value } }))} onBlur={() => s.completed && editSet(s)} style={inp} />
-                      {s.completed ? (
-                        <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ color: "#79e0a8", fontWeight: 700 }}>✓</span>
-                          <button className="trn-sub" onClick={() => delSet(s.id)} style={{ padding: "4px 8px" }}>✕</button>
-                        </span>
-                      ) : (
-                        <button onClick={() => completeSet(s)} disabled={busy} style={{ ...btn(ACCENT), marginLeft: "auto", padding: "7px 12px" }}>Log</button>
-                      )}
-                    </div>
-                  );
-                })}
+          {groups.map((g) => {
+            const prevList: WkPrevSet[] = prevMap[g.name] || [];
+            return (
+              <div key={g.idx} style={{ padding: 12, borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                <div style={{ fontWeight: 700, fontSize: 13 }}>{g.name}{g.muscle ? <span className="subtle tiny" style={{ fontWeight: 400 }}> · {g.muscle}</span> : null}</div>
+                {/* column header */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, opacity: 0.5 }}>
+                  <span className="tiny" style={{ width: 16 }}>#</span>
+                  <span className="tiny" style={{ width: 62 }}>prev</span>
+                  <span className="tiny" style={{ width: 52, textAlign: "center" }}>kg</span>
+                  <span className="tiny" style={{ width: 12 }} />
+                  <span className="tiny" style={{ width: 52, textAlign: "center" }}>reps</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
+                  {g.sets.map((s) => {
+                    const v = inputs[s.id] || { kg: "", reps: "" };
+                    const pv = prevList.find((p) => p.set_number === s.set_number);
+                    const prevTxt = pv && pv.weight_kg != null ? `${pv.weight_kg}×${pv.reps ?? "—"}` : "–";
+                    const kgPh = pv?.weight_kg != null ? String(pv.weight_kg) : (s.target_weight_kg != null ? String(s.target_weight_kg) : "kg");
+                    const repsPh = pv?.reps != null ? String(pv.reps) : (s.target_reps != null ? String(s.target_reps) : "reps");
+                    return (
+                      <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span className="tnum subtle" style={{ width: 16, fontSize: 12 }}>{s.set_number}</span>
+                        <span className="tnum" style={{ width: 62, fontSize: 12, opacity: 0.55, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{prevTxt}</span>
+                        <input inputMode="decimal" value={v.kg} placeholder={kgPh} onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, kg: e.target.value } }))} onBlur={() => s.completed && editSet(s)} style={inp} />
+                        <span className="subtle" style={{ fontSize: 12, width: 12, textAlign: "center" }}>×</span>
+                        <input inputMode="numeric" value={v.reps} placeholder={repsPh} onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, reps: e.target.value } }))} onBlur={() => s.completed && editSet(s)} style={inp} />
+                        {s.completed ? (
+                          <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ color: "#79e0a8", fontWeight: 700 }}>✓</span>
+                            <button className="trn-sub" onClick={() => delSet(s.id)} style={{ padding: "4px 8px" }}>✕</button>
+                          </span>
+                        ) : (
+                          <button onClick={() => completeSet(s)} disabled={busy} style={{ ...btn(ACCENT), marginLeft: "auto", padding: "7px 12px" }}>Log</button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <button className="trn-sub" style={{ marginTop: 8 }} disabled={busy} onClick={() => addSet(g.name, g.muscle, g.sets[g.sets.length - 1]?.id)}>+ Set</button>
               </div>
-              <button className="trn-sub" style={{ marginTop: 8 }} disabled={busy} onClick={() => addSet(g.name, g.muscle, g.sets[g.sets.length - 1]?.id)}>+ Set</button>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div style={{ marginTop: 12 }}>
@@ -234,6 +273,21 @@ export default function WorkoutLogger() {
             <button className="trn-sub" style={{ marginTop: 8 }} onClick={() => setFinishing(false)}>Keep logging</button>
           </div>
         ) : null}
+
+        {/* Discard */}
+        <div style={{ marginTop: 16, borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 12 }}>
+          {discarding ? (
+            <div>
+              <div className="tiny" style={{ color: "#ff8a8a", marginBottom: 8 }}>Discard this workout? It won&apos;t be saved and can&apos;t be undone.</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button disabled={busy} onClick={doDiscard} style={{ ...btn("rgba(255,111,94,0.9)"), flex: 1, padding: 10 }}>{busy ? "Discarding…" : "Discard"}</button>
+                <button disabled={busy} onClick={() => setDiscarding(false)} className="trn-sub" style={{ flex: 1 }}>Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setDiscarding(true)} disabled={busy} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", color: "#ff8a8a", fontSize: 12, fontWeight: 600, padding: 4 }}>Discard workout</button>
+          )}
+        </div>
       </div>
     );
   }
