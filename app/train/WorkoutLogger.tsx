@@ -31,6 +31,7 @@ function fmtClock(startTs?: string | null): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return h > 0 ? `${h}:${pad(m)}:${pad(ss)}` : `${m}:${pad(ss)}`;
 }
+function fmtSecs(s: number): string { const m = Math.floor(s / 60); const ss = s % 60; return `${m}:${String(ss).padStart(2, "0")}`; }
 
 function ExercisePicker({ onPick, placeholder }: { onPick: (e: { name: string; muscle_group: string }) => void; placeholder?: string }) {
   const [q, setQ] = useState("");
@@ -103,6 +104,8 @@ export default function WorkoutLogger() {
   const [finishing, setFinishing] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const [titleEdit, setTitleEdit] = useState<string | null>(null);
+  const [restEnd, setRestEnd] = useState<number | null>(null);
+  const restLen = 90;
   const [buildId, setBuildId] = useState<string | null>(null);
   const [, force] = useState(0);
   const tick = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -175,6 +178,7 @@ export default function WorkoutLogger() {
     if (isTemp(s.id)) return;
     const v = inputs[s.id] || { kg: "", reps: "" };
     const target = !s.completed;
+    if (target) setRestEnd(Date.now() + restLen * 1000); else setRestEnd(null);
     patchSets((list) => list.map((x) => (x.id === s.id ? { ...x, completed: target, weight_kg: v.kg === "" ? x.weight_kg : Number(v.kg), reps: v.reps === "" ? x.reps : Number(v.reps) } : x)));
     try {
       if (target) await wkCompleteSet({ id: s.id, weight_kg: v.kg === "" ? null : Number(v.kg), reps: v.reps === "" ? null : Number(v.reps) });
@@ -274,6 +278,9 @@ export default function WorkoutLogger() {
     const done = doneSets.length;
     const sessTitle = bundle.session.title || "Workout";
     const liveVol = doneSets.filter((x) => x.set_type === "normal").reduce((a, x) => a + ((Number(x.weight_kg) || 0) * (Number(x.reps) || 0)), 0);
+    const restRemain = restEnd ? Math.max(0, Math.ceil((restEnd - Date.now()) / 1000)) : 0;
+    const resting = restRemain > 0;
+    const upNext = (() => { for (const g of groups) { const gi = g.sets.findIndex((x) => !x.completed && !isTemp(x.id)); if (gi >= 0) return { name: g.name, n: gi + 1 }; } return null; })();
 
     return (
       <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "#0b0d12", display: "flex", flexDirection: "column" }}>
@@ -371,6 +378,28 @@ export default function WorkoutLogger() {
             <button onClick={() => setDiscarding(true)} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", color: "#ff8a8a", fontSize: 12, fontWeight: 600, padding: 4 }}>Discard workout</button>
           )}
         </div>
+        </div>
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", background: "#0b0d12", padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, width: "100%", maxWidth: 480, margin: "0 auto" }}>
+          {resting ? (
+            <>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="tnum" style={{ fontSize: 19, fontWeight: 800, color: "#8ab4ff" }}>Rest {fmtSecs(restRemain)}</div>
+                <div style={{ height: 4, borderRadius: 3, background: "rgba(255,255,255,0.08)", marginTop: 5, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${Math.min(100, (restRemain / restLen) * 100)}%`, background: ACCENT }} />
+                </div>
+              </div>
+              <button onClick={() => setRestEnd((e) => (e ? Math.max(Date.now(), e - 15000) : e))} className="trn-sub" style={{ padding: "7px 9px" }}>−15</button>
+              <button onClick={() => setRestEnd((e) => (e ? e + 15000 : Date.now() + 15000))} className="trn-sub" style={{ padding: "7px 9px" }}>+15</button>
+              <button onClick={() => setRestEnd(null)} style={btn("rgba(121,224,168,0.9)")}>Skip</button>
+            </>
+          ) : (
+            <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <div className="tiny" style={{ minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "#8a90a6" }}>
+                {upNext ? <span>Up next · <span style={{ color: "#cdd3e6", fontWeight: 700 }}>{upNext.name}</span> · set {upNext.n}</span> : "All sets done — finish when ready."}
+              </div>
+              <span className="subtle tiny tnum" style={{ flex: "0 0 auto" }}>rest {restLen}s</span>
+            </div>
+          )}
         </div>
       </div>
     );
