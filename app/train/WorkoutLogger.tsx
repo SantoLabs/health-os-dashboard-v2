@@ -485,6 +485,8 @@ function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExi
   const [parsing, setParsing] = useState(false);
   const [parseErr, setParseErr] = useState<string | null>(null);
   const [unmatched, setUnmatched] = useState<string[]>([]);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [overIdx, setOverIdx] = useState<number | null>(null);
 
   useEffect(() => {
     if (!routineId) return;
@@ -499,6 +501,7 @@ function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExi
   }
   function upd(i: number, patch: Partial<WkRoutineItem>) { setItems((xs) => xs.map((x, j) => (j === i ? { ...x, ...patch } : x))); }
   function remove(i: number) { setItems((xs) => xs.filter((_, j) => j !== i)); }
+  function move(from: number, to: number) { setItems((xs) => { if (to < 0 || to >= xs.length || from === to) return xs; const a = xs.slice(); const [m] = a.splice(from, 1); a.splice(to, 0, m); return a; }); }
   async function save() {
     if (!name.trim()) return;
     setSaving(true);
@@ -545,9 +548,10 @@ function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExi
       <div className="eyebrow" style={{ marginTop: 14, marginBottom: 6 }}>Exercises</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {items.map((it, i) => (
-          <div key={i} style={{ padding: 10, borderRadius: 10, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+          <div key={i} data-ridx={i} style={{ padding: 10, borderRadius: 10, background: dragIdx !== null && overIdx === i ? "rgba(162,116,255,0.14)" : "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", opacity: dragIdx === i ? 0.6 : 1 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-              <button onClick={() => setDetail(it.exercise_name)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit", textAlign: "left", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 5 }}>{it.exercise_name}<span className="subtle" style={{ fontSize: 11, fontWeight: 400 }}>ⓘ</span></button>
+              <span onPointerDown={(e) => { setDragIdx(i); setOverIdx(i); (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); }} onPointerMove={(e) => { if (dragIdx === null) return; const el = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest("[data-ridx]") as HTMLElement | null; if (el && el.dataset.ridx != null) setOverIdx(Number(el.dataset.ridx)); }} onPointerUp={(e) => { (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId); if (dragIdx !== null && overIdx !== null) move(dragIdx, overIdx); setDragIdx(null); setOverIdx(null); }} style={{ cursor: "grab", touchAction: "none", userSelect: "none", color: "var(--muted)", fontSize: 15, padding: "0 4px", flex: "0 0 auto" }} aria-label="Drag to reorder">⠿</span>
+              <button onClick={() => setDetail(it.exercise_name)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit", textAlign: "left", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 5, flex: 1, minWidth: 0 }}>{it.exercise_name}<span className="subtle" style={{ fontSize: 11, fontWeight: 400 }}>ⓘ</span></button>
               <button className="trn-sub" onClick={() => remove(i)} style={{ padding: "4px 8px" }}>✕</button>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
@@ -555,6 +559,8 @@ function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExi
               <span className="subtle tiny">sets ×</span>
               <input value={it.target_reps ?? ""} onChange={(e) => upd(i, { target_reps: e.target.value })} placeholder="8-12" style={{ ...inp, width: 64 }} />
               <span className="subtle tiny">reps</span>
+              <input inputMode="decimal" value={it.target_weight_kg == null ? "" : String(it.target_weight_kg)} onChange={(e) => upd(i, { target_weight_kg: e.target.value === "" ? null : Number(e.target.value) })} placeholder="kg" style={{ ...inp, width: 52 }} />
+              <span className="subtle tiny">kg</span>
             </div>
           </div>
         ))}
