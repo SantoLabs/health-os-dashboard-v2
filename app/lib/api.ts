@@ -528,6 +528,8 @@ export type WkBundle = { session: WkSession | null; sets: WkSet[]; prev?: Record
 export type WkRoutineSummary = { id: string; name: string; notes?: string | null; focus?: string | null; est_duration_mins?: number | null; item_count: number };
 export type WkRoutineItem = { id?: string; exercise_index?: number; exercise_name: string; muscle_group?: string | null; target_sets?: number; target_reps?: string | null; target_weight_kg?: number | null; rest_s?: number | null; notes?: string | null };
 export type WkRoutine = { routine: { id: string; name: string; notes?: string | null; focus?: string | null; est_duration_mins?: number | null } | null; items: WkRoutineItem[] };
+export type WkParsedItem = WkRoutineItem & { matched?: boolean; raw_name?: string };
+export type WkParsedRoutine = { ok: boolean; name?: string; focus?: string | null; est_duration_mins?: number | null; items: WkParsedItem[]; unmatched?: string[]; error?: string };
 export type WkPR = { exercise: string; type: string; value: number; prev: number | null; unit: string };
 export type WkFinish = { ok: boolean; session_id: string; title: string | null; summary: { sets: number; exercises: number; volume_kg: number; duration_mins: number | null; top_sets: { exercise: string; top_weight: number; best_e1rm: number }[] }; prs: WkPR[]; error?: string };
 export type WkExercise = { name: string; muscle_group: string; equipment?: string | null; type?: string | null; movement_pattern?: string | null; mechanic?: string | null; unilateral?: boolean | null; difficulty?: string | null; prescription?: string | null; is_recovery?: boolean | null; secondary?: string | null; body_region?: string | null; media_status?: string | null };
@@ -557,6 +559,7 @@ export function wkDiscard(session_id: string) { return wkPost<{ ok: boolean; dis
 export function wkFinish(body: { session_id: string; session_rpe?: number | null; notes?: string | null }) { return wkPost<WkFinish>("finish", body); }
 export function wkSaveRoutine(body: { id?: string; name: string; notes?: string | null; focus?: string | null; est_duration_mins?: number | null; items: WkRoutineItem[] }) { return wkPost<{ ok: boolean; id: string }>("save_routine", body); }
 export function wkDeleteRoutine(id: string) { return wkPost<{ ok: boolean }>("delete_routine", { id }); }
+export function wkParseRoutine(text: string) { return wkPost<WkParsedRoutine>("parse_routine", { text }); }
 export function wkRename(body: { session_id: string; title: string }) { return wkPost<{ ok: boolean; session?: { id: string; title: string } }>("rename", body); }
 export function wkReconcile() { return wkPost<{ ok: boolean; matched: number; sessions: unknown[] }>("reconcile", {}); }
 
