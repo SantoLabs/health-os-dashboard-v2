@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   wkActive, wkStart, wkAddSet, wkCompleteSet, wkEditSet, wkDeleteSet, wkAddExercise, wkFinish, wkDiscard,
-  wkRoutines, wkRoutine, wkSaveRoutine, wkDeleteRoutine, wkExercises, planWeek, fmtVolume, wkRename,
+  wkRoutines, wkRoutine, wkSaveRoutine, wkDeleteRoutine, wkParseRoutine, wkExercises, planWeek, fmtVolume, wkRename,
 } from "../lib/api";
 import type { WkBundle, WkSet, WkFinish, WkRoutineSummary, WkRoutineItem, WkExercise, WkFacets, WkPrevSet } from "../lib/api";
 import ExerciseDetail from "./ExerciseDetail";
@@ -481,6 +481,10 @@ function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExi
   const [loading, setLoading] = useState(!!routineId);
   const [saving, setSaving] = useState(false);
   const [detail, setDetail] = useState<string | null>(null);
+  const [rawText, setRawText] = useState("");
+  const [parsing, setParsing] = useState(false);
+  const [parseErr, setParseErr] = useState<string | null>(null);
+  const [unmatched, setUnmatched] = useState<string[]>([]);
 
   useEffect(() => {
     if (!routineId) return;
@@ -501,6 +505,19 @@ function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExi
     try { await wkSaveRoutine({ id: routineId || undefined, name: name.trim(), focus: focus.trim() || null, items }); onExit(); } finally { setSaving(false); }
   }
   async function del() { if (!routineId) return; setSaving(true); try { await wkDeleteRoutine(routineId); onExit(); } finally { setSaving(false); } }
+  async function doParse() {
+    const t = rawText.trim();
+    if (!t || parsing) return;
+    setParsing(true); setParseErr(null); setUnmatched([]);
+    try {
+      const r = await wkParseRoutine(t);
+      if (!r.ok || !r.items || r.items.length === 0) { setParseErr(r.error || "Kai couldn't read that — try one exercise per line."); return; }
+      if (!name.trim() && r.name) setName(r.name);
+      if (!focus.trim() && r.focus) setFocus(r.focus);
+      setItems(r.items.map((it) => ({ exercise_name: it.exercise_name, muscle_group: it.muscle_group ?? null, target_sets: it.target_sets ?? 3, target_reps: it.target_reps ?? "8-12", target_weight_kg: it.target_weight_kg ?? null })));
+      setUnmatched(r.unmatched || []);
+    } catch { setParseErr("Something went wrong reading that."); } finally { setParsing(false); }
+  }
 
   if (loading) return <div className="muted center pad">Loading…</div>;
   const field: React.CSSProperties = { background: "rgba(255,255,255,0.05)", color: "inherit", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "8px 10px", fontSize: 13, fontFamily: "inherit" };
