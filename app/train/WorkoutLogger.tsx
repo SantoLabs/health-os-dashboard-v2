@@ -533,6 +533,15 @@ function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExi
         <input value={focus} onChange={(e) => setFocus(e.target.value)} placeholder="Focus (optional, e.g. push / legs)" style={field} />
       </div>
 
+      <div style={{ marginTop: 12, padding: 12, borderRadius: 12, background: "rgba(162,116,255,0.06)", border: "1px solid rgba(162,116,255,0.18)" }}>
+        <div style={{ fontSize: 12.5, fontWeight: 700 }}>Describe it — Kai builds the list</div>
+        <div className="subtle tiny" style={{ marginTop: 2 }}>e.g. &quot;Push day: bench 4×8, incline DB press 3×10, cable fly 3×12, lateral raises 4×15&quot;</div>
+        <textarea value={rawText} onChange={(e) => setRawText(e.target.value)} rows={2} placeholder="Type or paste your routine…" style={{ ...field, width: "100%", marginTop: 8, resize: "vertical" }} />
+        <button onClick={doParse} disabled={parsing || !rawText.trim()} style={{ ...btn(ACCENT), marginTop: 8, padding: "9px 12px", fontSize: 12 }}>{parsing ? "Kai is reading…" : "Parse with Kai"}</button>
+        {parseErr ? <div className="subtle tiny" style={{ marginTop: 8, color: "#ff8a8a" }}>{parseErr}</div> : null}
+        {unmatched.length > 0 ? <div className="subtle tiny" style={{ marginTop: 8, color: "#fbbf24" }}>Couldn&apos;t match: {unmatched.join(", ")} — edit or swap those below.</div> : null}
+      </div>
+
       <div className="eyebrow" style={{ marginTop: 14, marginBottom: 6 }}>Exercises</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {items.map((it, i) => (
