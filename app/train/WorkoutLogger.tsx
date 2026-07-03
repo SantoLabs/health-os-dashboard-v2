@@ -18,6 +18,8 @@ const todayISO = () => new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().sp
 const isStrength = (t?: string) => /strength/i.test(t || "");
 const isTemp = (id: string) => id.startsWith("temp:");
 const tmpId = () => "temp:" + Math.random().toString(36).slice(2, 9);
+const REST_DEFAULT_S = 90;
+const REST_LS_KEY = "hos_rest_default";
 
 function elapsed(startTs?: string | null): string {
   if (!startTs) return "";
@@ -116,7 +118,7 @@ export default function WorkoutLogger() {
   const [titleEdit, setTitleEdit] = useState<string | null>(null);
   const [restEnd, setRestEnd] = useState<number | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
-  const restLen = 90;
+  const [restLen, setRestLen] = useState<number>(REST_DEFAULT_S);
   const [buildId, setBuildId] = useState<string | null>(null);
   const [, force] = useState(0);
   const tick = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -159,6 +161,28 @@ export default function WorkoutLogger() {
     }
   }, [view, bundle?.session?.started_at]);
 
+  // Hydrate the persisted default rest length (client-only; localStorage is unavailable during SSR).
+  useEffect(() => {
+    try { const v = Number(localStorage.getItem(REST_LS_KEY)); if (v >= 15 && v <= 600) setRestLen(v); } catch { /* ignore */ }
+  }, []);
+
+  // Auto-dismiss the rest timer at 0: fire a haptic buzz (if supported) and clear. Re-arms on every restEnd change
+  // (new set completed, ±15, skip), so there is exactly one buzz per rest and none on skip/uncomplete.
+  useEffect(() => {
+    if (restEnd == null) return;
+    const ms = restEnd - Date.now();
+    const buzz = () => { try { navigator.vibrate?.(200); } catch { /* ignore */ } setRestEnd(null); };
+    if (ms <= 0) { buzz(); return; }
+    const to = setTimeout(buzz, ms);
+    return () => clearTimeout(to);
+  }, [restEnd]);
+
+  // ±15 buttons: nudge the running countdown AND persist the new default so the next auto-timer uses it.
+  function adjustRest(delta: number) {
+    setRestLen((n) => { const nx = Math.min(600, Math.max(15, n + delta)); try { localStorage.setItem(REST_LS_KEY, String(nx)); } catch { /* ignore */ } return nx; });
+    setRestEnd((e) => (e == null ? e : Math.max(Date.now(), e + delta * 1000)));
+  }
+
   function patchSets(fn: (s: WkSet[]) => WkSet[]) { setBundle((b) => (b && b.session ? { ...b, sets: fn(b.sets) } : b)); }
   const reloadActive = useCallback(async () => { const b = await wkActive(); setBundle(b); mergeSeed(b.sets); }, [mergeSeed]);
 
@@ -189,7 +213,11 @@ export default function WorkoutLogger() {
     if (isTemp(s.id)) return;
     const v = inputs[s.id] || { kg: "", reps: "" };
     const target = !s.completed;
-    if (target) setRestEnd(Date.now() + restLen * 1000); else setRestEnd(null);
+    if (target) {
+      const sets = bundle?.sets || [];
+      const moreLeft = sets.some((x) => x.id !== s.id && !x.completed && !isTemp(x.id));
+      setRestEnd(moreLeft ? Date.now() + restLen * 1000 : null);
+    } else setRestEnd(null);
     patchSets((list) => list.map((x) => (x.id === s.id ? { ...x, completed: target, weight_kg: v.kg === "" ? x.weight_kg : Number(v.kg), reps: v.reps === "" ? x.reps : Number(v.reps) } : x)));
     try {
       if (target) await wkCompleteSet({ id: s.id, weight_kg: v.kg === "" ? null : Number(v.kg), reps: v.reps === "" ? null : Number(v.reps) });
@@ -399,14 +427,14 @@ export default function WorkoutLogger() {
                   <div style={{ height: "100%", width: `${Math.min(100, (restRemain / restLen) * 100)}%`, background: ACCENT }} />
                 </div>
               </div>
-              <button onClick={() => setRestEnd((e) => (e ? Math.max(Date.now(), e - 15000) : e))} className="trn-sub" style={{ padding: "7px 9px" }}>−15</button>
-              <button onClick={() => setRestEnd((e) => (e ? e + 15000 : Date.now() + 15000))} className="trn-sub" style={{ padding: "7px 9px" }}>+15</button>
+              <button onClick={() => adjustRest(-15)} className="trn-sub" style={{ padding: "7px 9px" }}>−15</button>
+              <button onClick={() => adjustRest(15)} className="trn-sub" style={{ padding: "7px 9px" }}>+15</button>
               <button onClick={() => setRestEnd(null)} style={btn("rgba(121,224,168,0.9)")}>Skip</button>
             </>
           ) : (
             <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
               <div className="tiny" style={{ minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "#8a90a6" }}>
-                {upNext ? <span>Up next · <span style={{ color: "#cdd3e6", fontWeight: 700 }}>{upNext.name}</span> · set {upNext.n}</span> : "All sets done — finish when ready."}
+                {upNext ? <span>Up next · <span style={{ color: "#cdd3e6", fontWeight: 700 }}>{upNext.name}</span> · set {upNext.n}</span> : "Last set — nice work 💪"}
               </div>
               <span className="subtle tiny tnum" style={{ flex: "0 0 auto" }}>rest {restLen}s</span>
             </div>
