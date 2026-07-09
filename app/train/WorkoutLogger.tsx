@@ -47,7 +47,29 @@ function DetailOverlay({ title, onClose }: { title: string; onClose: () => void 
   );
 }
 
-function ExercisePicker({ onPick, placeholder }: { onPick: (e: { name: string; muscle_group: string }) => void; placeholder?: string }) {
+const REX_KEY = "hos_ex_recents";
+const TYPE_OPTS: { v: string; label: string }[] = [
+  { v: "strength", label: "Strength" },
+  { v: "mobility", label: "Mobility" },
+  { v: "dynamic_stretch", label: "Dynamic stretch" },
+  { v: "static_stretch", label: "Static stretch" },
+  { v: "warmup", label: "Warm-up" },
+  { v: "recovery_rehab", label: "Recovery / rehab" },
+  { v: "cardio", label: "Cardio" },
+];
+function loadRecents(): { name: string; muscle_group: string }[] {
+  try { const a = JSON.parse(localStorage.getItem(REX_KEY) || "[]"); return Array.isArray(a) ? a.slice(0, 20) : []; } catch { return []; }
+}
+function pushRecents(items: { name: string; muscle_group: string }[]) {
+  try {
+    const seen = new Set<string>();
+    const merged: { name: string; muscle_group: string }[] = [];
+    for (const it of [...items, ...loadRecents()]) { const k = (it.name || "").toLowerCase(); if (!it.name || seen.has(k)) continue; seen.add(k); merged.push({ name: it.name, muscle_group: it.muscle_group || "" }); }
+    localStorage.setItem(REX_KEY, JSON.stringify(merged.slice(0, 20)));
+  } catch { /* ignore */ }
+}
+
+function ExercisePicker({ onPick, onPickMany, placeholder }: { onPick: (e: { name: string; muscle_group: string }) => void; onPickMany?: (list: { name: string; muscle_group: string }[]) => void; placeholder?: string }) {
   const [q, setQ] = useState("");
   const [opts, setOpts] = useState<WkExercise[]>([]);
   const [facets, setFacets] = useState<WkFacets | null>(null);
@@ -55,6 +77,11 @@ function ExercisePicker({ onPick, placeholder }: { onPick: (e: { name: string; m
   const [fType, setFType] = useState<string | null>(null);
   const [fEquip, setFEquip] = useState<string | null>(null);
   const [fMuscle, setFMuscle] = useState<string | null>(null);
+  const [sheet, setSheet] = useState<null | "type" | "equipment" | "muscle">(null);
+  const [sel, setSel] = useState<{ name: string; muscle_group: string }[]>([]);
+  const [recents, setRecents] = useState<{ name: string; muscle_group: string }[]>([]);
+  const filtered = !!(q.trim() || fType || fEquip || fMuscle);
+  useEffect(() => { if (open) setRecents(loadRecents()); }, [open]);
   useEffect(() => {
     let alive = true;
     if (!open) return;
@@ -65,41 +92,69 @@ function ExercisePicker({ onPick, placeholder }: { onPick: (e: { name: string; m
     }, 220);
     return () => { alive = false; clearTimeout(t); };
   }, [q, open, fType, fEquip, fMuscle]);
-  const reset = () => { setQ(""); setOpen(false); setFType(null); setFEquip(null); setFMuscle(null); };
-  const chip = (active: boolean): React.CSSProperties => ({ padding: "5px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600, whiteSpace: "nowrap", flex: "0 0 auto", cursor: "pointer", border: active ? "1px solid rgba(162,116,255,0.6)" : "1px solid rgba(255,255,255,0.12)", background: active ? "rgba(162,116,255,0.18)" : "rgba(255,255,255,0.04)", color: "inherit" });
-  const row = (label: string, options: string[], val: string | null, set: (v: string | null) => void) => (
-    options.length ? (
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-        <span className="subtle tiny" style={{ width: 60, flex: "0 0 auto", textTransform: "capitalize" }}>{label}</span>
-        <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
-          {options.map((o) => (<button key={o} style={chip(val === o)} onClick={() => set(val === o ? null : o)}>{o}</button>))}
-        </div>
-      </div>
-    ) : null
+  const reset = () => { setQ(""); setOpen(false); setFType(null); setFEquip(null); setFMuscle(null); setSheet(null); setSel([]); };
+  const isSel = (name: string) => sel.some((x) => x.name === name);
+  const toggleSel = (e: { name: string; muscle_group: string }) => setSel((s) => (s.some((x) => x.name === e.name) ? s.filter((x) => x.name !== e.name) : [...s, { name: e.name, muscle_group: e.muscle_group || "" }]));
+  const commit = (chosen: { name: string; muscle_group: string }[]) => {
+    if (chosen.length === 0) return;
+    pushRecents(chosen);
+    if (onPickMany && chosen.length > 1) onPickMany(chosen);
+    else chosen.forEach((e) => onPick(e));
+    reset();
+  };
+  const filterBtn = (label: string, val: string | null, key: "type" | "equipment" | "muscle") => (
+    <button className="trn-sub" style={{ padding: "5px 10px", fontSize: 11, border: val ? "1px solid rgba(162,116,255,0.6)" : undefined }} onClick={() => setSheet(sheet === key ? null : key)}>{val ? `${label}: ${val}` : label} ▾</button>
   );
+  const sheetOpts = sheet === "type" ? TYPE_OPTS.map((t) => t.v) : sheet === "equipment" ? (facets?.equipment || []) : sheet === "muscle" ? (facets?.muscle || []) : [];
+  const applySheet = (v: string) => {
+    if (sheet === "type") setFType((p) => (p === v ? null : v));
+    else if (sheet === "equipment") setFEquip((p) => (p === v ? null : v));
+    else if (sheet === "muscle") setFMuscle((p) => (p === v ? null : v));
+    setSheet(null);
+  };
+  const listItems = filtered ? opts.map((o) => ({ name: o.name, muscle_group: o.muscle_group })) : recents;
   return (
     <div style={{ position: "relative" }}>
       <div style={{ display: "flex", gap: 6 }}>
         <input value={q} onChange={(e) => setQ(e.target.value)} onFocus={() => setOpen(true)} placeholder={placeholder || "Search exercises…"}
           style={{ flex: 1, background: "rgba(255,255,255,0.05)", color: "inherit", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "8px 10px", fontSize: 13, fontFamily: "inherit" }} />
-        {q.trim() ? <button className="trn-sub" onClick={() => { onPick({ name: q.trim(), muscle_group: "" }); reset(); }}>Add</button> : null}
+        {q.trim() && !listItems.some((o) => o.name.toLowerCase() === q.trim().toLowerCase()) ? <button className="trn-sub" onClick={() => commit([{ name: q.trim(), muscle_group: "" }])}>Add</button> : null}
       </div>
       {open ? (
-        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-          {facets ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {row("Type", facets.type, fType, setFType)}
-              {row("Equipment", facets.equipment, fEquip, setFEquip)}
-              {row("Muscle", facets.muscle, fMuscle, setFMuscle)}
+        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+            {filterBtn("Type", fType, "type")}
+            {filterBtn("Equipment", fEquip, "equipment")}
+            {filterBtn("Muscle", fMuscle, "muscle")}
+            {(fType || fEquip || fMuscle) ? <button className="subtle tiny" style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: "2px 4px" }} onClick={() => { setFType(null); setFEquip(null); setFMuscle(null); }}>Clear</button> : null}
+          </div>
+          {sheet ? (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: 8, background: "rgba(255,255,255,0.03)", borderRadius: 8 }}>
+              {sheetOpts.length ? sheetOpts.map((o) => {
+                const on = (sheet === "type" && fType === o) || (sheet === "equipment" && fEquip === o) || (sheet === "muscle" && fMuscle === o);
+                const lbl = sheet === "type" ? (TYPE_OPTS.find((t) => t.v === o)?.label || o) : o;
+                return <button key={o} onClick={() => applySheet(o)} style={{ padding: "5px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600, cursor: "pointer", border: on ? "1px solid rgba(162,116,255,0.6)" : "1px solid rgba(255,255,255,0.12)", background: on ? "rgba(162,116,255,0.18)" : "rgba(255,255,255,0.04)", color: "inherit", textTransform: "capitalize" }}>{lbl}</button>;
+              }) : <span className="subtle tiny">No options</span>}
             </div>
           ) : null}
-          {opts.length > 0 ? (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, maxHeight: 240, overflowY: "auto", marginTop: 2 }}>
-              {opts.map((o) => (
-                <button key={o.name} className="trn-sub" onClick={() => { onPick({ name: o.name, muscle_group: o.muscle_group }); reset(); }}>{o.name}</button>
-              ))}
+          <div className="subtle tiny" style={{ textTransform: "uppercase", letterSpacing: 0.4, opacity: 0.7 }}>{filtered ? "All" : "Recent"}</div>
+          {listItems.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 260, overflowY: "auto" }}>
+              {listItems.map((o) => {
+                const on = isSel(o.name);
+                return (
+                  <button key={o.name} onClick={() => toggleSel(o)} style={{ display: "flex", alignItems: "center", gap: 8, textAlign: "left", padding: "8px 10px", borderRadius: 8, cursor: "pointer", border: on ? "1px solid rgba(162,116,255,0.6)" : "1px solid rgba(255,255,255,0.08)", background: on ? "rgba(162,116,255,0.14)" : "rgba(255,255,255,0.03)", color: "inherit" }}>
+                    <span style={{ flex: "0 0 auto", width: 18, height: 18, borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, background: on ? ACCENT : "rgba(255,255,255,0.08)", color: "#fff" }}>{on ? "✓" : ""}</span>
+                    <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600 }}>{o.name}</span>
+                    {o.muscle_group ? <span className="subtle tiny" style={{ textTransform: "capitalize" }}>{o.muscle_group}</span> : null}
+                  </button>
+                );
+              })}
             </div>
-          ) : <div className="subtle tiny" style={{ padding: "4px 2px" }}>No matches — type a name and tap Add for a custom exercise.</div>}
+          ) : <div className="subtle tiny" style={{ padding: "4px 2px" }}>{filtered ? "No matches — type a name and tap Add for a custom exercise." : "No recent exercises yet — search to add your first."}</div>}
+          {sel.length > 0 ? (
+            <button onClick={() => commit(sel)} style={{ ...btn(ACCENT), width: "100%", padding: 11, marginTop: 2 }}>Add {sel.length} exercise{sel.length === 1 ? "" : "s"}</button>
+          ) : null}
         </div>
       ) : null}
     </div>
