@@ -212,8 +212,8 @@ export async function coachThreadOp(op: "rename" | "pin" | "delete_thread", body
   return res.json();
 }
 // GET today's proactive home-screen card (generated once per day, cached server-side).
-export async function coachDailyCard(): Promise<{ card: KaiDailyCard; cached: boolean }> {
-  const res = await authedFetch(`/functions/v1/coach?api=daily_card`);
+export async function coachDailyCard(scope?: "training"): Promise<{ card: KaiDailyCard; cached: boolean }> {
+  const res = await authedFetch(`/functions/v1/coach?api=daily_card${scope ? `&scope=${scope}` : ""}`);
   if (!res.ok) throw new Error(`Couldn't load your daily card (${res.status})`);
   return res.json();
 }
