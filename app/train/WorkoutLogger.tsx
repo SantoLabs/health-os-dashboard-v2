@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   wkActive, wkStart, wkAddSet, wkCompleteSet, wkEditSet, wkDeleteSet, wkAddExercise, wkFinish, wkDiscard,
-  wkRoutines, wkRoutine, wkSaveRoutine, wkDeleteRoutine, wkParseRoutine, wkExercises, planWeek, fmtVolume, wkRename,
+  wkRoutines, wkRoutine, wkSaveRoutine, wkDeleteRoutine, wkParseRoutine, wkExercises, planWeek, fmtVolume, wkRename, cardioList, cardioPrescribe,
 } from "../lib/api";
-import type { WkBundle, WkSet, WkFinish, WkRoutineSummary, WkRoutineItem, WkExercise, WkFacets, WkPrevSet } from "../lib/api";
+import type { WkBundle, WkSet, WkFinish, WkRoutineSummary, WkRoutineItem, WkExercise, WkFacets, WkPrevSet, CardioRoutine } from "../lib/api";
 import ExerciseDetail from "./ExerciseDetail";
 
 type View = "home" | "log" | "celebrate" | "build";
@@ -112,6 +112,8 @@ export default function WorkoutLogger() {
   const [busy, setBusy] = useState(false);
   const [bundle, setBundle] = useState<WkBundle | null>(null);
   const [routines, setRoutines] = useState<WkRoutineSummary[]>([]);
+  const [cardioRoutines, setCardioRoutines] = useState<CardioRoutine[]>([]);
+  const [plannedCardio, setPlannedCardio] = useState<Record<string, boolean>>({});
   const [planToday, setPlanToday] = useState<PlanToday[]>([]);
   const [celebrate, setCelebrate] = useState<WkFinish | null>(null);
   const [inputs, setInputs] = useState<Record<string, { kg: string; reps: string }>>({});
@@ -144,12 +146,13 @@ export default function WorkoutLogger() {
   const loadHome = useCallback(async () => {
     setLoading(true);
     try {
-      const [b, r, wk] = await Promise.all([
+      const [b, r, cr, wk] = await Promise.all([
         wkActive(),
         wkRoutines().catch(() => ({ routines: [] as WkRoutineSummary[] })),
+        cardioList().catch(() => ({ routines: [] as CardioRoutine[] })),
         planWeek<{ today: string; sessions: PlanToday[] }>().catch(() => null),
       ]);
-      setBundle(b); setRoutines(r.routines || []);
+      setBundle(b); setRoutines(r.routines || []); setCardioRoutines(cr.routines || []);
       const t = todayISO();
       // Manual "start" is only for strength — cardio (Swim/Run/Cycle) is auto-detected from the tracker.
       setPlanToday(((wk?.sessions) || []).filter((s) => s.session_date === t && s.committed && !s.completed && !s.skipped && !s.is_rest_day && isStrength(s.session_type)));
