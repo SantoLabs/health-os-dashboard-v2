@@ -609,42 +609,43 @@ export default function WorkoutLogger() {
             </div>
           )}
 
-          <div className="eyebrow" style={{ marginTop: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>Saved routines</span>
-            <button className="trn-sub" style={{ padding: "4px 10px" }} onClick={() => { setBuildId(null); setView("build"); }}>+ New</button>
-          </div>
-          {routines.length === 0 && cardioRoutines.length === 0 ? (
-            <div className="subtle tiny" style={{ padding: "4px 2px 8px" }}>No routines yet. Build one to start workouts in a tap.</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {routines.map((r) => (
-                <div key={r.id} className="card" style={{ padding: 12, display: "flex", alignItems: "center", gap: 10 }}>
-                  <span aria-hidden style={{ flex: "0 0 auto", fontSize: 10, fontWeight: 700, letterSpacing: 0.3, padding: "3px 7px", borderRadius: 6, background: "rgba(162,116,255,0.16)", color: "#c9b6ff" }}>LIFT</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 13 }}>{r.name}</div>
-                    <div className="subtle tiny">{r.item_count} exercise{r.item_count === 1 ? "" : "s"}{r.focus ? ` · ${r.focus}` : ""}{r.est_duration_mins ? ` · ${r.est_duration_mins}m` : ""}</div>
+          <div className="eyebrow" style={{ marginTop: 4 }}>Saved routines</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            {routines.map((r) => {
+              const locked = busy || !!bundle?.session;
+              return (
+                <div key={r.id} className="card" style={{ padding: 12, minHeight: 96, display: "flex", flexDirection: "column", justifyContent: "space-between", cursor: locked ? "default" : "pointer", opacity: locked ? 0.6 : 1 }} onClick={() => { if (!locked) startFrom({ routine_id: r.id }); }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <span aria-hidden style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3, padding: "3px 7px", borderRadius: 6, background: "rgba(162,116,255,0.16)", color: "#c9b6ff" }}>LIFT</span>
+                    <button aria-label="Edit routine" className="subtle" style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: 2, fontSize: 13, opacity: 0.7 }} onClick={(e) => { e.stopPropagation(); setBuildId(r.id); setView("build"); }}>✎</button>
                   </div>
-                  <button className="trn-sub" disabled={busy || !!bundle?.session} onClick={() => startFrom({ routine_id: r.id })}>Start</button>
-                  <button className="trn-sub" onClick={() => { setBuildId(r.id); setView("build"); }}>Edit</button>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div>
+                    <div className="subtle tiny">{r.item_count} exercise{r.item_count === 1 ? "" : "s"}{r.est_duration_mins ? ` · ${r.est_duration_mins}m` : ""}{r.focus ? ` · ${r.focus}` : ""}</div>
+                  </div>
                 </div>
-              ))}
-              {cardioRoutines.map((c) => {
-                const km = c.total_distance_m ? (c.total_distance_m / 1000).toFixed(1) + "km" : null;
-                const mins = c.total_duration_s ? Math.round(c.total_duration_s / 60) + "m" : null;
-                const meta = [c.sport, km, mins].filter(Boolean).join(" · ");
-                return (
-                  <div key={c.id} className="card" style={{ padding: 12, display: "flex", alignItems: "center", gap: 10 }}>
-                    <span aria-hidden style={{ flex: "0 0 auto", fontSize: 10, fontWeight: 700, letterSpacing: 0.3, padding: "3px 7px", borderRadius: 6, background: "rgba(52,211,153,0.16)", color: "#7fe3b8" }}>CARDIO</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, fontSize: 13 }}>{c.name}</div>
-                      <div className="subtle tiny" style={{ textTransform: "capitalize" }}>{meta || "cardio routine"}</div>
-                    </div>
-                    <button className="trn-sub" disabled={busy || !!plannedCardio[c.id]} onClick={async () => { setBusy(true); try { await cardioPrescribe({ routine_id: c.id }); setPlannedCardio((p) => ({ ...p, [c.id]: true })); } finally { setBusy(false); } }}>{plannedCardio[c.id] ? "Planned ✓" : "Plan today"}</button>
+              );
+            })}
+            {cardioRoutines.map((c) => {
+              const km = c.total_distance_m ? (c.total_distance_m / 1000).toFixed(1) + "km" : null;
+              const mins = c.total_duration_s ? Math.round(c.total_duration_s / 60) + "m" : null;
+              const meta = [c.sport, km, mins].filter(Boolean).join(" · ");
+              const done = !!plannedCardio[c.id];
+              return (
+                <div key={c.id} className="card" style={{ padding: 12, minHeight: 96, display: "flex", flexDirection: "column", justifyContent: "space-between", cursor: busy || done ? "default" : "pointer", opacity: busy ? 0.6 : 1 }} onClick={() => { if (!busy && !done) { setBusy(true); cardioPrescribe({ routine_id: c.id }).then(() => setPlannedCardio((p) => ({ ...p, [c.id]: true }))).finally(() => setBusy(false)); } }}>
+                  <span aria-hidden style={{ alignSelf: "flex-start", fontSize: 10, fontWeight: 700, letterSpacing: 0.3, padding: "3px 7px", borderRadius: 6, background: "rgba(52,211,153,0.16)", color: "#7fe3b8" }}>CARDIO</span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</div>
+                    <div className="subtle tiny" style={{ textTransform: "capitalize" }}>{done ? "Planned ✓ for today" : (meta || "cardio routine")}</div>
                   </div>
-                );
-              })}
-            </div>
-          )}
+                </div>
+              );
+            })}
+            <button onClick={() => { setBuildId(null); setView("build"); }} className="card" style={{ padding: 12, minHeight: 96, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, cursor: "pointer", border: "1px dashed rgba(255,255,255,0.18)", background: "transparent", color: "inherit" }}>
+              <span style={{ fontSize: 22, lineHeight: 1, opacity: 0.8 }}>+</span>
+              <span className="subtle tiny">New routine</span>
+            </button>
+          </div>
         </>
       )}
     </div>
