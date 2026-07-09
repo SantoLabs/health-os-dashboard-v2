@@ -39,18 +39,18 @@ function Ring({ value, color }: { value: number; color: string }) {
   );
 }
 
-export default function KaiDailyCard({ liveReadiness }: { liveReadiness?: { score: number | null; label?: string | null } | null }) {
+export default function KaiDailyCard({ liveReadiness, scope }: { liveReadiness?: { score: number | null; label?: string | null } | null; scope?: "training" }) {
   const router = useRouter();
   const [card, setCard] = useState<Card | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    coachDailyCard()
+    coachDailyCard(scope)
       .then((r) => { if (alive) setCard(r.card); })
       .catch(() => { if (alive) setFailed(true); });
     return () => { alive = false; };
-  }, []);
+  }, [scope]);
 
   // Fail silent — the Home screen must never break if Kai is unavailable.
   if (failed || !card) return null;
@@ -79,7 +79,7 @@ export default function KaiDailyCard({ liveReadiness }: { liveReadiness?: { scor
         <KaiMark size={26} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13.5, fontWeight: 800, color: H }}>{card.greeting}</div>
-          <div style={{ fontSize: 10.5, color: SECOND }}>Kai · your daily note</div>
+          <div style={{ fontSize: 10.5, color: SECOND }}>{scope === "training" ? "Kai · Thoughts" : "Kai · your daily note"}</div>
         </div>
         {ringValue != null ? (
           <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
