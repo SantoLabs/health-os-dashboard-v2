@@ -20,6 +20,8 @@ const isTemp = (id: string) => id.startsWith("temp:");
 const tmpId = () => "temp:" + Math.random().toString(36).slice(2, 9);
 const REST_DEFAULT_S = 90;
 const REST_LS_KEY = "hos_rest_default";
+// Rest-timer picker stops: Off, then 5s steps to 2:00, then 15s steps to 5:00 (37 stops). hos_rest_default persists the pick.
+const REST_STOPS: number[] = [0, ...Array.from({ length: 24 }, (_, i) => (i + 1) * 5), ...Array.from({ length: 12 }, (_, i) => 120 + (i + 1) * 15)];
 
 function elapsed(startTs?: string | null): string {
   if (!startTs) return "";
@@ -120,8 +122,11 @@ export default function WorkoutLogger() {
   const [detail, setDetail] = useState<string | null>(null);
   const [restLen, setRestLen] = useState<number>(REST_DEFAULT_S);
   const [buildId, setBuildId] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [restPickerOpen, setRestPickerOpen] = useState(false);
   const [, force] = useState(0);
   const tick = useRef<ReturnType<typeof setInterval> | null>(null);
+  const wakeRef = useRef<any>(null);
 
   const seedInputs = useCallback((sets: WkSet[]) => {
     const m: Record<string, { kg: string; reps: string }> = {};
@@ -163,7 +168,7 @@ export default function WorkoutLogger() {
 
   // Hydrate the persisted default rest length (client-only; localStorage is unavailable during SSR).
   useEffect(() => {
-    try { const v = Number(localStorage.getItem(REST_LS_KEY)); if (v >= 15 && v <= 600) setRestLen(v); } catch { /* ignore */ }
+    try { const v = Number(localStorage.getItem(REST_LS_KEY)); if (Number.isFinite(v) && v >= 0 && v <= 600) setRestLen(v); } catch { /* ignore */ }
   }, []);
 
   // Auto-dismiss the rest timer at 0: fire a haptic buzz (if supported) and clear. Re-arms on every restEnd change
@@ -177,11 +182,27 @@ export default function WorkoutLogger() {
     return () => clearTimeout(to);
   }, [restEnd]);
 
-  // ±15 buttons: nudge the running countdown AND persist the new default so the next auto-timer uses it.
-  function adjustRest(delta: number) {
-    setRestLen((n) => { const nx = Math.min(600, Math.max(15, n + delta)); try { localStorage.setItem(REST_LS_KEY, String(nx)); } catch { /* ignore */ } return nx; });
-    setRestEnd((e) => (e == null ? e : Math.max(Date.now(), e + delta * 1000)));
+  // Rest picker: set the default rest length, persist it, and (if a timer is running) re-arm to the new length.
+  function pickRest(v: number) {
+    setRestLen(v);
+    try { localStorage.setItem(REST_LS_KEY, String(v)); } catch { /* ignore */ }
+    setRestEnd((e) => (e == null ? e : v > 0 ? Date.now() + v * 1000 : null));
+    setRestPickerOpen(false);
   }
+
+  // Keep the screen awake while logging (best-effort; unsupported browsers no-op). Re-acquire when the tab returns to foreground.
+  useEffect(() => {
+    if (view !== "log") return;
+    let released = false;
+    const nav = navigator as unknown as { wakeLock?: { request: (t: string) => Promise<{ release?: () => void }> } };
+    const acquire = async () => {
+      try { if (!nav.wakeLock || document.visibilityState !== "visible") return; wakeRef.current = await nav.wakeLock.request("screen"); } catch { /* ignore */ }
+    };
+    const onVis = () => { if (!released && document.visibilityState === "visible") acquire(); };
+    acquire();
+    document.addEventListener("visibilitychange", onVis);
+    return () => { released = true; document.removeEventListener("visibilitychange", onVis); try { wakeRef.current?.release?.(); } catch { /* ignore */ } wakeRef.current = null; };
+  }, [view]);
 
   function patchSets(fn: (s: WkSet[]) => WkSet[]) { setBundle((b) => (b && b.session ? { ...b, sets: fn(b.sets) } : b)); }
   const reloadActive = useCallback(async () => { const b = await wkActive(); setBundle(b); mergeSeed(b.sets); }, [mergeSeed]);
@@ -216,7 +237,7 @@ export default function WorkoutLogger() {
     if (target) {
       const sets = bundle?.sets || [];
       const moreLeft = sets.some((x) => x.id !== s.id && !x.completed && !isTemp(x.id));
-      setRestEnd(moreLeft ? Date.now() + restLen * 1000 : null);
+      setRestEnd(moreLeft && restLen > 0 ? Date.now() + restLen * 1000 : null);
     } else setRestEnd(null);
     patchSets((list) => list.map((x) => (x.id === s.id ? { ...x, completed: target, weight_kg: v.kg === "" ? x.weight_kg : Number(v.kg), reps: v.reps === "" ? x.reps : Number(v.reps) } : x)));
     try {
@@ -323,14 +344,27 @@ export default function WorkoutLogger() {
 
     return (
       <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "#0b0d12", display: "flex", flexDirection: "column" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderBottom: "1px solid rgba(255,255,255,0.08)", background: "#0b0d12" }}>
-          <button onClick={() => { setView("home"); loadHome(); }} aria-label="Back" style={{ width: 34, height: 34, borderRadius: 9, flex: "0 0 auto", cursor: "pointer", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff", fontSize: 20, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
-          {titleEdit !== null ? (
-            <input autoFocus value={titleEdit} onChange={(e) => setTitleEdit(e.target.value)} onBlur={saveTitle} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} style={{ flex: 1, minWidth: 0, background: "rgba(255,255,255,0.06)", color: "inherit", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 8, padding: "7px 10px", fontSize: 15, fontWeight: 800, fontFamily: "inherit" }} />
-          ) : (
-            <button onClick={() => setTitleEdit(sessTitle)} style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", cursor: "text", color: "inherit", fontSize: 15, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", padding: 0 }}>{sessTitle}<span className="subtle" style={{ fontSize: 12, marginLeft: 6, fontWeight: 400 }}>✎</span></button>
-          )}
-          <button onClick={() => setFinishing(true)} style={btn("rgba(121,224,168,0.9)")} disabled={busy}>Finish</button>
+        <div style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", background: "#0b0d12" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", width: "100%", maxWidth: 480, margin: "0 auto" }}>
+            <button onClick={() => { setView("home"); loadHome(); }} aria-label="Back" style={{ width: 34, height: 34, borderRadius: 9, flex: "0 0 auto", cursor: "pointer", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff", fontSize: 20, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
+            {titleEdit !== null ? (
+              <input autoFocus value={titleEdit} onChange={(e) => setTitleEdit(e.target.value)} onBlur={saveTitle} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} style={{ flex: 1, minWidth: 0, background: "rgba(255,255,255,0.06)", color: "inherit", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 8, padding: "7px 10px", fontSize: 15, fontWeight: 800, fontFamily: "inherit" }} />
+            ) : (
+              <button onClick={() => setTitleEdit(sessTitle)} style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", cursor: "text", color: "inherit", fontSize: 15, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", padding: 0 }}>{sessTitle}<span className="subtle" style={{ fontSize: 12, marginLeft: 6, fontWeight: 400 }}>✎</span></button>
+            )}
+            <button onClick={() => setFinishing(true)} style={btn("rgba(121,224,168,0.9)")} disabled={busy}>Finish</button>
+            <div style={{ position: "relative", flex: "0 0 auto" }}>
+              <button onClick={() => setMenuOpen((o) => !o)} aria-label="More" style={{ width: 34, height: 34, borderRadius: 9, cursor: "pointer", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff", fontSize: 18, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>⋯</button>
+              {menuOpen ? (
+                <>
+                  <div onClick={() => setMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 410 }} />
+                  <div style={{ position: "absolute", top: 40, right: 0, zIndex: 411, minWidth: 160, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: 6, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
+                    <button onClick={() => { setMenuOpen(false); setDiscarding(true); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "#ff8a8a", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Discard workout</button>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </div>
         </div>
         <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", padding: 14, width: "100%", maxWidth: 480, margin: "0 auto" }}>
 
@@ -404,19 +438,6 @@ export default function WorkoutLogger() {
           </div>
         ) : null}
 
-        <div style={{ marginTop: 16, borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 12 }}>
-          {discarding ? (
-            <div>
-              <div className="tiny" style={{ color: "#ff8a8a", marginBottom: 8 }}>Discard this workout? It won&apos;t be saved and can&apos;t be undone.</div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button disabled={busy} onClick={doDiscard} style={{ ...btn("rgba(255,111,94,0.9)"), flex: 1, padding: 10 }}>{busy ? "Discarding…" : "Discard"}</button>
-                <button disabled={busy} onClick={() => setDiscarding(false)} className="trn-sub" style={{ flex: 1 }}>Cancel</button>
-              </div>
-            </div>
-          ) : (
-            <button onClick={() => setDiscarding(true)} style={{ width: "100%", background: "none", border: "none", cursor: "pointer", color: "#ff8a8a", fontSize: 12, fontWeight: 600, padding: 4 }}>Discard workout</button>
-          )}
-        </div>
         </div>
         <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", background: "#0b0d12", padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, width: "100%", maxWidth: 480, margin: "0 auto" }}>
           {resting ? (
@@ -427,8 +448,7 @@ export default function WorkoutLogger() {
                   <div style={{ height: "100%", width: `${Math.min(100, (restRemain / restLen) * 100)}%`, background: ACCENT }} />
                 </div>
               </div>
-              <button onClick={() => adjustRest(-15)} className="trn-sub" style={{ padding: "7px 9px" }}>−15</button>
-              <button onClick={() => adjustRest(15)} className="trn-sub" style={{ padding: "7px 9px" }}>+15</button>
+              <button onClick={() => setRestPickerOpen(true)} className="trn-sub" style={{ padding: "7px 11px", fontVariantNumeric: "tabular-nums" }}>{restLen > 0 ? fmtSecs(restLen) : "Off"}</button>
               <button onClick={() => setRestEnd(null)} style={btn("rgba(121,224,168,0.9)")}>Skip</button>
             </>
           ) : (
@@ -436,11 +456,37 @@ export default function WorkoutLogger() {
               <div className="tiny" style={{ minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "#8a90a6" }}>
                 {upNext ? <span>Up next · <span style={{ color: "#cdd3e6", fontWeight: 700 }}>{upNext.name}</span> · set {upNext.n}</span> : "Last set — nice work 💪"}
               </div>
-              <span className="subtle tiny tnum" style={{ flex: "0 0 auto" }}>rest {restLen}s</span>
+              <button onClick={() => setRestPickerOpen(true)} className="subtle tiny tnum" style={{ flex: "0 0 auto", background: "none", border: "none", cursor: "pointer", color: "inherit", padding: 0 }}>rest {restLen > 0 ? fmtSecs(restLen) : "off"} ✎</button>
             </div>
           )}
         </div>
         {detail ? <DetailOverlay title={detail} onClose={() => setDetail(null)} /> : null}
+        {discarding ? (
+          <div onClick={() => !busy && setDiscarding(false)} style={{ position: "fixed", inset: 0, zIndex: 430, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 340, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: 16 }}>
+              <div className="tiny" style={{ color: "#ff8a8a", marginBottom: 12, fontWeight: 600 }}>Discard this workout? It won&apos;t be saved and can&apos;t be undone.</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button disabled={busy} onClick={doDiscard} style={{ ...btn("rgba(255,111,94,0.9)"), flex: 1, padding: 10 }}>{busy ? "Discarding…" : "Discard"}</button>
+                <button disabled={busy} onClick={() => setDiscarding(false)} className="trn-sub" style={{ flex: 1 }}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {restPickerOpen ? (
+          <div onClick={() => setRestPickerOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 430, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end" }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, margin: "0 auto", maxHeight: "60vh", overflowY: "auto", background: "#12151d", borderTopLeftRadius: 16, borderTopRightRadius: 16, borderTop: "1px solid rgba(255,255,255,0.1)", padding: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <div style={{ fontWeight: 800, fontSize: 15 }}>Rest timer</div>
+                <button onClick={() => setRestPickerOpen(false)} className="trn-sub" style={{ padding: "4px 12px" }}>Done</button>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8 }}>
+                {REST_STOPS.map((s) => (
+                  <button key={s} onClick={() => pickRest(s)} className="trn-sub" style={{ padding: "10px 0", fontWeight: restLen === s ? 800 : 500, color: restLen === s ? "#fff" : undefined, background: restLen === s ? ACCENT : undefined, border: restLen === s ? "none" : undefined }}>{s === 0 ? "Off" : fmtSecs(s)}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     );
   }
