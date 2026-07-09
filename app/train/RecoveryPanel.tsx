@@ -3,10 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { recoveryGet, planWeek, type RecMuscle, type RecMobility } from "../lib/api";
+import MuscleFigure from "./MuscleFigure";
 
 type Mode = "recovery" | "load";
 type Ctx = { readiness: number | null; readiness_label: string | null; acwr: number | null } | null;
+type Sel = { mg: string; label: string; fig: string | null } | null;
 
+// muscle_group (from muscle_recovery) -> aliases used to filter the mobility library
 const MUS: Record<string, { label: string; aliases: string[] }> = {
   shoulders: { label: "Shoulders", aliases: ["Shoulders", "Front Delts", "Side Delts", "Rear Delts"] },
   chest: { label: "Chest", aliases: ["Chest", "Upper Chest", "Lower Chest"] },
@@ -24,47 +27,35 @@ const MUS: Record<string, { label: string; aliases: string[] }> = {
   calves: { label: "Calves", aliases: ["Calves", "Ankles"] },
   adductors: { label: "Adductors", aliases: ["Adductors"] },
   abductors: { label: "Abductors", aliases: ["Abductors", "IT Band"] },
+  full_body: { label: "Full body", aliases: [] },
 };
 
-type Zone = { key: string; fig: "front" | "back"; cx: number; cy: number; rx: number; ry: number };
-const ZONES: Zone[] = [
-  { key: "shoulders", fig: "front", cx: 31, cy: 40, rx: 8, ry: 7 },
-  { key: "shoulders", fig: "front", cx: 89, cy: 40, rx: 8, ry: 7 },
-  { key: "chest", fig: "front", cx: 52, cy: 52, rx: 9, ry: 7 },
-  { key: "chest", fig: "front", cx: 68, cy: 52, rx: 9, ry: 7 },
-  { key: "biceps", fig: "front", cx: 27, cy: 62, rx: 6, ry: 11 },
-  { key: "biceps", fig: "front", cx: 93, cy: 62, rx: 6, ry: 11 },
-  { key: "abdominals", fig: "front", cx: 60, cy: 80, rx: 10, ry: 15 },
-  { key: "adductors", fig: "front", cx: 60, cy: 122, rx: 5, ry: 14 },
-  { key: "forearms", fig: "front", cx: 24, cy: 88, rx: 6, ry: 12 },
-  { key: "forearms", fig: "front", cx: 96, cy: 88, rx: 6, ry: 12 },
-  { key: "quadriceps", fig: "front", cx: 52, cy: 152, rx: 8, ry: 26 },
-  { key: "quadriceps", fig: "front", cx: 68, cy: 152, rx: 8, ry: 26 },
-  { key: "traps", fig: "back", cx: 60, cy: 36, rx: 12, ry: 7 },
-  { key: "shoulders", fig: "back", cx: 31, cy: 42, rx: 7, ry: 6 },
-  { key: "shoulders", fig: "back", cx: 89, cy: 42, rx: 7, ry: 6 },
-  { key: "upper_back", fig: "back", cx: 60, cy: 54, rx: 13, ry: 9 },
-  { key: "lats", fig: "back", cx: 48, cy: 70, rx: 7, ry: 12 },
-  { key: "lats", fig: "back", cx: 72, cy: 70, rx: 7, ry: 12 },
-  { key: "triceps", fig: "back", cx: 27, cy: 62, rx: 6, ry: 11 },
-  { key: "triceps", fig: "back", cx: 93, cy: 62, rx: 6, ry: 11 },
-  { key: "forearms", fig: "back", cx: 24, cy: 88, rx: 6, ry: 12 },
-  { key: "forearms", fig: "back", cx: 96, cy: 88, rx: 6, ry: 12 },
-  { key: "lower_back", fig: "back", cx: 60, cy: 92, rx: 9, ry: 8 },
-  { key: "glutes", fig: "back", cx: 52, cy: 114, rx: 8, ry: 8 },
-  { key: "glutes", fig: "back", cx: 68, cy: 114, rx: 8, ry: 8 },
-  { key: "hamstrings", fig: "back", cx: 52, cy: 154, rx: 8, ry: 24 },
-  { key: "hamstrings", fig: "back", cx: 68, cy: 154, rx: 8, ry: 24 },
-  { key: "calves", fig: "back", cx: 52, cy: 198, rx: 7, ry: 16 },
-  { key: "calves", fig: "back", cx: 68, cy: 198, rx: 7, ry: 16 },
-];
+// figure key -> backing muscle_group (which RecMuscle row colors it)
+const FKEY_MG: Record<string, string> = {
+  neck: "traps", traps: "traps", delts: "shoulders", chest: "chest", biceps: "biceps",
+  forearms: "forearms", abs: "abdominals", obliques: "abdominals", quads: "quadriceps",
+  calves: "calves", lats: "lats", midback: "upper_back", triceps: "triceps",
+  lowerback: "lower_back", glutes: "glutes", hamstrings: "hamstrings",
+};
+const FIG_LABEL: Record<string, string> = {
+  neck: "Neck", traps: "Traps", delts: "Shoulders", chest: "Chest", biceps: "Biceps",
+  forearms: "Forearms", abs: "Abs", obliques: "Obliques", quads: "Quads", calves: "Calves",
+  lats: "Lats", midback: "Upper back", triceps: "Triceps", lowerback: "Lower back",
+  glutes: "Glutes", hamstrings: "Hamstrings",
+};
+const MAPPED_MG = new Set(Object.values(FKEY_MG));
 
-function Leg({ c, t }: { c: string; t: string }) {
-  return <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10.5, color: "#8a90a6" }}><i style={{ width: 9, height: 9, borderRadius: 3, background: c, display: "inline-block" }} />{t}</span>;
-}
-function Stat({ v, l }: { v: string; l: string }) {
-  return <div style={{ flex: 1, background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: "9px 6px", textAlign: "center" }}><div className="tnum" style={{ fontSize: 15, fontWeight: 800 }}>{v}</div><div className="subtle tiny" style={{ marginTop: 1 }}>{l}</div></div>;
-}
+const REC_PAL: Record<string, string> = { fresh: "#4ecb8f", recovering: "#e3ac4e", fatigued: "#ef6584" };
+const LOAD_PAL: Record<string, string> = { neglected: "#565b6b", light: "#6d8ce8", heavy: "#9d7bf0", peak: "#ef6584" };
+const HINTS: Record<string, string> = {
+  fatigued: "give it another day", recovering: "light work is fine", fresh: "ready to train",
+  neglected: "no recent volume", light: "low recent volume", heavy: "high recent volume", peak: "highest recent volume",
+};
+const recState = (pct: number) => (pct >= 70 ? "fresh" : pct >= 50 ? "recovering" : "fatigued");
+const loadState = (pct: number) => (pct >= 80 ? "peak" : pct >= 50 ? "heavy" : pct >= 20 ? "light" : "neglected");
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const pretty = (mg: string) => mg.split("_").map(cap).join(" ");
+
 function MobRow({ x }: { x: RecMobility }) {
   return <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderTop: "1px solid rgba(255,255,255,0.05)" }}><span style={{ fontSize: 14 }}>🧘</span><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 600 }}>{x.name}</div><div className="subtle tiny">{[x.primary_muscle, x.default_prescription].filter(Boolean).join(" · ")}</div></div></div>;
 }
@@ -75,7 +66,7 @@ export default function RecoveryPanel() {
   const [mobility, setMobility] = useState<RecMobility[]>([]);
   const [ctx, setCtx] = useState<Ctx>(null);
   const [mode, setMode] = useState<Mode>("recovery");
-  const [sel, setSel] = useState<string | null>(null);
+  const [sel, setSel] = useState<Sel>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -94,46 +85,41 @@ export default function RecoveryPanel() {
   const M: Record<string, RecMuscle> = {};
   muscles.forEach((m) => { M[m.muscle_group] = m; });
 
-  function col(key: string): string {
-    const m = M[key];
-    if (!m) return "rgba(255,255,255,0.06)";
-    if (mode === "recovery") return m.freshness >= 67 ? "#34d399" : m.freshness >= 34 ? "#fbbf24" : "#fb7185";
-    return m.load_pct >= 80 ? "#fb7185" : m.load_pct >= 50 ? "#a274ff" : m.load_pct >= 20 ? "#5f7dff" : "rgba(130,140,170,0.35)";
-  }
+  const stateOf = (m: RecMuscle | undefined): string | null => {
+    if (!m || m.days_ago == null) return null;
+    return mode === "recovery" ? recState(m.freshness) : loadState(m.load_pct);
+  };
 
-  const selKey = sel;
-  const selM = selKey ? (M[selKey] || null) : null;
-  const selAliases = selKey ? (MUS[selKey]?.aliases || []) : [];
-  const selMob = selKey ? mobility.filter((x) => x.primary_muscle != null && selAliases.includes(x.primary_muscle)).slice(0, 6) : [];
-
-  function figure(fig: "front" | "back", label: string) {
-    return (
-      <div style={{ flex: 1, textAlign: "center", minWidth: 0 }}>
-        <svg viewBox="0 0 120 250" style={{ width: "100%", maxWidth: 150, height: "auto" }}>
-          <g fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.1)" strokeWidth={0.8}>
-            <circle cx={60} cy={16} r={11} />
-            <rect x={42} y={28} width={36} height={78} rx={14} />
-            <rect x={20} y={34} width={13} height={62} rx={6} />
-            <rect x={87} y={34} width={13} height={62} rx={6} />
-            <rect x={44} y={100} width={32} height={18} rx={9} />
-            <rect x={46} y={114} width={13} height={104} rx={6} />
-            <rect x={61} y={114} width={13} height={104} rx={6} />
-          </g>
-          {ZONES.filter((z) => z.fig === fig).map((z, i) => (
-            <ellipse key={i} cx={z.cx} cy={z.cy} rx={z.rx} ry={z.ry} fill={col(z.key)} stroke={sel === z.key ? "#ffffff" : "rgba(0,0,0,0.28)"} strokeWidth={sel === z.key ? 1.6 : 0.5} style={{ cursor: "pointer" }} onClick={() => setSel(z.key)} />
-          ))}
-        </svg>
-        <div className="subtle tiny" style={{ marginTop: 2 }}>{label}</div>
-      </div>
-    );
+  // figure-key -> state string (omit when no data -> figure paints it with base)
+  const states: Record<string, string> = {};
+  for (const fk of Object.keys(FKEY_MG)) {
+    const st = stateOf(M[FKEY_MG[fk]]);
+    if (st) states[fk] = st;
   }
+  const palette = mode === "recovery" ? REC_PAL : LOAD_PAL;
+
+  const orphans = muscles.filter((m) => !MAPPED_MG.has(m.muscle_group));
+
+  const selM = sel ? (M[sel.mg] || null) : null;
+  const selState = selM ? stateOf(selM) : null;
+  const selColor = selState ? palette[selState] : "#8b90a0";
+  const selPct = selM ? (mode === "recovery" ? selM.freshness : selM.load_pct) : 0;
+  const selAliases = sel ? (MUS[sel.mg]?.aliases || []) : [];
+  const selMob = sel ? mobility.filter((x) => x.primary_muscle != null && selAliases.includes(x.primary_muscle)).slice(0, 6) : [];
+
+  const pickFig = (fk: string) => setSel((s) => (s && s.fig === fk ? null : { mg: FKEY_MG[fk], label: FIG_LABEL[fk], fig: fk }));
+  const pickOrphan = (mg: string) => setSel((s) => (s && s.mg === mg && s.fig === null ? null : { mg, label: MUS[mg]?.label || pretty(mg), fig: null }));
+
+  const legend = mode === "recovery"
+    ? [["#ef6584", "Fatigued"], ["#e3ac4e", "Recovering"], ["#4ecb8f", "Fresh"]]
+    : [["#565b6b", "Neglected"], ["#6d8ce8", "Light"], ["#9d7bf0", "Heavy"], ["#ef6584", "Peak"]];
 
   return (
     <div>
       {ctx && (ctx.readiness != null || ctx.acwr != null) ? (
         <div className="card" style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <div style={{ textAlign: "center", minWidth: 46 }}>
-            <div className="tnum" style={{ fontSize: 24, fontWeight: 800, color: ctx.readiness != null && ctx.readiness < 40 ? "#fb7185" : ctx.readiness != null && ctx.readiness < 65 ? "#fbbf24" : "#34d399" }}>{ctx.readiness ?? "—"}</div>
+            <div className="tnum" style={{ fontSize: 24, fontWeight: 800, color: ctx.readiness != null && ctx.readiness < 40 ? "#ef6584" : ctx.readiness != null && ctx.readiness < 65 ? "#e3ac4e" : "#4ecb8f" }}>{ctx.readiness ?? "—"}</div>
             <div className="subtle tiny">readiness</div>
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -143,67 +129,80 @@ export default function RecoveryPanel() {
         </div>
       ) : null}
 
-      <div className="card">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+      <div className="card" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ fontSize: 14, fontWeight: 700 }}>Muscle map</div>
-          <div style={{ display: "flex", gap: 4, background: "rgba(255,255,255,0.05)", borderRadius: 9, padding: 3 }}>
+          <div style={{ display: "flex", gap: 4, background: "rgba(255,255,255,0.05)", borderRadius: 999, padding: 3 }}>
             {(["recovery", "load"] as Mode[]).map((m) => (
-              <button key={m} onClick={() => setMode(m)} style={{ padding: "5px 12px", borderRadius: 7, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, textTransform: "capitalize", background: mode === m ? "linear-gradient(135deg,#5f7dff,#a274ff)" : "transparent", color: mode === m ? "#fff" : "#8a90a6" }}>{m}</button>
+              <button key={m} onClick={() => setMode(m)} style={{ padding: "5px 12px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, textTransform: "capitalize", background: mode === m ? "linear-gradient(135deg,#5f7dff,#a274ff)" : "transparent", color: mode === m ? "#fff" : "#8a90a6" }}>{m}</button>
             ))}
           </div>
         </div>
-        {err ? <div className="subtle tiny" style={{ color: "#ff8a8a", marginBottom: 6 }}>{err}</div> : null}
+        {err ? <div className="subtle tiny" style={{ color: "#ff8a8a" }}>{err}</div> : null}
         {loading ? <div className="muted center pad">Loading…</div> : (
           <>
-            <div style={{ display: "flex", gap: 6 }}>
-              {figure("front", "Front")}
-              {figure("back", "Back")}
+            <div style={{ display: "flex", justifyContent: "space-evenly" }}>
+              <div style={{ width: 150, height: 285 }}><MuscleFigure view="front" states={states} palette={palette} selected={sel?.fig ?? null} onSelect={pickFig} /></div>
+              <div style={{ width: 150, height: 285 }}><MuscleFigure view="back" states={states} palette={palette} selected={sel?.fig ?? null} onSelect={pickFig} /></div>
             </div>
-            <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 6, flexWrap: "wrap" }}>
-              {mode === "recovery" ? (
-                <>
-                  <Leg c="#fb7185" t="Fatigued" />
-                  <Leg c="#fbbf24" t="Recovering" />
-                  <Leg c="#34d399" t="Fresh" />
-                </>
-              ) : (
-                <>
-                  <Leg c="rgba(130,140,170,0.5)" t="Neglected" />
-                  <Leg c="#5f7dff" t="Light" />
-                  <Leg c="#a274ff" t="Heavy" />
-                  <Leg c="#fb7185" t="Peak" />
-                </>
-              )}
+            <div style={{ display: "flex", justifyContent: "space-evenly" }}>
+              <span className="subtle tiny">Front</span><span className="subtle tiny">Back</span>
             </div>
-            <div className="subtle tiny" style={{ textAlign: "center", marginTop: 8, opacity: 0.7, lineHeight: 1.5 }}>Tap a muscle for detail. Derived from your training recency and volume — not soreness sensors.</div>
+
+            {sel ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: "12px 14px" }}>
+                <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700 }}>{sel.label}</span>
+                    {selState ? <span style={{ background: selColor + "22", color: selColor, fontSize: 10, fontWeight: 700, borderRadius: 999, padding: "2px 8px", textTransform: "uppercase", letterSpacing: 0.4 }}>{cap(selState)}</span> : null}
+                  </div>
+                  <div className="subtle tiny">
+                    {selM && selM.days_ago != null ? `Last trained ${selM.days_ago === 0 ? "today" : selM.days_ago + "d ago"}${selState ? " · " + HINTS[selState] : ""}` : "Never trained — no recent volume."}
+                  </div>
+                  {selM ? <div className="subtle tiny" style={{ opacity: 0.8 }}>{selM.sets_14d} sets · {Math.round(selM.vol_14d).toLocaleString("en-US")} kg / 14d</div> : null}
+                  <div style={{ height: 5, borderRadius: 999, background: "rgba(255,255,255,0.08)", overflow: "hidden", marginTop: 2 }}>
+                    <div style={{ height: "100%", borderRadius: 999, background: selColor, width: selPct + "%" }} />
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
+                  <span style={{ color: selColor, fontSize: 18, fontWeight: 800 }} className="tnum">{selPct}%</span>
+                  <span onClick={() => setSel(null)} style={{ color: "#6b7080", fontSize: 11, cursor: "pointer" }}>Close</span>
+                </div>
+              </div>
+            ) : null}
+
+            {selMob.length > 0 ? (
+              <div>
+                <div className="eyebrow" style={{ marginBottom: 4 }}>Mobility for {sel?.label}</div>
+                {selMob.map((x) => <MobRow key={x.name} x={x} />)}
+              </div>
+            ) : null}
+
+            <div style={{ display: "flex", justifyContent: "center", gap: 16, flexWrap: "wrap" }}>
+              {legend.map(([c, t]) => (
+                <span key={t} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "#8a90a6" }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: c, display: "inline-block" }} />{t}</span>
+              ))}
+            </div>
+            <div className="subtle tiny" style={{ textAlign: "center", opacity: 0.7, lineHeight: 1.5 }}>Tap a muscle for detail. Derived from your training recency and volume — not soreness sensors.</div>
           </>
         )}
       </div>
 
-      {selKey ? (
+      {orphans.length > 0 ? (
         <div className="card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: 15, fontWeight: 800 }}>{MUS[selKey]?.label || selKey}</div>
-            <button className="trn-sub" onClick={() => setSel(null)} style={{ padding: "4px 10px" }}>Close</button>
+          <div className="eyebrow" style={{ marginBottom: 8 }}>Other areas</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {orphans.map((m) => {
+              const st = stateOf(m);
+              const c = st ? palette[st] : "rgba(130,140,170,0.4)";
+              const on = sel != null && sel.mg === m.muscle_group && sel.fig === null;
+              return (
+                <button key={m.muscle_group} onClick={() => pickOrphan(m.muscle_group)} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 11px", borderRadius: 999, cursor: "pointer", border: on ? "1px solid rgba(162,116,255,0.6)" : "1px solid rgba(255,255,255,0.1)", background: on ? "rgba(162,116,255,0.14)" : "rgba(255,255,255,0.04)", color: "inherit", fontSize: 12, fontWeight: 600 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: c, display: "inline-block" }} />{MUS[m.muscle_group]?.label || pretty(m.muscle_group)}
+                </button>
+              );
+            })}
           </div>
-          {selM ? (
-            <>
-              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                <Stat v={selM.days_ago != null ? (selM.days_ago === 0 ? "Today" : selM.days_ago + "d") : "—"} l="last trained" />
-                <Stat v={selM.freshness + "%"} l="fresh" />
-                <Stat v={selM.load_pct + "%"} l="load · 14d" />
-              </div>
-              <div className="subtle tiny" style={{ marginTop: 8 }}>{Math.round(selM.vol_14d).toLocaleString("en-US")} kg over the last 14 days · {selM.sets_14d} sets.</div>
-            </>
-          ) : (
-            <div className="subtle tiny" style={{ marginTop: 8 }}>No strength work recorded here recently — fully recovered (and possibly under-trained).</div>
-          )}
-          {selMob.length > 0 ? (
-            <div style={{ marginTop: 12 }}>
-              <div className="eyebrow" style={{ marginBottom: 4 }}>Mobility for {MUS[selKey]?.label || selKey}</div>
-              {selMob.map((x) => <MobRow key={x.name} x={x} />)}
-            </div>
-          ) : null}
         </div>
       ) : null}
 
