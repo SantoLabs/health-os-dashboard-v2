@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { recoveryGet, planWeek, type RecMuscle, type RecMobility } from "../lib/api";
 import MuscleFigure from "./MuscleFigure";
 
@@ -43,7 +42,6 @@ const FIG_LABEL: Record<string, string> = {
   lats: "Lats", midback: "Upper back", triceps: "Triceps", lowerback: "Lower back",
   glutes: "Glutes", hamstrings: "Hamstrings",
 };
-const MAPPED_MG = new Set(Object.values(FKEY_MG));
 
 const REC_PAL: Record<string, string> = { fresh: "#4ecb8f", recovering: "#e3ac4e", fatigued: "#ef6584" };
 const LOAD_PAL: Record<string, string> = { neglected: "#565b6b", light: "#6d8ce8", heavy: "#9d7bf0", peak: "#ef6584" };
@@ -54,14 +52,12 @@ const HINTS: Record<string, string> = {
 const recState = (pct: number) => (pct >= 70 ? "fresh" : pct >= 50 ? "recovering" : "fatigued");
 const loadState = (pct: number) => (pct >= 80 ? "peak" : pct >= 50 ? "heavy" : pct >= 20 ? "light" : "neglected");
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const pretty = (mg: string) => mg.split("_").map(cap).join(" ");
 
 function MobRow({ x }: { x: RecMobility }) {
   return <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderTop: "1px solid rgba(255,255,255,0.05)" }}><span style={{ fontSize: 14 }}>🧘</span><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 600 }}>{x.name}</div><div className="subtle tiny">{[x.primary_muscle, x.default_prescription].filter(Boolean).join(" · ")}</div></div></div>;
 }
 
 export default function RecoveryPanel() {
-  const router = useRouter();
   const [muscles, setMuscles] = useState<RecMuscle[]>([]);
   const [mobility, setMobility] = useState<RecMobility[]>([]);
   const [ctx, setCtx] = useState<Ctx>(null);
@@ -98,8 +94,6 @@ export default function RecoveryPanel() {
   }
   const palette = mode === "recovery" ? REC_PAL : LOAD_PAL;
 
-  const orphans = muscles.filter((m) => !MAPPED_MG.has(m.muscle_group));
-
   const selM = sel ? (M[sel.mg] || null) : null;
   const selState = selM ? stateOf(selM) : null;
   const selColor = selState ? palette[selState] : "#8b90a0";
@@ -108,7 +102,6 @@ export default function RecoveryPanel() {
   const selMob = sel ? mobility.filter((x) => x.primary_muscle != null && selAliases.includes(x.primary_muscle)).slice(0, 6) : [];
 
   const pickFig = (fk: string) => setSel((s) => (s && s.fig === fk ? null : { mg: FKEY_MG[fk], label: FIG_LABEL[fk], fig: fk }));
-  const pickOrphan = (mg: string) => setSel((s) => (s && s.mg === mg && s.fig === null ? null : { mg, label: MUS[mg]?.label || pretty(mg), fig: null }));
 
   const legend = mode === "recovery"
     ? [["#ef6584", "Fatigued"], ["#e3ac4e", "Recovering"], ["#4ecb8f", "Fresh"]]
@@ -188,37 +181,6 @@ export default function RecoveryPanel() {
         )}
       </div>
 
-      {orphans.length > 0 ? (
-        <div className="card">
-          <div className="eyebrow" style={{ marginBottom: 8 }}>Other areas</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {orphans.map((m) => {
-              const st = stateOf(m);
-              const c = st ? palette[st] : "rgba(130,140,170,0.4)";
-              const on = sel != null && sel.mg === m.muscle_group && sel.fig === null;
-              return (
-                <button key={m.muscle_group} onClick={() => pickOrphan(m.muscle_group)} style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 11px", borderRadius: 999, cursor: "pointer", border: on ? "1px solid rgba(162,116,255,0.6)" : "1px solid rgba(255,255,255,0.1)", background: on ? "rgba(162,116,255,0.14)" : "rgba(255,255,255,0.04)", color: "inherit", fontSize: 12, fontWeight: 600 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: c, display: "inline-block" }} />{MUS[m.muscle_group]?.label || pretty(m.muscle_group)}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
-
-      <div className="card">
-        <div className="eyebrow" style={{ marginBottom: 4 }}>Suggested mobility and recovery</div>
-        {mobility.length === 0 ? <div className="subtle tiny">Loading…</div> : mobility.slice(0, 8).map((x) => <MobRow key={x.name} x={x} />)}
-      </div>
-
-      <div className="card">
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ fontSize: 16 }}>💚</span><div style={{ fontSize: 13, fontWeight: 700 }}>Something hurts?</div></div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
-          {["My right trap is sore", "Full-body stretch", "Post-run cooldown"].map((q) => (
-            <button key={q} className="trn-sub" onClick={() => { try { window.sessionStorage.setItem("kai_seed", q); } catch { /* ignore */ } router.push("/more/ask"); }}>{q}</button>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
