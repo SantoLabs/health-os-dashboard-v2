@@ -528,12 +528,13 @@ export default function WorkoutLogger() {
             <span>Saved routines</span>
             <button className="trn-sub" style={{ padding: "4px 10px" }} onClick={() => { setBuildId(null); setView("build"); }}>+ New</button>
           </div>
-          {routines.length === 0 ? (
+          {routines.length === 0 && cardioRoutines.length === 0 ? (
             <div className="subtle tiny" style={{ padding: "4px 2px 8px" }}>No routines yet. Build one to start workouts in a tap.</div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {routines.map((r) => (
                 <div key={r.id} className="card" style={{ padding: 12, display: "flex", alignItems: "center", gap: 10 }}>
+                  <span aria-hidden style={{ flex: "0 0 auto", fontSize: 10, fontWeight: 700, letterSpacing: 0.3, padding: "3px 7px", borderRadius: 6, background: "rgba(162,116,255,0.16)", color: "#c9b6ff" }}>LIFT</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: 13 }}>{r.name}</div>
                     <div className="subtle tiny">{r.item_count} exercise{r.item_count === 1 ? "" : "s"}{r.focus ? ` · ${r.focus}` : ""}{r.est_duration_mins ? ` · ${r.est_duration_mins}m` : ""}</div>
@@ -542,6 +543,21 @@ export default function WorkoutLogger() {
                   <button className="trn-sub" onClick={() => { setBuildId(r.id); setView("build"); }}>Edit</button>
                 </div>
               ))}
+              {cardioRoutines.map((c) => {
+                const km = c.total_distance_m ? (c.total_distance_m / 1000).toFixed(1) + "km" : null;
+                const mins = c.total_duration_s ? Math.round(c.total_duration_s / 60) + "m" : null;
+                const meta = [c.sport, km, mins].filter(Boolean).join(" · ");
+                return (
+                  <div key={c.id} className="card" style={{ padding: 12, display: "flex", alignItems: "center", gap: 10 }}>
+                    <span aria-hidden style={{ flex: "0 0 auto", fontSize: 10, fontWeight: 700, letterSpacing: 0.3, padding: "3px 7px", borderRadius: 6, background: "rgba(52,211,153,0.16)", color: "#7fe3b8" }}>CARDIO</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13 }}>{c.name}</div>
+                      <div className="subtle tiny" style={{ textTransform: "capitalize" }}>{meta || "cardio routine"}</div>
+                    </div>
+                    <button className="trn-sub" disabled={busy || !!plannedCardio[c.id]} onClick={async () => { setBusy(true); try { await cardioPrescribe({ routine_id: c.id }); setPlannedCardio((p) => ({ ...p, [c.id]: true })); } finally { setBusy(false); } }}>{plannedCardio[c.id] ? "Planned ✓" : "Plan today"}</button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </>
