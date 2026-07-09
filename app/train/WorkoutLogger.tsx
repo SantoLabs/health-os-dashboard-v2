@@ -178,6 +178,7 @@ export default function WorkoutLogger() {
   const [restEnd, setRestEnd] = useState<number | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
   const [restLen, setRestLen] = useState<number>(REST_DEFAULT_S);
+  const [restMap, setRestMap] = useState<Record<string, number>>({});
   const [buildId, setBuildId] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [restPickerOpen, setRestPickerOpen] = useState(false);
@@ -211,7 +212,7 @@ export default function WorkoutLogger() {
       const t = todayISO();
       // Manual "start" is only for strength — cardio (Swim/Run/Cycle) is auto-detected from the tracker.
       setPlanToday(((wk?.sessions) || []).filter((s) => s.session_date === t && s.committed && !s.completed && !s.skipped && !s.is_rest_day && isStrength(s.session_type)));
-      if (b.session) seedInputs(b.sets);
+      if (b.session) { seedInputs(b.sets); try { const rm = JSON.parse(localStorage.getItem(`hos_rest_map:${b.session.id}`) || "{}"); if (rm && typeof rm === "object") setRestMap(rm as Record<string, number>); } catch { /* ignore */ } }
     } finally { setLoading(false); }
   }, [seedInputs]);
 
@@ -267,7 +268,18 @@ export default function WorkoutLogger() {
 
   async function startFrom(opts: { plan_id?: string; routine_id?: string; title?: string }) {
     setBusy(true);
-    try { const b = await wkStart(opts); setBundle(b); seedInputs(b.sets); setView("log"); } finally { setBusy(false); }
+    try {
+      const b = await wkStart(opts); setBundle(b); seedInputs(b.sets); setView("log");
+      if (opts.routine_id && b.session) {
+        try {
+          const rt = await wkRoutine(opts.routine_id);
+          const map: Record<string, number> = {};
+          for (const it of (rt.items || [])) { if (it.rest_s != null && it.rest_s > 0) map[it.exercise_name] = it.rest_s; }
+          setRestMap(map);
+          try { localStorage.setItem(`hos_rest_map:${b.session.id}`, JSON.stringify(map)); } catch { /* ignore */ }
+        } catch { /* ignore */ }
+      }
+    } finally { setBusy(false); }
   }
 
   // ---- optimistic set ops (instant local update, background persist) ----
@@ -295,7 +307,8 @@ export default function WorkoutLogger() {
     if (target) {
       const sets = bundle?.sets || [];
       const moreLeft = sets.some((x) => x.id !== s.id && !x.completed && !isTemp(x.id));
-      setRestEnd(moreLeft && restLen > 0 ? Date.now() + restLen * 1000 : null);
+      const rl = restMap[s.exercise_name] ?? restLen;
+      setRestEnd(moreLeft && rl > 0 ? Date.now() + rl * 1000 : null);
     } else setRestEnd(null);
     patchSets((list) => list.map((x) => (x.id === s.id ? { ...x, completed: target, weight_kg: v.kg === "" ? x.weight_kg : Number(v.kg), reps: v.reps === "" ? x.reps : Number(v.reps) } : x)));
     try {
@@ -326,6 +339,23 @@ export default function WorkoutLogger() {
     setInputs((m) => ({ ...m, [id]: { kg: "", reps: "" } }));
     try { await wkAddExercise({ session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null }); await reloadActive(); }
     catch { patchSets((s) => s.filter((x) => x.id !== id)); }
+  }
+  async function addExercises(picks: { name: string; muscle_group: string }[]) {
+    if (!bundle?.session || picks.length === 0) return;
+    if (picks.length === 1) return addExercise(picks[0]);
+    const sid = bundle.session.id;
+    let maxIdx = (bundle.sets || []).reduce((mx, x) => Math.max(mx, x.exercise_index ?? 0), -1);
+    const temps: string[] = [];
+    const rows: WkSet[] = [];
+    for (const e of picks) {
+      maxIdx += 1;
+      const id = tmpId(); temps.push(id);
+      rows.push({ id, session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null, exercise_index: maxIdx, set_number: 1, set_type: "normal", weight_kg: null, reps: null, rpe: null, rir: null, target_reps: null, target_weight_kg: null, completed: false });
+    }
+    patchSets((s) => [...s, ...rows]);
+    setInputs((m) => { const cp = { ...m }; for (const id of temps) cp[id] = { kg: "", reps: "" }; return cp; });
+    try { for (const e of picks) await wkAddExercise({ session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null }); await reloadActive(); }
+    catch { const ids = new Set(temps); patchSets((s) => s.filter((x) => !ids.has(x.id))); }
   }
   async function doFinish(rpe: number | null) {
     if (!bundle?.session) return;
@@ -482,7 +512,7 @@ export default function WorkoutLogger() {
 
         <div style={{ marginTop: 12 }}>
           <div className="eyebrow" style={{ marginBottom: 6 }}>Add exercise</div>
-          <ExercisePicker onPick={addExercise} />
+          <ExercisePicker onPick={addExercise} onPickMany={addExercises} />
         </div>
 
         {finishing ? (
