@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import KaiDailyCard from "../components/KaiDailyCard";
 import { planPropose, planAccept, planDecline, planWeek } from "../lib/api";
 import type { TrnProposal, TrnProposeResp } from "../lib/api";
@@ -22,7 +21,6 @@ function fmtDay(iso: string) { return new Date(iso + "T00:00:00Z").toLocaleDateS
 function fmtDate(iso: string) { return new Date(iso + "T00:00:00Z").toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" }); }
 
 export default function CoachPanel() {
-  const router = useRouter();
   const [resp, setResp] = useState<TrnProposeResp | null>(null);
   const [locked, setLocked] = useState<WeekSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,10 +51,6 @@ export default function CoachPanel() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  function ask(seed?: string) {
-    if (seed && typeof window !== "undefined") { try { window.sessionStorage.setItem("kai_seed", seed); } catch { /* ignore */ } }
-    router.push("/more/ask");
-  }
   function openDecline(p: TrnProposal) { setDeclineFor(p.id || null); setDeclineText(""); }
 
   async function accept(p: TrnProposal) {
@@ -88,7 +82,7 @@ export default function CoachPanel() {
 
   return (
     <div className="trainv2">
-      <KaiDailyCard />
+      <KaiDailyCard scope="training" liveReadiness={ctx && ctx.readiness != null ? { score: ctx.readiness, label: ctx.readiness_label ?? null } : null} />
 
       <div className="card" style={{ marginTop: 12 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -188,21 +182,6 @@ export default function CoachPanel() {
             </div>
           </div>
         ) : null}
-      </div>
-
-      <div className="card" style={{ marginTop: 12 }}>
-        <div style={{ fontSize: 14, fontWeight: 700 }}>Your coach, across everything</div>
-        <div className="subtle tiny" style={{ marginTop: 4, lineHeight: 1.5 }}>
-          Kai reads your training, recovery, sleep and race calendar together — ask about a session, a tweak to the week, or why a number moved.
-        </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
-          {["Was that session smart?", "Tweak this week", "How's my recovery?"].map((q) => (
-            <button key={q} className="trn-sub" onClick={() => ask(q)}>{q}</button>
-          ))}
-        </div>
-        <button onClick={() => ask()} style={{ marginTop: 12, width: "100%", padding: 12, borderRadius: 12, border: "none", cursor: "pointer", color: "#fff", fontWeight: 700, fontSize: 13, background: "linear-gradient(135deg,#5f7dff,#a274ff)" }}>
-          Open coach chat →
-        </button>
       </div>
     </div>
   );
