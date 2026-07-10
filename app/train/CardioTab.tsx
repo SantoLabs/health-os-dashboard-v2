@@ -312,12 +312,12 @@ const PZ_RATIOS = [1.347, 1.16, 1.039, 0.973, 0.915];
 
 function fmtPaceS(s: number | null | undefined): string {
   if (!s || !isFinite(s) || s <= 0) return "—";
-  const m = Math.floor(s / 60), sec = Math.round(s % 60);
+  const t = Math.round(s), m = Math.floor(t / 60), sec = t % 60;
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 function fmtClock(sec: number | null | undefined): string {
   if (!sec || sec <= 0) return "—";
-  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = Math.round(sec % 60);
+  const t = Math.round(sec), h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
   return h ? `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}` : `${m}:${s.toString().padStart(2, "0")}`;
 }
 function pickHrZones(zones: CardioHrZone[] | null, sport: string): CardioHrZone | null {
@@ -396,6 +396,14 @@ function decodePolyline(str: string, precision = 5): [number, number][] {
   return coords;
 }
 
+function haversine(a: [number, number], b: [number, number]): number {
+  const R = 6371000, toRad = Math.PI / 180;
+  const dLat = (b[0] - a[0]) * toRad, dLng = (b[1] - a[1]) * toRad;
+  const la1 = a[0] * toRad, la2 = b[0] * toRad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
 function RouteTrace({ poly }: { poly: string }) {
   const pts = useMemo(() => { try { return decodePolyline(poly); } catch { return [] as [number, number][]; } }, [poly]);
   if (pts.length < 2) return null;
@@ -403,36 +411,39 @@ function RouteTrace({ poly }: { poly: string }) {
   const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
   const midLat = (minLat + maxLat) / 2;
   const kx = Math.cos((midLat * Math.PI) / 180);
-  const rawW = Math.max((maxLng - minLng) * kx, 1e-9), rawH = Math.max(maxLat - minLat, 1e-9);
-  const aspect = Math.min(2.3, Math.max(1.1, rawW / rawH));
-  const VBW = 1000, VBH = Math.round(VBW / aspect), pad = 70;
-  const scale = Math.min((VBW - 2 * pad) / rawW, (VBH - 2 * pad) / rawH);
-  const offX = (VBW - rawW * scale) / 2, offY = (VBH - rawH * scale) / 2;
+  const W = 440, H = 210, pad = 20;
+  const spanX = Math.max((maxLng - minLng) * kx, 1e-6), spanY = Math.max(maxLat - minLat, 1e-6);
+  const scale = Math.min((W - 2 * pad) / spanX, (H - 2 * pad) / spanY);
+  const offX = (W - spanX * scale) / 2, offY = (H - spanY * scale) / 2;
   const PX = (lng: number) => offX + (lng - minLng) * kx * scale;
   const PY = (lat: number) => offY + (maxLat - lat) * scale;
   const dpath = pts.map((p, i) => `${i === 0 ? "M" : "L"}${PX(p[1]).toFixed(1)},${PY(p[0]).toFixed(1)}`).join(" ");
   const s = pts[0], e = pts[pts.length - 1];
-  const grid: React.ReactElement[] = [];
-  for (let g = 1; g < 6; g++) grid.push(<line key={"gx" + g} x1={(VBW / 6) * g} y1={0} x2={(VBW / 6) * g} y2={VBH} stroke="rgba(255,255,255,0.035)" strokeWidth={1} />);
-  for (let g = 1; g < Math.round(VBH / (VBW / 6)); g++) grid.push(<line key={"gy" + g} x1={0} y1={(VBW / 6) * g} x2={VBW} y2={(VBW / 6) * g} stroke="rgba(255,255,255,0.035)" strokeWidth={1} />);
+
+  const widthMeters = Math.max(haversine([midLat, minLng], [midLat, maxLng]), 1);
+  const metersPerPx = widthMeters / (spanX * scale);
+  const targets = [50, 100, 200, 500, 1000, 2000, 5000, 10000];
+  let barM = targets[0];
+  for (const t of targets) if (t / metersPerPx <= 96) barM = t;
+  const barPx = barM / metersPerPx;
+
   return (
-    <div className="card" style={{ padding: 0, overflow: "hidden", marginBottom: 8, background: "radial-gradient(130% 120% at 50% 0%, #161b28 0%, #0b0d13 72%)" }}>
-      <svg viewBox={`0 0 ${VBW} ${VBH}`} style={{ width: "100%", height: "auto", display: "block" }}>
+    <div className="card" style={{ padding: 0, overflow: "hidden", marginBottom: 8, background: "#0b0d13" }}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
         <defs>
-          <filter id="rtglow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="7" result="b" />
-            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          <filter id="rtglow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="2.4" />
           </filter>
-          <linearGradient id="rtline" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#f6b17a" /><stop offset="100%" stopColor="#f0883e" />
-          </linearGradient>
         </defs>
-        <g opacity={0.6}>{grid}</g>
-        <path d={dpath} fill="none" stroke="#0b0d13" strokeWidth={13} strokeLinejoin="round" strokeLinecap="round" />
-        <path d={dpath} fill="none" stroke="url(#rtline)" strokeWidth={6} strokeLinejoin="round" strokeLinecap="round" filter="url(#rtglow)" />
-        <circle cx={PX(s[1])} cy={PY(s[0])} r={13} fill="none" stroke="#34d399" strokeWidth={4} />
-        <circle cx={PX(s[1])} cy={PY(s[0])} r={5} fill="#34d399" />
-        <circle cx={PX(e[1])} cy={PY(e[0])} r={10} fill="#fb7185" stroke="#0b0d13" strokeWidth={3.5} />
+        {[0.2, 0.4, 0.6, 0.8].map((f) => <line key={"v" + f} x1={W * f} y1={0} x2={W * f} y2={H} stroke="rgba(255,255,255,0.035)" strokeWidth={1} />)}
+        {[0.25, 0.5, 0.75].map((f) => <line key={"h" + f} x1={0} y1={H * f} x2={W} y2={H * f} stroke="rgba(255,255,255,0.035)" strokeWidth={1} />)}
+        <path d={dpath} fill="none" stroke="#f0883e" strokeWidth={5} opacity={0.35} filter="url(#rtglow)" strokeLinejoin="round" strokeLinecap="round" />
+        <path d={dpath} fill="none" stroke="#f0a03e" strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" />
+        <circle cx={PX(s[1])} cy={PY(s[0])} r={6} fill="none" stroke="#34d399" strokeWidth={1.5} opacity={0.5} />
+        <circle cx={PX(s[1])} cy={PY(s[0])} r={3.5} fill="#34d399" stroke="#0b0d13" strokeWidth={1.5} />
+        <circle cx={PX(e[1])} cy={PY(e[0])} r={3.5} fill="#fb7185" stroke="#0b0d13" strokeWidth={1.5} />
+        <line x1={14} y1={H - 14} x2={14 + barPx} y2={H - 14} stroke="rgba(255,255,255,0.45)" strokeWidth={2} strokeLinecap="round" />
+        <text x={14} y={H - 19} fill="rgba(255,255,255,0.55)" fontSize={9}>{barM >= 1000 ? `${barM / 1000} km` : `${barM} m`}</text>
       </svg>
     </div>
   );
