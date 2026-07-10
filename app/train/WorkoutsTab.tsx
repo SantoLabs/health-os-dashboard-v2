@@ -2,6 +2,7 @@
 
 import { useTrain, type TrnOverview } from "../lib/api";
 import WorkoutLogger from "./WorkoutLogger";
+import CardioBuilder from "./CardioBuilder";
 
 export default function WorkoutsTab() {
   const { data: ov, error } = useTrain<TrnOverview>("overview");
@@ -11,6 +12,9 @@ export default function WorkoutsTab() {
       {/* Live logger: resume / start-from-plan / start-from-routine / empty, live set logging,
           celebration + PRs, and the routine builder. Owns the execution surface (Phase 3). */}
       <WorkoutLogger />
+
+      {/* Cardio session builder (6c): create structured, editable interval workouts to save or add to calendar. */}
+      <CardioBuilder />
 
       {/* Quick stats (real, from overview) */}
       {error ? (
