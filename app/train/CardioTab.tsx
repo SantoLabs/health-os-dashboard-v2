@@ -320,7 +320,7 @@ function RouteTrace({ poly }: { poly: string }) {
     </div>
   );
 }
-function CardioActivityDetail({ id, sport, onBack }: { id: string; sport: string; onBack: () => void }) {
+export function CardioActivityDetail({ id, sport, onBack }: { id: string; sport: string; onBack: () => void }) {
   const [d, setD] = useState<CardioDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => { let a = true; cardioDetail(id).then((r) => a && setD(r)).catch((e) => a && setErr((e as Error).message)); return () => { a = false; }; }, [id]);
