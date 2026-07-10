@@ -484,6 +484,8 @@ export async function strengthStats(): Promise<StrengthStats> { const res = awai
 export type SessionExercise = { title: string; muscle_group: string; sets: number; volume: number | null };
 export type StrengthSession = { id: string; date: string; name: string; source: string; sets: number; volume: number; exercises: SessionExercise[] };
 export async function strengthSessions(): Promise<StrengthSession[]> { const res = await authedFetch(`/functions/v1/strength_stats?api=sessions`); if (!res.ok) throw new Error(`Couldn't load sessions (${res.status})`); return res.json(); }
+export type CardioActivityLite = { activity_id: string; date: string; sport: string; name: string | null; distance_km: number | null; duration_mins: number | null; pace_min_km: number | null; avg_hr: number | null; elevation_gain_m: number | null; calories: number | null; avg_swolf: number | null };
+export async function cardioActivities(): Promise<CardioActivityLite[]> { const res = await authedFetch(`/functions/v1/cardio_stats?api=list`); if (!res.ok) throw new Error(`Couldn't load cardio (${res.status})`); return res.json(); }
 export type TrnActivity = {
   date: string; name?: string; distance_km: number; pace_min_km: number | null; avg_hr: number | null; max_hr?: number | null;
   z1: number; z2: number; z3: number; z4: number; z5: number; m_per_beat: number | null;
