@@ -403,25 +403,40 @@ function RouteTrace({ poly }: { poly: string }) {
   const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
   const midLat = (minLat + maxLat) / 2;
   const kx = Math.cos((midLat * Math.PI) / 180);
-  const W = 440, H = 200, pad = 16;
-  const spanX = Math.max((maxLng - minLng) * kx, 1e-6), spanY = Math.max(maxLat - minLat, 1e-6);
-  const scale = Math.min((W - 2 * pad) / spanX, (H - 2 * pad) / spanY);
-  const offX = (W - spanX * scale) / 2, offY = (H - spanY * scale) / 2;
+  const rawW = Math.max((maxLng - minLng) * kx, 1e-9), rawH = Math.max(maxLat - minLat, 1e-9);
+  const aspect = Math.min(2.3, Math.max(1.1, rawW / rawH));
+  const VBW = 1000, VBH = Math.round(VBW / aspect), pad = 70;
+  const scale = Math.min((VBW - 2 * pad) / rawW, (VBH - 2 * pad) / rawH);
+  const offX = (VBW - rawW * scale) / 2, offY = (VBH - rawH * scale) / 2;
   const PX = (lng: number) => offX + (lng - minLng) * kx * scale;
   const PY = (lat: number) => offY + (maxLat - lat) * scale;
   const dpath = pts.map((p, i) => `${i === 0 ? "M" : "L"}${PX(p[1]).toFixed(1)},${PY(p[0]).toFixed(1)}`).join(" ");
   const s = pts[0], e = pts[pts.length - 1];
+  const grid: React.ReactElement[] = [];
+  for (let g = 1; g < 6; g++) grid.push(<line key={"gx" + g} x1={(VBW / 6) * g} y1={0} x2={(VBW / 6) * g} y2={VBH} stroke="rgba(255,255,255,0.035)" strokeWidth={1} />);
+  for (let g = 1; g < Math.round(VBH / (VBW / 6)); g++) grid.push(<line key={"gy" + g} x1={0} y1={(VBW / 6) * g} x2={VBW} y2={(VBW / 6) * g} stroke="rgba(255,255,255,0.035)" strokeWidth={1} />);
   return (
-    <div className="card" style={{ padding: 0, overflow: "hidden", marginBottom: 8, background: "#0d0f16" }}>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
-        <path d={dpath} fill="none" stroke="#f0883e" strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" />
-        <circle cx={PX(s[1])} cy={PY(s[0])} r={4} fill="#34d399" stroke="#0d0f16" strokeWidth={1.5} />
-        <circle cx={PX(e[1])} cy={PY(e[0])} r={4} fill="#fb7185" stroke="#0d0f16" strokeWidth={1.5} />
+    <div className="card" style={{ padding: 0, overflow: "hidden", marginBottom: 8, background: "radial-gradient(130% 120% at 50% 0%, #161b28 0%, #0b0d13 72%)" }}>
+      <svg viewBox={`0 0 ${VBW} ${VBH}`} style={{ width: "100%", height: "auto", display: "block" }}>
+        <defs>
+          <filter id="rtglow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="7" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <linearGradient id="rtline" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#f6b17a" /><stop offset="100%" stopColor="#f0883e" />
+          </linearGradient>
+        </defs>
+        <g opacity={0.6}>{grid}</g>
+        <path d={dpath} fill="none" stroke="#0b0d13" strokeWidth={13} strokeLinejoin="round" strokeLinecap="round" />
+        <path d={dpath} fill="none" stroke="url(#rtline)" strokeWidth={6} strokeLinejoin="round" strokeLinecap="round" filter="url(#rtglow)" />
+        <circle cx={PX(s[1])} cy={PY(s[0])} r={13} fill="none" stroke="#34d399" strokeWidth={4} />
+        <circle cx={PX(s[1])} cy={PY(s[0])} r={5} fill="#34d399" />
+        <circle cx={PX(e[1])} cy={PY(e[0])} r={10} fill="#fb7185" stroke="#0b0d13" strokeWidth={3.5} />
       </svg>
     </div>
   );
 }
-
 function CardioActivityDetail({ id, sport, onBack }: { id: string; sport: string; onBack: () => void }) {
   const [d, setD] = useState<CardioDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
