@@ -36,7 +36,7 @@ export default function TrainPage() {
           </>
         )}
 
-        {primary === "Recovery" && <RecoveryPanel />}
+        {primary === "Recovery" && <RecoveryPanel onGoWorkouts={() => { setPrimary("Train"); setTrainSub("Workouts"); }} />}
 
         {primary === "Progress" && <ProgressTab />}
       </div>
