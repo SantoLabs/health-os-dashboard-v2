@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   wkActive, wkStart, wkAddSet, wkCompleteSet, wkEditSet, wkDeleteSet, wkAddExercise, wkFinish, wkDiscard,
-  wkRoutines, wkRoutine, wkSaveRoutine, wkDeleteRoutine, wkParseRoutine, wkExercises, planWeek, fmtVolume, wkRename, cardioList, cardioPrescribe,
+  wkRoutines, wkRoutine, wkSaveRoutine, wkDeleteRoutine, wkParseRoutine, wkExercises, planWeek, fmtVolume, wkRename, cardioList, cardioPrescribe, recoveryGet,
 } from "../lib/api";
 import type { WkBundle, WkSet, WkFinish, WkRoutineSummary, WkRoutineItem, WkExercise, WkFacets, WkPrevSet, CardioRoutine } from "../lib/api";
 import ExerciseDetail from "./ExerciseDetail";
@@ -168,6 +168,7 @@ export default function WorkoutLogger() {
   const [bundle, setBundle] = useState<WkBundle | null>(null);
   const [routines, setRoutines] = useState<WkRoutineSummary[]>([]);
   const [cardioRoutines, setCardioRoutines] = useState<CardioRoutine[]>([]);
+  const [recoveryIds, setRecoveryIds] = useState<Set<string>>(new Set());
   const [plannedCardio, setPlannedCardio] = useState<Record<string, boolean>>({});
   const [planToday, setPlanToday] = useState<PlanToday[]>([]);
   const [celebrate, setCelebrate] = useState<WkFinish | null>(null);
@@ -202,13 +203,15 @@ export default function WorkoutLogger() {
   const loadHome = useCallback(async () => {
     setLoading(true);
     try {
-      const [b, r, cr, wk] = await Promise.all([
+      const [b, r, cr, rec, wk] = await Promise.all([
         wkActive(),
         wkRoutines().catch(() => ({ routines: [] as WkRoutineSummary[] })),
         cardioList().catch(() => ({ routines: [] as CardioRoutine[] })),
+        recoveryGet().catch(() => ({ routines: [] as { id: string }[] })),
         planWeek<{ today: string; sessions: PlanToday[] }>().catch(() => null),
       ]);
       setBundle(b); setRoutines(r.routines || []); setCardioRoutines(cr.routines || []);
+      setRecoveryIds(new Set(((rec as { routines?: { id: string }[] }).routines || []).map((x) => x.id)));
       const t = todayISO();
       // Manual "start" is only for strength — cardio (Swim/Run/Cycle) is auto-detected from the tracker.
       setPlanToday(((wk?.sessions) || []).filter((s) => s.session_date === t && s.committed && !s.completed && !s.skipped && !s.is_rest_day && isStrength(s.session_type)));
@@ -616,7 +619,9 @@ export default function WorkoutLogger() {
               return (
                 <div key={r.id} className="card" style={{ padding: 12, minHeight: 96, display: "flex", flexDirection: "column", justifyContent: "space-between", cursor: locked ? "default" : "pointer", opacity: locked ? 0.6 : 1 }} onClick={() => { if (!locked) startFrom({ routine_id: r.id }); }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <span aria-hidden style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3, padding: "3px 7px", borderRadius: 6, background: "rgba(162,116,255,0.16)", color: "#c9b6ff" }}>LIFT</span>
+                    {recoveryIds.has(r.id)
+                    ? <span aria-hidden style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3, padding: "3px 7px", borderRadius: 6, background: "rgba(52,211,153,0.16)", color: "#7fe3b8" }}>RECOVERY</span>
+                    : <span aria-hidden style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3, padding: "3px 7px", borderRadius: 6, background: "rgba(162,116,255,0.16)", color: "#c9b6ff" }}>LIFT</span>}
                     <button aria-label="Edit routine" className="subtle" style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: 2, fontSize: 13, opacity: 0.7 }} onClick={(e) => { e.stopPropagation(); setBuildId(r.id); setView("build"); }}>✎</button>
                   </div>
                   <div style={{ minWidth: 0 }}>
