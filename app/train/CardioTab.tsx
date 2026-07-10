@@ -309,7 +309,6 @@ const HRZ_COLORS = ["#6b8cff", "#34d399", "#f0c05a", "#f0883e", "#fb7185"];
 const PZ_COLORS = ["#6b8cff", "#34d399", "#3fc7bd", "#f0c05a", "#f0883e", "#fb7185"];
 const PZ_NAMES = ["Recovery", "Endurance", "Tempo", "Threshold", "VO2", "Anaerobic"];
 const PZ_RATIOS = [1.347, 1.16, 1.039, 0.973, 0.915];
-const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY || "cjYYPVd6Bj39UKw0Idz0";
 
 function fmtPaceS(s: number | null | undefined): string {
   if (!s || !isFinite(s) || s <= 0) return "—";
@@ -381,10 +380,51 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
+function decodePolyline(str: string, precision = 5): [number, number][] {
+  let index = 0, lat = 0, lng = 0;
+  const coords: [number, number][] = [];
+  const factor = Math.pow(10, precision);
+  while (index < str.length) {
+    let shift = 0, result = 0, byte = 0;
+    do { byte = str.charCodeAt(index++) - 63; result |= (byte & 0x1f) << shift; shift += 5; } while (byte >= 0x20);
+    lat += (result & 1) ? ~(result >> 1) : (result >> 1);
+    shift = 0; result = 0;
+    do { byte = str.charCodeAt(index++) - 63; result |= (byte & 0x1f) << shift; shift += 5; } while (byte >= 0x20);
+    lng += (result & 1) ? ~(result >> 1) : (result >> 1);
+    coords.push([lat / factor, lng / factor]);
+  }
+  return coords;
+}
+
+function RouteTrace({ poly }: { poly: string }) {
+  const pts = useMemo(() => { try { return decodePolyline(poly); } catch { return [] as [number, number][]; } }, [poly]);
+  if (pts.length < 2) return null;
+  const lats = pts.map((p) => p[0]), lngs = pts.map((p) => p[1]);
+  const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+  const midLat = (minLat + maxLat) / 2;
+  const kx = Math.cos((midLat * Math.PI) / 180);
+  const W = 440, H = 200, pad = 16;
+  const spanX = Math.max((maxLng - minLng) * kx, 1e-6), spanY = Math.max(maxLat - minLat, 1e-6);
+  const scale = Math.min((W - 2 * pad) / spanX, (H - 2 * pad) / spanY);
+  const offX = (W - spanX * scale) / 2, offY = (H - spanY * scale) / 2;
+  const PX = (lng: number) => offX + (lng - minLng) * kx * scale;
+  const PY = (lat: number) => offY + (maxLat - lat) * scale;
+  const dpath = pts.map((p, i) => `${i === 0 ? "M" : "L"}${PX(p[1]).toFixed(1)},${PY(p[0]).toFixed(1)}`).join(" ");
+  const s = pts[0], e = pts[pts.length - 1];
+  return (
+    <div className="card" style={{ padding: 0, overflow: "hidden", marginBottom: 8, background: "#0d0f16" }}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
+        <path d={dpath} fill="none" stroke="#f0883e" strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" />
+        <circle cx={PX(s[1])} cy={PY(s[0])} r={4} fill="#34d399" stroke="#0d0f16" strokeWidth={1.5} />
+        <circle cx={PX(e[1])} cy={PY(e[0])} r={4} fill="#fb7185" stroke="#0d0f16" strokeWidth={1.5} />
+      </svg>
+    </div>
+  );
+}
+
 function CardioActivityDetail({ id, sport, onBack }: { id: string; sport: string; onBack: () => void }) {
   const [d, setD] = useState<CardioDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [mapFailed, setMapFailed] = useState(false);
   useEffect(() => { let a = true; cardioDetail(id).then((r) => a && setD(r)).catch((e) => a && setErr((e as Error).message)); return () => { a = false; }; }, [id]);
 
   const back = <button onClick={onBack} style={{ background: "none", border: "none", color: "#f0a35e", cursor: "pointer", fontSize: 13, fontWeight: 600, padding: "4px 0" }}>{"‹"} Back</button>;
@@ -422,9 +462,6 @@ function CardioActivityDetail({ id, sport, onBack }: { id: string; sport: string
   const pzHas = isRun && pzSecs.some((v) => v > 0);
 
   const poly = d.polyline;
-  const mapUrl = poly && !mapFailed
-    ? `https://api.maptiler.com/maps/basic-v2-dark/static/auto/440x220@2x.png?key=${MAPTILER_KEY}&path=fill:none|width:4|stroke:%23f0883e|enc:${encodeURIComponent(poly)}`
-    : null;
 
   const paceVals = laps.map((l) => (l.speed_mps && l.speed_mps > 0 ? 1000 / l.speed_mps : null)).filter((p): p is number => p != null);
   const pMin = paceVals.length ? Math.min(...paceVals) : 0, pMax = paceVals.length ? Math.max(...paceVals) : 1;
@@ -440,11 +477,7 @@ function CardioActivityDetail({ id, sport, onBack }: { id: string; sport: string
         </div>
       </div>
 
-      {mapUrl ? (
-        <div className="card" style={{ padding: 0, overflow: "hidden", marginBottom: 8 }}>
-          <img src={mapUrl} alt="Route" onError={() => setMapFailed(true)} style={{ width: "100%", display: "block" }} />
-        </div>
-      ) : null}
+      {poly ? <RouteTrace poly={poly} /> : null}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
         {a.distance_km != null ? <Stat label="Distance" value={`${a.distance_km.toFixed(2)} km`} /> : null}
