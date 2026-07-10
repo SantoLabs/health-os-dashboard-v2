@@ -478,9 +478,12 @@ export type TrnStrength = { lifts: TrnLiftSummary[] };
 export type TrnLiftSession = { date: string; workout_id?: string; working_sets: number; total_reps: number; top_weight: number | null; est_1rm: number | null; volume_kg: number };
 export type TrnLift = { title: string; summary: TrnLiftSummary; sessions: TrnLiftSession[] };
 export type StatWindow = { key: string; vol: number; sets: number; sessions: number; prev_vol: number | null; prev_sets: number | null; prev_sessions: number | null };
-export type RadarAxis = { axis: string; current: number; previous: number };
-export type StrengthStats = { windows: StatWindow[]; radar: RadarAxis[] };
+export type RadarAxis = { axis: string; current: number; previous: number | null };
+export type StrengthStats = { windows: StatWindow[]; radar: Record<string, RadarAxis[]> };
 export async function strengthStats(): Promise<StrengthStats> { const res = await authedFetch(`/functions/v1/strength_stats`); if (!res.ok) throw new Error(`Couldn't load strength stats (${res.status})`); return res.json(); }
+export type SessionExercise = { title: string; muscle_group: string; sets: number; volume: number | null };
+export type StrengthSession = { id: string; date: string; name: string; source: string; sets: number; volume: number; exercises: SessionExercise[] };
+export async function strengthSessions(): Promise<StrengthSession[]> { const res = await authedFetch(`/functions/v1/strength_stats?api=sessions`); if (!res.ok) throw new Error(`Couldn't load sessions (${res.status})`); return res.json(); }
 export type TrnActivity = {
   date: string; name?: string; distance_km: number; pace_min_km: number | null; avg_hr: number | null; max_hr?: number | null;
   z1: number; z2: number; z3: number; z4: number; z5: number; m_per_beat: number | null;
