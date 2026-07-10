@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cardioActivities, cardioParse, cardioList, cardioSave, cardioPrescribe, type CardioActivityLite, type CardioParsed, type CardioRoutine, type CardioSegment } from "../lib/api";
 import { sportEmoji, fmtPace } from "./ui";
 
@@ -40,10 +40,26 @@ function buildBuckets(start: Date, end: Date, unit: "day" | "week" | "month"): B
   return out;
 }
 
+function niceMax(v: number): number {
+  if (v <= 0) return 1;
+  const exp = Math.floor(Math.log10(v)), base = Math.pow(10, exp), f = v / base;
+  const nf = f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10;
+  return nf * base;
+}
+function axisLabel(v: number, metric: string): string {
+  if (metric === "time") return `${v >= 10 ? Math.round(v) : Math.round(v * 10) / 10}h`;
+  if (metric === "distance") return `${v >= 10 ? Math.round(v) : Math.round(v * 10) / 10} km`;
+  if (metric === "elevation") return `${Math.round(v)} m`;
+  return `${Math.round(v)}`;
+}
+
 function CardioChart({ acts, sport }: { acts: CardioActivityLite[]; sport: string }) {
   const [metric, setMetric] = useState("distance");
   const [range, setRange] = useState("1M");
+  const [hover, setHover] = useState<number | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
   const rdef = RANGES.find((r) => r[0] === range) || RANGES[1];
+  const unit = rdef[2];
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const start = rdef[1] == null ? new Date(today.getFullYear(), 0, 1) : new Date(today.getTime() - (rdef[1] - 1) * 86400000);
   const prevLen = rdef[1] == null ? Math.round((today.getTime() - start.getTime()) / 86400000) + 1 : rdef[1];
@@ -57,42 +73,69 @@ function CardioChart({ acts, sport }: { acts: CardioActivityLite[]; sport: strin
   const ptotal = prev.reduce((s, a) => s + value(a), 0);
   const pct = ptotal > 0 ? Math.round((total / ptotal - 1) * 100) : null;
 
-  const buckets = buildBuckets(start, today, rdef[2]);
+  const buckets = buildBuckets(start, today, unit);
   const bvals = buckets.map((b) => cur.filter((a) => { const d = D(a.date); return d >= b.start && d <= b.end; }).reduce((s, a) => s + value(a), 0));
-  const max = Math.max(1, ...bvals);
-  const W = 320, H = 132, PAD = 6, chartH = H - 20;
-  const bw = (W - PAD * 2) / Math.max(1, buckets.length);
+  const n = buckets.length;
+  const ymax = niceMax(Math.max(...bvals, 0));
+
+  const W = 340, H = 190, x0 = 8, padR = 36, padT = 14, padB = 22;
+  const plotW = W - x0 - padR, plotH = H - padT - padB, baseY = padT + plotH;
+  const X = (i: number) => n <= 1 ? x0 + plotW / 2 : x0 + (i / (n - 1)) * plotW;
+  const Y = (v: number) => baseY - (v / ymax) * plotH;
+  const linePts = bvals.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
+  const areaPts = `${X(0).toFixed(1)},${baseY} ${linePts} ${X(n - 1).toFixed(1)},${baseY}`;
+  const grid = [0, 1 / 3, 2 / 3, 1];
+  const xTickIdx = Array.from(new Set([0, ...Array.from({ length: 4 }, (_, k) => Math.round(((k + 1) / 5) * (n - 1)))]));
+  const xlabel = (b: Bucket) => unit === "month" ? MONTHS[b.start.getMonth()] : `${b.start.getDate()} ${MONTHS[b.start.getMonth()]}`;
+
+  function onMove(e: React.PointerEvent<SVGSVGElement>) {
+    const svg = svgRef.current; if (!svg || n < 1) return;
+    const r = svg.getBoundingClientRect();
+    const rel = ((e.clientX - r.left) / r.width) * W;
+    const idx = n <= 1 ? 0 : Math.round(((rel - x0) / plotW) * (n - 1));
+    setHover(Math.max(0, Math.min(n - 1, idx)));
+  }
 
   return (
     <div className="card" style={{ marginBottom: 8 }}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
         {METRICS.map(([k, lbl]) => (
-          <button key={k} onClick={() => setMetric(k)} style={{ padding: "5px 10px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, background: metric === k ? "linear-gradient(135deg,#f0883e,#f0a03e)" : "rgba(255,255,255,0.05)", color: metric === k ? "#1a1206" : "#8a90a6" }}>{lbl}</button>
+          <button key={k} onClick={() => { setMetric(k); setHover(null); }} style={{ padding: "5px 10px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, background: metric === k ? "linear-gradient(135deg,#f0883e,#f0a03e)" : "rgba(255,255,255,0.05)", color: metric === k ? "#1a1206" : "#8a90a6" }}>{lbl}</button>
         ))}
       </div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 2 }}>
         <div className="tnum" style={{ fontSize: 26, fontWeight: 800 }}>{fmtMetric(total, metric)}</div>
         {pct != null ? <span style={{ fontSize: 12, fontWeight: 700, color: pct >= 0 ? "#34d399" : "#fb7185" }}>{pct >= 0 ? "▲" : "▼"} {Math.abs(pct)}%</span> : null}
       </div>
-      <div className="subtle tiny" style={{ marginBottom: 8 }}>{cap(sport)} · {rdef[0]}{pct != null ? " · vs prior period" : ""}</div>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }} preserveAspectRatio="none">
-        <defs><linearGradient id="cbar" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f0a03e" /><stop offset="100%" stopColor="#f0883e" /></linearGradient></defs>
-        {bvals.map((v, i) => {
-          const h = v > 0 ? Math.max(2, (v / max) * chartH) : 0;
-          return <rect key={i} x={PAD + i * bw + bw * 0.15} y={chartH - h} width={bw * 0.7} height={h} rx={Math.min(2, bw * 0.3)} fill="url(#cbar)" opacity={v > 0 ? 1 : 0.2} />;
+      <div className="subtle tiny" style={{ marginBottom: 6 }}>{cap(sport)} · {rdef[0]}{pct != null ? " · vs prior period" : ""}</div>
+      <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block", touchAction: "none", cursor: "crosshair" }} onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={() => setHover(null)}>
+        <defs><linearGradient id="carea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f0883e" stopOpacity="0.35" /><stop offset="100%" stopColor="#f0883e" stopOpacity="0" /></linearGradient></defs>
+        {grid.map((g, i) => {
+          const y = baseY - g * plotH;
+          return (<g key={i}>
+            <line x1={x0} y1={y} x2={x0 + plotW} y2={y} stroke="rgba(255,255,255,0.07)" strokeWidth={1} />
+            <text x={W - padR + 5} y={y + 3} fill="#6b7080" fontSize={8}>{axisLabel(ymax * g, metric)}</text>
+          </g>);
         })}
-        <line x1={PAD} y1={chartH} x2={W - PAD} y2={chartH} stroke="rgba(255,255,255,0.1)" strokeWidth={1} />
-        {buckets.map((b, i) => b.label ? <text key={i} x={PAD + i * bw + bw / 2} y={H - 4} fill="#6b7080" fontSize={8} textAnchor="middle">{b.label}</text> : null)}
+        <polygon points={areaPts} fill="url(#carea)" />
+        <polyline points={linePts} fill="none" stroke="#f0883e" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        {bvals.map((v, i) => v > 0 ? <circle key={i} cx={X(i)} cy={Y(v)} r={hover === i ? 4 : 2.2} fill="#f0a03e" stroke="#0d0f16" strokeWidth={hover === i ? 1.5 : 0} /> : null)}
+        {xTickIdx.map((i) => <text key={"x" + i} x={X(i)} y={H - 6} fill="#6b7080" fontSize={8} textAnchor="middle">{xlabel(buckets[i])}</text>)}
+        {hover != null ? (
+          <g>
+            <line x1={X(hover)} y1={padT} x2={X(hover)} y2={baseY} stroke="rgba(240,136,62,0.5)" strokeWidth={1} strokeDasharray="3 3" />
+            <text x={Math.max(x0 + 26, Math.min(X(hover), x0 + plotW - 26))} y={padT - 3} fill="#f0c088" fontSize={9} fontWeight={700} textAnchor="middle">{fmtMetric(bvals[hover], metric)} · {xlabel(buckets[hover])}</text>
+          </g>
+        ) : null}
       </svg>
       <div style={{ display: "flex", gap: 4, marginTop: 8, flexWrap: "wrap", justifyContent: "center" }}>
         {RANGES.map(([k]) => (
-          <button key={k} onClick={() => setRange(k)} style={{ padding: "3px 10px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, background: range === k ? "rgba(240,136,62,0.18)" : "transparent", color: range === k ? "#f0a35e" : "#6b7080" }}>{k}</button>
+          <button key={k} onClick={() => { setRange(k); setHover(null); }} style={{ padding: "3px 10px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, background: range === k ? "rgba(240,136,62,0.18)" : "transparent", color: range === k ? "#f0a35e" : "#6b7080" }}>{k}</button>
         ))}
       </div>
     </div>
   );
 }
-
 function CardioList({ acts, sport }: { acts: CardioActivityLite[]; sport: string }) {
   const [monthIdx, setMonthIdx] = useState(0);
   const inSport = useMemo(() => acts.filter((a) => a.sport === sport), [acts, sport]);
