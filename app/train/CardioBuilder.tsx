@@ -1,15 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { cardioParse, cardioList, cardioSave, cardioPrescribe, type CardioParsed, type CardioRoutine, type CardioSegment } from "../lib/api";
+import { cardioParse, cardioList, cardioSave, cardioPrescribe, type CardioParsed, type CardioRoutine, type CardioSegment, type CardioBlock, type CardioStructure } from "../lib/api";
 
 const cdToday = () => new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().split("T")[0];
 function fmtDist(m?: number | null): string { if (!m) return ""; return m >= 1000 ? `${(m / 1000).toFixed(m % 1000 === 0 ? 0 : 2)} km` : `${Math.round(m)} m`; }
 function fmtDur(s?: number | null): string { if (!s) return ""; return s >= 60 ? `${Math.round(s / 60)} min` : `${s}s`; }
-
-type Seg = { role?: string | null; distance_m?: number | null; duration_s?: number | null; intensity?: string | null };
-type Block = { reps: number; segments: Seg[] };
-type Struct = { blocks: Block[] };
 
 const ROLES = ["warmup", "work", "recovery", "cooldown", "rest"];
 const roleBg = (role?: string | null) =>
@@ -22,7 +18,7 @@ export default function CardioBuilder({ sportHint = "running" }: { sportHint?: s
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [parsed, setParsed] = useState<CardioParsed | null>(null);
-  const [edited, setEdited] = useState<Struct | null>(null);
+  const [edited, setEdited] = useState<CardioStructure | null>(null);
   const [name, setName] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -31,7 +27,7 @@ export default function CardioBuilder({ sportHint = "running" }: { sportHint?: s
 
   useEffect(() => { if (!open) return; cardioList().then((r) => setRoutines(r.routines || [])).catch(() => {}); }, [open, msg]);
   useEffect(() => {
-    if (parsed?.structure) { setEdited(JSON.parse(JSON.stringify(parsed.structure)) as Struct); setName(parsed?.name || "Custom session"); }
+    if (parsed?.structure) { setEdited(JSON.parse(JSON.stringify(parsed.structure)) as CardioStructure); setName(parsed?.name || "Custom session"); }
     else setEdited(null);
   }, [parsed]);
 
@@ -59,10 +55,10 @@ export default function CardioBuilder({ sportHint = "running" }: { sportHint?: s
   }
 
   // ---- structure editing ----
-  function updateBlock(bi: number, patch: Partial<Block>) {
+  function updateBlock(bi: number, patch: Partial<CardioBlock>) {
     setEdited((st) => { if (!st) return st; const blocks = st.blocks.slice(); blocks[bi] = { ...blocks[bi], ...patch }; return { ...st, blocks }; });
   }
-  function updateSeg(bi: number, si: number, patch: Partial<Seg>) {
+  function updateSeg(bi: number, si: number, patch: Partial<CardioSegment>) {
     setEdited((st) => { if (!st) return st; const blocks = st.blocks.slice(); const segs = blocks[bi].segments.slice(); segs[si] = { ...segs[si], ...patch }; blocks[bi] = { ...blocks[bi], segments: segs }; return { ...st, blocks }; });
   }
   function removeSeg(bi: number, si: number) {
