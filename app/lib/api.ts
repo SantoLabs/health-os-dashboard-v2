@@ -583,7 +583,8 @@ export function cardioPrescribe(body: { sport?: string; date?: string; routine_i
 // ---- recovery (Slice C: body map + mobility) ----
 export type RecMuscle = { muscle_group: string; last_trained: string | null; days_ago: number | null; vol_14d: number; sets_14d: number; freshness: number; load_pct: number };
 export type RecMobility = { name: string; primary_muscle: string | null; secondary_muscles: string | null; body_region: string | null; type: string | null; default_prescription: string | null };
-export type RecoveryResp = { ok: boolean; muscles: RecMuscle[]; mobility: RecMobility[]; generated_at?: string };
+export type RecRoutine = { id: string; name: string; focus: string | null; est_duration_mins: number | null; item_count: number; recommend_after: string | null; recommended: boolean };
+export type RecoveryResp = { ok: boolean; muscles: RecMuscle[]; mobility: RecMobility[]; routines?: RecRoutine[]; recommended_id?: string | null; recent_sport?: string | null; generated_at?: string };
 export async function recoveryGet(): Promise<RecoveryResp> { const res = await authedFetch(`/functions/v1/recovery`); if (!res.ok) throw new Error(`Couldn't load recovery (${res.status})`); return res.json(); }
 
 
