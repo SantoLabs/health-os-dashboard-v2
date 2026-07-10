@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { cardioActivities, cardioParse, cardioList, cardioSave, cardioPrescribe, type CardioActivityLite, type CardioParsed, type CardioRoutine, type CardioSegment } from "../lib/api";
+import { cardioActivities, cardioDetail, cardioParse, cardioList, cardioSave, cardioPrescribe, type CardioActivityLite, type CardioDetail, type CardioHrZone, type CardioParsed, type CardioRoutine, type CardioSegment } from "../lib/api";
 import { sportEmoji, fmtPace } from "./ui";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -136,7 +136,7 @@ function CardioChart({ acts, sport }: { acts: CardioActivityLite[]; sport: strin
     </div>
   );
 }
-function CardioList({ acts, sport }: { acts: CardioActivityLite[]; sport: string }) {
+function CardioList({ acts, sport, onOpen }: { acts: CardioActivityLite[]; sport: string; onOpen: (id: string) => void }) {
   const [monthIdx, setMonthIdx] = useState(0);
   const inSport = useMemo(() => acts.filter((a) => a.sport === sport), [acts, sport]);
   const months = useMemo(() => {
@@ -160,7 +160,7 @@ function CardioList({ acts, sport }: { acts: CardioActivityLite[]; sport: string
       <div className="eyebrow" style={{ marginTop: 0 }}>{cap(sport)} sessions</div>
       {rows.length === 0 ? <div className="subtle tiny" style={{ padding: "8px 2px" }}>No {sport} sessions this month.</div> :
         rows.map((a) => (
-          <div key={a.activity_id} className="card" style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", marginBottom: 8 }}>
+          <div key={a.activity_id} className="card" onClick={() => onOpen(a.activity_id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", marginBottom: 8, cursor: "pointer" }}>
             <span style={{ fontSize: 16 }}>{sportEmoji(sport)}</span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 600, fontSize: 13 }}>{a.distance_km != null ? `${a.distance_km.toFixed(2)} km` : (a.duration_mins != null ? fmtHrMin(a.duration_mins) : (a.name || "Session"))}</div>
@@ -170,6 +170,7 @@ function CardioList({ acts, sport }: { acts: CardioActivityLite[]; sport: string
               <div className="tnum" style={{ fontSize: 13, fontWeight: 600, color: "#c9cede" }}>{sport === "swimming" && a.avg_swolf != null ? `SWOLF ${Math.round(a.avg_swolf)}` : a.pace_min_km != null ? `${fmtPace(a.pace_min_km)}/km` : ""}</div>
               {a.avg_hr != null ? <div className="subtle tiny tnum">{Math.round(a.avg_hr)} bpm</div> : null}
             </div>
+            <span style={{ color: "#6b7080", fontSize: 18, marginLeft: 2 }}>{"›"}</span>
           </div>
         ))}
     </div>
@@ -304,10 +305,202 @@ function CardioBuilder({ sportHint }: { sportHint: string }) {
   );
 }
 
+const HRZ_COLORS = ["#6b8cff", "#34d399", "#f0c05a", "#f0883e", "#fb7185"];
+const PZ_COLORS = ["#6b8cff", "#34d399", "#3fc7bd", "#f0c05a", "#f0883e", "#fb7185"];
+const PZ_NAMES = ["Recovery", "Endurance", "Tempo", "Threshold", "VO2", "Anaerobic"];
+const PZ_RATIOS = [1.347, 1.16, 1.039, 0.973, 0.915];
+
+function fmtPaceS(s: number | null | undefined): string {
+  if (!s || !isFinite(s) || s <= 0) return "—";
+  const m = Math.floor(s / 60), sec = Math.round(s % 60);
+  return `${m}:${sec.toString().padStart(2, "0")}`;
+}
+function fmtClock(sec: number | null | undefined): string {
+  if (!sec || sec <= 0) return "—";
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = Math.round(sec % 60);
+  return h ? `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}` : `${m}:${s.toString().padStart(2, "0")}`;
+}
+function pickHrZones(zones: CardioHrZone[] | null, sport: string): CardioHrZone | null {
+  if (!zones || !zones.length) return null;
+  const key = sport === "running" ? "RUNNING" : sport === "cycling" ? "CYCLING" : "DEFAULT";
+  return zones.find((z) => z.sport === key) || zones.find((z) => z.sport === "DEFAULT") || zones[0];
+}
+type PaceZone = { z: number; name: string; fast: number; slow: number };
+function buildPaceZones(t: number | null): PaceZone[] {
+  if (!t) return [];
+  const b = PZ_RATIOS.map((r) => Math.round(r * t));
+  return [
+    { z: 1, name: PZ_NAMES[0], fast: b[0], slow: Infinity },
+    { z: 2, name: PZ_NAMES[1], fast: b[1], slow: b[0] },
+    { z: 3, name: PZ_NAMES[2], fast: b[2], slow: b[1] },
+    { z: 4, name: PZ_NAMES[3], fast: b[3], slow: b[2] },
+    { z: 5, name: PZ_NAMES[4], fast: b[4], slow: b[3] },
+    { z: 6, name: PZ_NAMES[5], fast: 0, slow: b[4] },
+  ];
+}
+function hrZoneIndex(hr: number | null | undefined, hz: CardioHrZone | null): number {
+  if (hr == null || !hz) return -1;
+  if (hr >= hz.z5) return 4;
+  if (hr >= hz.z4) return 3;
+  if (hr >= hz.z3) return 2;
+  if (hr >= hz.z2) return 1;
+  return 0;
+}
+
+function ZoneBar({ label, rows }: { label: string; rows: { range: string; secs: number; color: string }[] }) {
+  const total = rows.reduce((s, r) => s + r.secs, 0) || 1;
+  return (
+    <div className="card" style={{ marginBottom: 8 }}>
+      <div className="eyebrow" style={{ marginTop: 0, marginBottom: 8 }}>{label}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+        {rows.map((r, i) => {
+          const pct = Math.round((r.secs / total) * 100);
+          return (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span className="tnum" style={{ width: 20, fontSize: 11, fontWeight: 700, color: r.color }}>Z{i + 1}</span>
+              <div style={{ flex: 1, height: 15, borderRadius: 5, background: "rgba(255,255,255,0.05)", overflow: "hidden" }}>
+                <div style={{ width: `${pct}%`, height: "100%", background: r.color, minWidth: r.secs > 0 ? 3 : 0, borderRadius: 5 }} />
+              </div>
+              <span className="tnum subtle" style={{ width: 82, fontSize: 10, textAlign: "right" }}>{r.range}</span>
+              <span className="tnum" style={{ width: 32, fontSize: 11, textAlign: "right", fontWeight: 600 }}>{pct}%</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "9px 11px" }}>
+      <div className="subtle tiny" style={{ marginBottom: 2 }}>{label}</div>
+      <div className="tnum" style={{ fontSize: 15, fontWeight: 700 }}>{value}</div>
+    </div>
+  );
+}
+
+function CardioActivityDetail({ id, sport, onBack }: { id: string; sport: string; onBack: () => void }) {
+  const [d, setD] = useState<CardioDetail | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [mapFailed, setMapFailed] = useState(false);
+  useEffect(() => { let a = true; cardioDetail(id).then((r) => a && setD(r)).catch((e) => a && setErr((e as Error).message)); return () => { a = false; }; }, [id]);
+
+  const back = <button onClick={onBack} style={{ background: "none", border: "none", color: "#f0a35e", cursor: "pointer", fontSize: 13, fontWeight: 600, padding: "4px 0" }}>{"‹"} Back</button>;
+  if (err) return <div>{back}<div className="card error" style={{ marginTop: 8 }}><strong>Couldn&apos;t load</strong><div className="subtle">{err}</div></div></div>;
+  if (!d) return <div>{back}<div className="muted center pad">Loading{"…"}</div></div>;
+  const a = d.activity;
+  if (!a) return <div>{back}<div className="subtle center pad">Activity not found.</div></div>;
+
+  const laps = d.laps || [];
+  const hz = pickHrZones(d.hr_zones, sport);
+  const pzones = buildPaceZones(d.threshold_pace_s_per_km);
+  const isRun = sport === "running";
+  const isSwim = sport === "swimming";
+
+  const movingS = laps.reduce((s, l) => s + (l.moving_s || 0), 0) || null;
+  const elapsedS = (a.duration_mins || 0) * 60 || null;
+
+  const hrSecs = [a.z1, a.z2, a.z3, a.z4, a.z5].map((v) => v || 0);
+  const hrHas = hrSecs.some((v) => v > 0) && hz;
+  const hrRange = (i: number) => {
+    if (!hz) return "";
+    const lo = [hz.z1, hz.z2, hz.z3, hz.z4, hz.z5][i];
+    const hi = i < 4 ? [hz.z2, hz.z3, hz.z4, hz.z5][i] - 1 : (hz.maxHr || lo);
+    return `${lo}–${hi}`;
+  };
+
+  const pzSecs = pzones.map(() => 0);
+  if (pzones.length) laps.forEach((l) => {
+    if (!l.gap_mps || l.gap_mps <= 0) return;
+    const pace = 1000 / l.gap_mps;
+    const w = l.moving_s || l.dur_s || 0;
+    const zi = pzones.findIndex((z) => pace >= z.fast && pace < z.slow);
+    if (zi >= 0) pzSecs[zi] += w;
+  });
+  const pzHas = isRun && pzSecs.some((v) => v > 0);
+
+  const poly = d.polyline;
+  const mapUrl = poly && !mapFailed
+    ? `https://api.maptiler.com/maps/basic-v2-dark/static/auto/440x220@2x.png?key=AGkSusqPjwHgshtMZDSG&path=fill:none|width:4|stroke:%23f0883e|enc:${encodeURIComponent(poly)}`
+    : null;
+
+  const paceVals = laps.map((l) => (l.speed_mps && l.speed_mps > 0 ? 1000 / l.speed_mps : null)).filter((p): p is number => p != null);
+  const pMin = paceVals.length ? Math.min(...paceVals) : 0, pMax = paceVals.length ? Math.max(...paceVals) : 1;
+
+  return (
+    <div>
+      {back}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "6px 0 12px" }}>
+        <span style={{ fontSize: 20 }}>{sportEmoji(sport)}</span>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>{a.name || `${cap(sport)} session`}</div>
+          <div className="subtle tiny">{new Date(a.date + "T00:00:00").getDate()} {MONTHS[new Date(a.date + "T00:00:00").getMonth()]} {new Date(a.date + "T00:00:00").getFullYear()}</div>
+        </div>
+      </div>
+
+      {mapUrl ? (
+        <div className="card" style={{ padding: 0, overflow: "hidden", marginBottom: 8 }}>
+          <img src={mapUrl} alt="Route" onError={() => setMapFailed(true)} style={{ width: "100%", display: "block" }} />
+        </div>
+      ) : null}
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 8 }}>
+        {a.distance_km != null ? <Stat label="Distance" value={`${a.distance_km.toFixed(2)} km`} /> : null}
+        {!isSwim && a.pace_min_km != null ? <Stat label="Avg pace" value={`${fmtPaceS(a.pace_min_km * 60)}/km`} /> : null}
+        {isSwim && a.avg_swolf != null ? <Stat label="Avg SWOLF" value={`${Math.round(a.avg_swolf)}`} /> : null}
+        {movingS ? <Stat label="Moving" value={fmtClock(movingS)} /> : (elapsedS ? <Stat label="Time" value={fmtClock(elapsedS)} /> : null)}
+        {a.elevation_gain_m != null ? <Stat label="Elev gain" value={`${Math.round(a.elevation_gain_m)} m`} /> : null}
+        {a.avg_hr != null ? <Stat label="Avg HR" value={`${Math.round(a.avg_hr)}${a.max_hr ? ` / ${Math.round(a.max_hr)}` : ""}`} /> : null}
+        {a.calories != null ? <Stat label="Calories" value={`${Math.round(a.calories)}`} /> : null}
+        {a.avg_power != null ? <Stat label="Power" value={`${Math.round(a.avg_power)}${a.normalized_power ? ` / ${Math.round(a.normalized_power)}` : ""} W`} /> : null}
+        {a.avg_run_cadence != null ? <Stat label="Cadence" value={`${Math.round(a.avg_run_cadence)} spm`} /> : null}
+      </div>
+
+      {hrHas ? (
+        <ZoneBar label="Time in heart-rate zones" rows={hrSecs.map((secs, i) => ({ range: hrRange(i), secs, color: HRZ_COLORS[i] }))} />
+      ) : null}
+
+      {pzHas ? (
+        <>
+          <ZoneBar label="Time in pace zones" rows={pzones.map((z, i) => ({ range: i === 0 ? `>${fmtPaceS(z.fast)}` : i === 5 ? `<${fmtPaceS(z.slow)}` : `${fmtPaceS(z.fast)}–${fmtPaceS(z.slow)}`, secs: pzSecs[i], color: PZ_COLORS[i] }))} />
+          <div className="subtle tiny" style={{ margin: "-2px 2px 8px" }}>Pace zones from your Garmin threshold ({fmtPaceS(d.threshold_pace_s_per_km)}/km), grade-adjusted {"·"} Strava model</div>
+        </>
+      ) : null}
+
+      {laps.length > 1 ? (
+        <>
+          <div className="eyebrow">Splits</div>
+          <div className="card">
+            {laps.map((l, i) => {
+              const pace = l.speed_mps && l.speed_mps > 0 ? 1000 / l.speed_mps : null;
+              const zi = hrZoneIndex(l.avg_hr, hz);
+              const barPct = pace != null && pMax > pMin ? 100 - ((pace - pMin) / (pMax - pMin)) * 100 : 50;
+              return (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: i < laps.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
+                  <span className="tnum subtle" style={{ width: 16, fontSize: 11 }}>{i + 1}</span>
+                  <span className="tnum" style={{ width: 50, fontSize: 12, fontWeight: 600 }}>{isSwim ? (l.swolf != null ? `${Math.round(l.swolf)}` : "—") : fmtPaceS(pace)}</span>
+                  <div style={{ flex: 1, height: 6, background: "rgba(255,255,255,0.05)", borderRadius: 3, overflow: "hidden" }}>
+                    <div style={{ width: `${Math.max(4, barPct)}%`, height: "100%", background: zi >= 0 ? HRZ_COLORS[zi] : "#f0883e", borderRadius: 3 }} />
+                  </div>
+                  {l.elev_gain != null ? <span className="tnum subtle" style={{ width: 32, fontSize: 10, textAlign: "right" }}>{"↑"}{Math.round(l.elev_gain)}</span> : null}
+                  {l.avg_hr != null ? <span className="tnum" style={{ width: 40, fontSize: 11, textAlign: "right", color: zi >= 0 ? HRZ_COLORS[zi] : "var(--muted)" }}>{Math.round(l.avg_hr)}</span> : null}
+                </div>
+              );
+            })}
+          </div>
+          {!isSwim ? <div className="subtle tiny" style={{ marginTop: 4 }}>Bar = relative pace {"·"} color = HR zone</div> : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 export default function CardioTab() {
   const [acts, setActs] = useState<CardioActivityLite[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [sport, setSport] = useState<string>("running");
+  const [sel, setSel] = useState<string | null>(null);
 
   useEffect(() => { let alive = true; cardioActivities().then((r) => alive && setActs(r)).catch((e) => alive && setErr((e as Error).message)); return () => { alive = false; }; }, []);
 
@@ -323,6 +516,9 @@ export default function CardioTab() {
     });
   }, [acts]);
   useEffect(() => { if (sports.length && !sports.includes(sport)) setSport(sports[0]); }, [sports, sport]);
+  useEffect(() => { setSel(null); }, [sport]);
+
+  if (sel) return <CardioActivityDetail id={sel} sport={sport} onBack={() => setSel(null)} />;
 
   return (
     <div>
@@ -334,7 +530,7 @@ export default function CardioTab() {
             {sports.map((s) => <button key={s} className={sport === s ? "trn-sub on" : "trn-sub"} onClick={() => setSport(s)}>{sportEmoji(s)} {cap(s)}</button>)}
           </div>
           <CardioChart acts={acts} sport={sport} />
-          <CardioList acts={acts} sport={sport} />
+          <CardioList acts={acts} sport={sport} onOpen={setSel} />
         </>
       )}
     </div>
