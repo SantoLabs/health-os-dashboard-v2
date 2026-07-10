@@ -309,6 +309,7 @@ const HRZ_COLORS = ["#6b8cff", "#34d399", "#f0c05a", "#f0883e", "#fb7185"];
 const PZ_COLORS = ["#6b8cff", "#34d399", "#3fc7bd", "#f0c05a", "#f0883e", "#fb7185"];
 const PZ_NAMES = ["Recovery", "Endurance", "Tempo", "Threshold", "VO2", "Anaerobic"];
 const PZ_RATIOS = [1.347, 1.16, 1.039, 0.973, 0.915];
+const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY || "cjYYPVd6Bj39UKw0Idz0";
 
 function fmtPaceS(s: number | null | undefined): string {
   if (!s || !isFinite(s) || s <= 0) return "—";
@@ -422,7 +423,7 @@ function CardioActivityDetail({ id, sport, onBack }: { id: string; sport: string
 
   const poly = d.polyline;
   const mapUrl = poly && !mapFailed
-    ? `https://api.maptiler.com/maps/basic-v2-dark/static/auto/440x220@2x.png?key=AGkSusqPjwHgshtMZDSG&path=fill:none|width:4|stroke:%23f0883e|enc:${encodeURIComponent(poly)}`
+    ? `https://api.maptiler.com/maps/basic-v2-dark/static/auto/440x220@2x.png?key=${MAPTILER_KEY}&path=fill:none|width:4|stroke:%23f0883e|enc:${encodeURIComponent(poly)}`
     : null;
 
   const paceVals = laps.map((l) => (l.speed_mps && l.speed_mps > 0 ? 1000 / l.speed_mps : null)).filter((p): p is number => p != null);
