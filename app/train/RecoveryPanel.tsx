@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { recoveryGet, planWeek, type RecMuscle, type RecMobility } from "../lib/api";
+import { recoveryGet, planWeek, wkStart, type RecMuscle, type RecMobility, type RecRoutine } from "../lib/api";
 import MuscleFigure from "./MuscleFigure";
 
 type Mode = "recovery" | "load";
@@ -57,7 +57,7 @@ function MobRow({ x }: { x: RecMobility }) {
   return <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderTop: "1px solid rgba(255,255,255,0.05)" }}><span style={{ fontSize: 14 }}>🧘</span><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 600 }}>{x.name}</div><div className="subtle tiny">{[x.primary_muscle, x.default_prescription].filter(Boolean).join(" · ")}</div></div></div>;
 }
 
-export default function RecoveryPanel() {
+export default function RecoveryPanel({ onGoWorkouts }: { onGoWorkouts?: () => void }) {
   const [muscles, setMuscles] = useState<RecMuscle[]>([]);
   const [mobility, setMobility] = useState<RecMobility[]>([]);
   const [ctx, setCtx] = useState<Ctx>(null);
@@ -65,11 +65,14 @@ export default function RecoveryPanel() {
   const [sel, setSel] = useState<Sel>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [routines, setRoutines] = useState<RecRoutine[]>([]);
+  const [recentSport, setRecentSport] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let alive = true;
     recoveryGet()
-      .then((r) => { if (alive) { setMuscles(r.muscles || []); setMobility(r.mobility || []); } })
+      .then((r) => { if (alive) { setMuscles(r.muscles || []); setMobility(r.mobility || []); setRoutines(r.routines || []); setRecentSport(r.recent_sport || null); } })
       .catch((e) => { if (alive) setErr((e as Error).message); })
       .finally(() => { if (alive) setLoading(false); });
     planWeek<{ context?: { readiness: number | null; readiness_label: string | null; acwr: number | null } }>()
@@ -180,6 +183,28 @@ export default function RecoveryPanel() {
           </>
         )}
       </div>
+
+      {routines.length > 0 ? (
+        <div className="card">
+          <div className="eyebrow" style={{ marginBottom: 8 }}>Recovery routines</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {[...routines].sort((a, b) => Number(b.recommended) - Number(a.recommended)).map((r) => (
+              <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: 12, borderRadius: 12, background: "rgba(255,255,255,0.03)", border: r.recommended ? "1px solid rgba(162,116,255,0.4)" : "1px solid rgba(255,255,255,0.06)" }}>
+                <span aria-hidden style={{ flex: "0 0 auto", fontSize: 10, fontWeight: 700, letterSpacing: 0.3, padding: "3px 7px", borderRadius: 6, background: "rgba(52,211,153,0.16)", color: "#7fe3b8" }}>RECOVERY</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <span style={{ fontWeight: 700, fontSize: 13 }}>{r.name}</span>
+                    {r.recommended ? <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", padding: "2px 7px", borderRadius: 999, background: "rgba(162,116,255,0.18)", color: "#c9b6ff" }}>Recommended</span> : null}
+                  </div>
+                  <div className="subtle tiny">{r.item_count} move{r.item_count === 1 ? "" : "s"}{r.est_duration_mins ? ` · ${r.est_duration_mins}m` : ""}{r.focus ? ` · ${r.focus}` : ""}</div>
+                </div>
+                <button className="trn-sub" disabled={busy} onClick={async () => { setBusy(true); try { await wkStart({ routine_id: r.id }); onGoWorkouts?.(); } finally { setBusy(false); } }}>Start</button>
+              </div>
+            ))}
+          </div>
+          {recentSport ? <div className="subtle tiny" style={{ marginTop: 8, opacity: 0.75 }}>Recommended after your recent {recentSport === "bike" ? "ride" : recentSport}.</div> : null}
+        </div>
+      ) : null}
 
     </div>
   );
