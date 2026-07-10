@@ -1,95 +1,135 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useTrain, type TrnCardio, type TrnActivity, cardioParse, cardioList, cardioSave, cardioPrescribe, type CardioParsed, type CardioRoutine, type CardioSegment } from "../lib/api";
-import { Spark, Delta, ZoneBar, fmtPace, dShort, sportEmoji } from "./ui";
+import { useEffect, useMemo, useState } from "react";
+import { cardioActivities, cardioParse, cardioList, cardioSave, cardioPrescribe, type CardioActivityLite, type CardioParsed, type CardioRoutine, type CardioSegment } from "../lib/api";
+import { sportEmoji, fmtPace } from "./ui";
 
-const SPORTS = [
-  { pill: "Run", sport: "running" },
-  { pill: "Swim", sport: "swimming" },
-  { pill: "Ride", sport: "cycling" },
-] as const;
-type Pill = (typeof SPORTS)[number]["pill"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const METRICS: [string, string][] = [["distance", "Distance"], ["time", "Time"], ["elevation", "Elevation"], ["sessions", "Sessions"]];
+const RANGES: [string, number | null, "day" | "week" | "month"][] = [["7D", 7, "day"], ["1M", 30, "day"], ["3M", 91, "week"], ["6M", 182, "week"], ["YTD", null, "month"], ["1Y", 365, "month"]];
 
-const isEasy = (a: TrnActivity) => (a.z2 || 0) > (a.z3 || 0) + (a.z4 || 0) + (a.z5 || 0);
-const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+function fmtHrMin(mins: number) { const h = Math.floor(mins / 60), m = Math.round(mins % 60); return h ? `${h}h ${m}m` : `${m}m`; }
+function fmtMetric(v: number, metric: string) {
+  if (metric === "distance") return `${v.toFixed(1)} km`;
+  if (metric === "time") return fmtHrMin(v * 60);
+  if (metric === "elevation") return `${Math.round(v)} m`;
+  return `${Math.round(v)}`;
+}
+const D = (s: string) => new Date(s + "T00:00:00");
 
-function SportView({ pill, sport }: { pill: Pill; sport: string }) {
-  const { data, error } = useTrain<TrnCardio>(`cardio&sport=${sport}`);
-  if (error) return <div className="card error"><strong>Couldn&apos;t load</strong><div className="subtle">{error}</div></div>;
-  if (!data) return <div className="muted center pad">Loading…</div>;
-
-  const acts = [...(data.activities || [])].sort((a, b) => a.date.localeCompare(b.date));
-  const weekly = data.weekly || [];
-
-  if (acts.length < 2) {
-    return <div className="card"><div className="subtle center" style={{ padding: "18px 0" }}>Not enough {pill.toLowerCase()} sessions logged yet to analyse.</div></div>;
-  }
-
-  // easy-run avg pace (fallback to all if too few easy)
-  const easy = acts.filter(isEasy);
-  const paceSet = (easy.length >= 3 ? easy : acts).slice(-12).map((a) => a.pace_min_km).filter((p): p is number => p != null);
-  const avgPace = mean(paceSet);
-
-  // aerobic efficiency (m/beat) — recent vs ~4 weeks ago (weekly series)
-  const effWeeks = weekly.filter((w) => w.avg_m_per_beat != null);
-  const recentEff = effWeeks[effWeeks.length - 1]?.avg_m_per_beat ?? null;
-  const pastEff = effWeeks[effWeeks.length - 5]?.avg_m_per_beat ?? effWeeks[0]?.avg_m_per_beat ?? null;
-  const effPct = recentEff != null && pastEff ? Math.round((recentEff / pastEff - 1) * 1000) / 10 : null;
-  const effSeries = weekly.slice(-16).map((w) => w.avg_m_per_beat);
-
-  // HR zones — last 30 days summed (seconds → minutes)
-  const cut30 = Date.now() - 30 * 86400000;
-  const z: [number, number, number, number, number] = [0, 0, 0, 0, 0];
-  acts.forEach((a) => {
-    if (new Date(a.date + "T00:00:00").getTime() >= cut30) {
-      z[0] += a.z1 || 0; z[1] += a.z2 || 0; z[2] += a.z3 || 0; z[3] += a.z4 || 0; z[4] += a.z5 || 0;
+type Bucket = { start: Date; end: Date; label: string };
+function buildBuckets(start: Date, end: Date, unit: "day" | "week" | "month"): Bucket[] {
+  const out: Bucket[] = [];
+  if (unit === "day") {
+    for (let d = new Date(start); d <= end; d = new Date(d.getTime() + 86400000))
+      out.push({ start: new Date(d), end: new Date(d), label: d.getDate() === 1 ? MONTHS[d.getMonth()] : "" });
+  } else if (unit === "week") {
+    for (let d = new Date(start); d <= end; d = new Date(d.getTime() + 7 * 86400000)) {
+      const e = new Date(Math.min(d.getTime() + 6 * 86400000, end.getTime()));
+      out.push({ start: new Date(d), end: e, label: MONTHS[d.getMonth()] });
     }
-  });
-  const zoneHas = z.some((v) => v > 0);
-  const recent6 = [...acts].reverse().slice(0, 6);
+  } else {
+    let d = new Date(start.getFullYear(), start.getMonth(), 1);
+    while (d <= end) {
+      const e = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+      out.push({ start: new Date(d), end: new Date(Math.min(e.getTime(), end.getTime())), label: MONTHS[d.getMonth()] });
+      d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    }
+  }
+  return out;
+}
+
+function CardioChart({ acts, sport }: { acts: CardioActivityLite[]; sport: string }) {
+  const [metric, setMetric] = useState("distance");
+  const [range, setRange] = useState("1M");
+  const rdef = RANGES.find((r) => r[0] === range) || RANGES[1];
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const start = rdef[1] == null ? new Date(today.getFullYear(), 0, 1) : new Date(today.getTime() - (rdef[1] - 1) * 86400000);
+  const prevLen = rdef[1] == null ? Math.round((today.getTime() - start.getTime()) / 86400000) + 1 : rdef[1];
+  const prevStart = new Date(start.getTime() - prevLen * 86400000);
+  const value = (a: CardioActivityLite) => metric === "distance" ? (a.distance_km || 0) : metric === "time" ? (a.duration_mins || 0) / 60 : metric === "elevation" ? (a.elevation_gain_m || 0) : 1;
+
+  const inSport = acts.filter((a) => a.sport === sport);
+  const cur = inSport.filter((a) => { const d = D(a.date); return d >= start && d <= today; });
+  const prev = inSport.filter((a) => { const d = D(a.date); return d >= prevStart && d < start; });
+  const total = cur.reduce((s, a) => s + value(a), 0);
+  const ptotal = prev.reduce((s, a) => s + value(a), 0);
+  const pct = ptotal > 0 ? Math.round((total / ptotal - 1) * 100) : null;
+
+  const buckets = buildBuckets(start, today, rdef[2]);
+  const bvals = buckets.map((b) => cur.filter((a) => { const d = D(a.date); return d >= b.start && d <= b.end; }).reduce((s, a) => s + value(a), 0));
+  const max = Math.max(1, ...bvals);
+  const W = 320, H = 132, PAD = 6, chartH = H - 20;
+  const bw = (W - PAD * 2) / Math.max(1, buckets.length);
 
   return (
-    <>
-      {/* avg pace hero */}
-      <div className="trn-hero">
-        <div className="trn-eyebrow">Avg pace · {easy.length >= 3 ? "easy sessions" : "recent"}</div>
-        <div className="trn-hero-num tnum">
-          {fmtPace(avgPace)}<small>/km</small>
-          {effPct != null && <Delta v={effPct} unit="%" suffix="at same HR" />}
-        </div>
-        <div className="trn-hero-sub">
-          {recentEff != null ? `Aerobic efficiency ${recentEff.toFixed(2)} m/beat` : "Efficiency trending"}
-        </div>
-        <Spark values={effSeries} color="#3ec8e6" />
-        <div className="subtle tiny" style={{ marginTop: 8 }}>Aerobic efficiency (m/beat) · higher = faster at the same heart rate</div>
-      </div>
-
-      {/* HR zone distribution */}
-      {zoneHas && (
-        <div className="card">
-          <div className="trn-eyebrow">Time in heart-rate zones · 30d</div>
-          <ZoneBar z={z} />
-        </div>
-      )}
-
-      {/* recent activities */}
-      <div className="eyebrow">Recent {pill.toLowerCase()} sessions</div>
-      <div className="card">
-        {recent6.map((a, i) => (
-          <div className="trn-srow" key={i}>
-            <span className="d">{sportEmoji(sport)} {dShort(a.date)}</span>
-            <span className="tnum">{a.distance_km != null ? `${a.distance_km.toFixed(2)} km` : "—"}</span>
-            <span className="tnum" style={{ color: "var(--muted)" }}>
-              {sport === "swimming" && a.avg_swolf != null
-                ? `SWOLF ${Math.round(a.avg_swolf)}`
-                : a.pace_min_km != null ? `${fmtPace(a.pace_min_km)}/km` : ""}
-              {a.avg_hr != null ? ` · ${Math.round(a.avg_hr)} bpm` : ""}
-            </span>
-          </div>
+    <div className="card" style={{ marginBottom: 8 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+        {METRICS.map(([k, lbl]) => (
+          <button key={k} onClick={() => setMetric(k)} style={{ padding: "5px 10px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, background: metric === k ? "linear-gradient(135deg,#f0883e,#f0a03e)" : "rgba(255,255,255,0.05)", color: metric === k ? "#1a1206" : "#8a90a6" }}>{lbl}</button>
         ))}
       </div>
-    </>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 2 }}>
+        <div className="tnum" style={{ fontSize: 26, fontWeight: 800 }}>{fmtMetric(total, metric)}</div>
+        {pct != null ? <span style={{ fontSize: 12, fontWeight: 700, color: pct >= 0 ? "#34d399" : "#fb7185" }}>{pct >= 0 ? "▲" : "▼"} {Math.abs(pct)}%</span> : null}
+      </div>
+      <div className="subtle tiny" style={{ marginBottom: 8 }}>{cap(sport)} · {rdef[0]}{pct != null ? " · vs prior period" : ""}</div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }} preserveAspectRatio="none">
+        <defs><linearGradient id="cbar" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f0a03e" /><stop offset="100%" stopColor="#f0883e" /></linearGradient></defs>
+        {bvals.map((v, i) => {
+          const h = v > 0 ? Math.max(2, (v / max) * chartH) : 0;
+          return <rect key={i} x={PAD + i * bw + bw * 0.15} y={chartH - h} width={bw * 0.7} height={h} rx={Math.min(2, bw * 0.3)} fill="url(#cbar)" opacity={v > 0 ? 1 : 0.2} />;
+        })}
+        <line x1={PAD} y1={chartH} x2={W - PAD} y2={chartH} stroke="rgba(255,255,255,0.1)" strokeWidth={1} />
+        {buckets.map((b, i) => b.label ? <text key={i} x={PAD + i * bw + bw / 2} y={H - 4} fill="#6b7080" fontSize={8} textAnchor="middle">{b.label}</text> : null)}
+      </svg>
+      <div style={{ display: "flex", gap: 4, marginTop: 8, flexWrap: "wrap", justifyContent: "center" }}>
+        {RANGES.map(([k]) => (
+          <button key={k} onClick={() => setRange(k)} style={{ padding: "3px 10px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, background: range === k ? "rgba(240,136,62,0.18)" : "transparent", color: range === k ? "#f0a35e" : "#6b7080" }}>{k}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CardioList({ acts, sport }: { acts: CardioActivityLite[]; sport: string }) {
+  const [monthIdx, setMonthIdx] = useState(0);
+  const inSport = useMemo(() => acts.filter((a) => a.sport === sport), [acts, sport]);
+  const months = useMemo(() => {
+    const set = new Set<string>(); inSport.forEach((a) => set.add(a.date.slice(0, 7)));
+    return Array.from(set).sort().reverse();
+  }, [inSport]);
+  useEffect(() => { setMonthIdx(0); }, [sport]);
+  const curMonth = months[monthIdx] || null;
+  const rows = curMonth ? inSport.filter((a) => a.date.slice(0, 7) === curMonth) : [];
+  const monthLabel = curMonth ? `${MONTHS[parseInt(curMonth.slice(5, 7), 10) - 1]} ${curMonth.slice(0, 4)}` : "—";
+
+  return (
+    <div>
+      <div className="card" style={{ marginBottom: 8, padding: "8px 10px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <button aria-label="Older" disabled={monthIdx >= months.length - 1} onClick={() => setMonthIdx((i) => Math.min(months.length - 1, i + 1))} style={{ background: "none", border: "none", color: monthIdx >= months.length - 1 ? "rgba(255,255,255,0.2)" : "#f0a35e", fontSize: 22, cursor: monthIdx >= months.length - 1 ? "default" : "pointer", padding: "0 10px", lineHeight: 1 }}>‹</button>
+          <div style={{ fontWeight: 700, fontSize: 13 }}>{monthLabel}</div>
+          <button aria-label="Newer" disabled={monthIdx <= 0} onClick={() => setMonthIdx((i) => Math.max(0, i - 1))} style={{ background: "none", border: "none", color: monthIdx <= 0 ? "rgba(255,255,255,0.2)" : "#f0a35e", fontSize: 22, cursor: monthIdx <= 0 ? "default" : "pointer", padding: "0 10px", lineHeight: 1 }}>›</button>
+        </div>
+      </div>
+      <div className="eyebrow" style={{ marginTop: 0 }}>{cap(sport)} sessions</div>
+      {rows.length === 0 ? <div className="subtle tiny" style={{ padding: "8px 2px" }}>No {sport} sessions this month.</div> :
+        rows.map((a) => (
+          <div key={a.activity_id} className="card" style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", marginBottom: 8 }}>
+            <span style={{ fontSize: 16 }}>{sportEmoji(sport)}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>{a.distance_km != null ? `${a.distance_km.toFixed(2)} km` : (a.duration_mins != null ? fmtHrMin(a.duration_mins) : (a.name || "Session"))}</div>
+              <div className="subtle tiny">{new Date(a.date + "T00:00:00").getDate()} {MONTHS[new Date(a.date + "T00:00:00").getMonth()]}{a.duration_mins != null ? ` · ${fmtHrMin(a.duration_mins)}` : ""}</div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div className="tnum" style={{ fontSize: 13, fontWeight: 600, color: "#c9cede" }}>{sport === "swimming" && a.avg_swolf != null ? `SWOLF ${Math.round(a.avg_swolf)}` : a.pace_min_km != null ? `${fmtPace(a.pace_min_km)}/km` : ""}</div>
+              {a.avg_hr != null ? <div className="subtle tiny tnum">{Math.round(a.avg_hr)} bpm</div> : null}
+            </div>
+          </div>
+        ))}
+    </div>
   );
 }
 
@@ -222,19 +262,38 @@ function CardioBuilder({ sportHint }: { sportHint: string }) {
 }
 
 export default function CardioTab() {
-  const [pill, setPill] = useState<Pill>("Run");
-  const active = SPORTS.find((s) => s.pill === pill)!;
+  const [acts, setActs] = useState<CardioActivityLite[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [sport, setSport] = useState<string>("running");
+
+  useEffect(() => { let alive = true; cardioActivities().then((r) => alive && setActs(r)).catch((e) => alive && setErr((e as Error).message)); return () => { alive = false; }; }, []);
+
+  const sports = useMemo(() => {
+    if (!acts) return [];
+    const counts: Record<string, number> = {};
+    acts.forEach((a) => { counts[a.sport] = (counts[a.sport] || 0) + 1; });
+    const order = ["running", "cycling", "swimming", "walking"];
+    return Object.keys(counts).sort((a, b) => {
+      const ia = order.indexOf(a), ib = order.indexOf(b);
+      if (ia < 0 && ib < 0) return counts[b] - counts[a];
+      if (ia < 0) return 1; if (ib < 0) return -1; return ia - ib;
+    });
+  }, [acts]);
+  useEffect(() => { if (sports.length && !sports.includes(sport)) setSport(sports[0]); }, [sports, sport]);
+
   return (
     <div>
-      <CardioBuilder sportHint={active.sport} />
-      <div className="trn-subs" style={{ marginBottom: 12 }}>
-        {SPORTS.map((s) => (
-          <button key={s.pill} className={pill === s.pill ? "trn-sub on" : "trn-sub"} onClick={() => setPill(s.pill)}>
-            {sportEmoji(s.sport)} {s.pill}
-          </button>
-        ))}
-      </div>
-      <SportView key={active.sport} pill={active.pill} sport={active.sport} />
+      <CardioBuilder sportHint={sport} />
+      {err ? <div className="card error"><strong>Couldn&apos;t load</strong><div className="subtle">{err}</div></div> : null}
+      {acts == null ? <div className="muted center pad">Loading…</div> : (
+        <>
+          <div className="trn-subs" style={{ marginBottom: 12 }}>
+            {sports.map((s) => <button key={s} className={sport === s ? "trn-sub on" : "trn-sub"} onClick={() => setSport(s)}>{sportEmoji(s)} {cap(s)}</button>)}
+          </div>
+          <CardioChart acts={acts} sport={sport} />
+          <CardioList acts={acts} sport={sport} />
+        </>
+      )}
     </div>
   );
 }
