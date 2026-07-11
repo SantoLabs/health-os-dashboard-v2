@@ -6,6 +6,7 @@ import { Spark, SubPills, kg, dShort } from "./ui";
 import KaiDailyCard from "../components/KaiDailyCard";
 import ExerciseDetail from "./ExerciseDetail";
 import { CardioActivityDetail } from "./CardioTab";
+import { useRouter } from "next/navigation";
 
 const goalIcon = (label: string): string => {
   const k = label.toLowerCase();
@@ -163,6 +164,36 @@ function normPlan(t: string, rest: boolean): Sport | null {
   if (k.startsWith("walk")) return "walk";
   return null;
 }
+// Strength calendar labels show the split (Upper push / Upper pull / Upper / Lower /
+// Full body / Core), not volume — the 🏋️ already says it's strength.
+function muscleRegion(mg: string): "push" | "pull" | "lower" | "core" | "other" {
+  const m = (mg || "").toLowerCase();
+  if (m.includes("quad") || m.includes("hamstring") || m.includes("glute") || m.includes("calf") || m.includes("calves") || m.includes("adductor") || m.includes("abductor") || m.includes("hip")) return "lower";
+  if (m.includes("abdominal") || m === "abs" || m.includes("oblique") || m.includes("core")) return "core";
+  if (m.includes("chest") || m.includes("pec") || m.includes("shoulder") || m.includes("delt") || m.includes("tricep")) return "push";
+  if (m.includes("lat") || m.includes("back") || m.includes("bicep") || m.includes("trap") || m.includes("forearm")) return "pull";
+  return "other";
+}
+function strengthSplit(s: StrengthSession): string {
+  const n = (s.name || "").toLowerCase();
+  if (/full\\s?body|total\\s?body/.test(n)) return "Full body";
+  const nPush = /push/.test(n), nPull = /pull/.test(n);
+  if (nPush && !nPull) return "Upper push";
+  if (nPull && !nPush) return "Upper pull";
+  if (/upper/.test(n)) return "Upper";
+  if (/lower|leg/.test(n)) return "Lower";
+  if (/core|abs/.test(n)) return "Core";
+  const w = { push: 0, pull: 0, lower: 0, core: 0, other: 0 };
+  for (const e of s.exercises || []) w[muscleRegion(e.muscle_group)] += e.sets || 1;
+  const upper = w.push + w.pull;
+  const total = upper + w.lower + w.core;
+  if (total === 0) return "Strength";
+  if (w.lower > 0 && upper > 0 && w.lower >= total * 0.3 && upper >= total * 0.3) return "Full body";
+  if (w.lower >= upper && w.lower >= w.core) return "Lower";
+  if (w.core > upper && w.core > w.lower) return "Core";
+  if (w.push > 0 && w.pull > 0) return "Upper";
+  return w.push >= w.pull ? "Upper push" : "Upper pull";
+}
 function hexA(h: string, a: number): string { const x = h.replace("#", ""); const r = parseInt(x.slice(0, 2), 16), g = parseInt(x.slice(2, 4), 16), b = parseInt(x.slice(4, 6), 16); return `rgba(${r},${g},${b},${a})`; }
 
 function istTodayISO(): string { return new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 10); }
@@ -175,52 +206,58 @@ function dnum(s: string): number { return Number(s.slice(8, 10)); }
 function moni(s: string): number { return Number(s.slice(5, 7)) - 1; }
 
 type PlanSession = { session_date: string; session_type: string; completed: boolean; skipped?: boolean; is_rest_day: boolean };
-type Cell = { key: string; sport: Sport; stat: string; planned: boolean; cardioId?: string; strength?: StrengthSession };
+type Cell = { key: string; sport: Sport; label: string; stat: string; planned: boolean; date: string; cardioId?: string; strength?: StrengthSession };
 
 function buildCells(from: string, to: string, str: StrengthSession[], car: CardioActivityLite[], plan: PlanSession[], today: string): Map<string, Cell[]> {
   const map = new Map<string, Cell[]>();
   const push = (d: string, c: Cell) => { if (d < from || d > to) return; const a = map.get(d) || []; a.push(c); map.set(d, a); };
-  for (const s of str) push(s.date, { key: "s" + s.id, sport: "strength", stat: s.volume ? `${Math.round(s.volume).toLocaleString("en-US")} kg` : `${s.sets} sets`, planned: false, strength: s });
+  // strength → split label (no volume in the calendar); cardio → distance
+  for (const s of str) push(s.date, { key: "s" + s.id, sport: "strength", label: strengthSplit(s), stat: "", planned: false, date: s.date, strength: s });
   for (const a of car) {
     const sp = normCardio(a.sport); if (!sp) continue;
-    const stat = a.distance_km != null && a.distance_km > 0 ? `${a.distance_km.toFixed(1)} km` : a.duration_mins != null ? `${Math.round(a.duration_mins)} min` : SPORT[sp].label;
-    push(a.date, { key: "c" + a.activity_id, sport: sp, stat, planned: false, cardioId: a.activity_id });
+    const stat = a.distance_km != null && a.distance_km > 0 ? `${a.distance_km.toFixed(1)} km` : a.duration_mins != null ? `${Math.round(a.duration_mins)} min` : "";
+    push(a.date, { key: "c" + a.activity_id, sport: sp, label: SPORT[sp].label, stat, planned: false, date: a.date, cardioId: a.activity_id });
   }
+  // planned future sessions (dashed, tappable → calendar); only days > today, no shadowing an actual of same sport
   for (const p of plan) {
     const d = p.session_date; if (!d || d <= today || p.completed || p.skipped) continue;
     const sp = normPlan(p.session_type, p.is_rest_day); if (!sp) continue;
-    if ((map.get(d) || []).some((c) => c.sport === sp)) continue; // don't shadow an actual of same sport
-    push(d, { key: "p" + d + sp, sport: sp, stat: "planned", planned: true });
+    if ((map.get(d) || []).some((c) => c.sport === sp)) continue;
+    push(d, { key: "p" + d + sp, sport: sp, label: SPORT[sp].label, stat: "", planned: true, date: d });
   }
   return map;
 }
 
-function Chip({ c, onOpen }: { c: Cell; onOpen: (c: Cell) => void }) {
+function Chip({ c, onTap }: { c: Cell; onTap: (c: Cell) => void }) {
   const s = SPORT[c.sport];
-  const tappable = !c.planned && !!(c.cardioId || c.strength);
   return (
-    <button onClick={() => tappable && onOpen(c)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 9px", borderRadius: 10, background: c.planned ? hexA(s.color, 0.05) : hexA(s.color, 0.16), border: `1px ${c.planned ? "dashed" : "solid"} ${hexA(s.color, c.planned ? 0.3 : 0.5)}`, color: c.planned ? hexA(s.color, 0.8) : "#eef", cursor: tappable ? "pointer" : "default", font: "inherit", fontSize: 12, fontWeight: 600, textAlign: "left" }}>
+    <button onClick={() => onTap(c)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 9px", borderRadius: 10, background: c.planned ? hexA(s.color, 0.05) : hexA(s.color, 0.16), border: `1px ${c.planned ? "dashed" : "solid"} ${hexA(s.color, c.planned ? 0.45 : 0.5)}`, color: c.planned ? hexA(s.color, 0.85) : "#eef", cursor: "pointer", font: "inherit", fontSize: 12, fontWeight: 600, textAlign: "left" }}>
       <span style={{ fontSize: 13 }}>{s.emoji}</span>
-      <span>{s.label}</span>
-      <span className="tnum" style={{ opacity: 0.85, fontWeight: 500 }}>{c.stat}</span>
+      <span>{c.label}</span>
+      {c.stat ? <span className="tnum" style={{ opacity: 0.85, fontWeight: 500 }}>{c.stat}</span> : null}
     </button>
   );
 }
 
-function WeekGrid({ start, cells, today, onOpen }: { start: string; cells: Map<string, Cell[]>; today: string; onOpen: (c: Cell) => void }) {
+function WeekGrid({ start, cells, today, onTap, onDate }: { start: string; cells: Map<string, Cell[]>; today: string; onTap: (c: Cell) => void; onDate: (d: string) => void }) {
   return (
     <div className="card" style={{ padding: "4px 4px" }}>
       {Array.from({ length: 7 }, (_, i) => isoAdd(start, i)).map((d, i) => {
         const cs = cells.get(d) || [];
         const isToday = d === today;
+        const past = d < today;
         return (
           <div key={d} style={{ display: "flex", gap: 10, padding: "8px", alignItems: "flex-start", borderTop: i === 0 ? "none" : "1px solid rgba(255,255,255,0.05)" }}>
             <div style={{ width: 40, flex: "none", textAlign: "center" }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: isToday ? "#a274ff" : "#8a90a6" }}>{DOW[i]}</div>
               <div className="tnum" style={{ fontSize: 15, fontWeight: 700, color: isToday ? "#fff" : "#c9cede" }}>{dnum(d)}</div>
             </div>
-            <div style={{ flex: 1, minWidth: 0, display: "flex", flexWrap: "wrap", gap: 6, paddingTop: 2 }}>
-              {cs.length === 0 ? <span style={{ fontSize: 13, color: "#6b7080" }}>⭐ Rest</span> : cs.map((c) => <Chip key={c.key} c={c} onOpen={onOpen} />)}
+            <div style={{ flex: 1, minWidth: 0, display: "flex", flexWrap: "wrap", gap: 6, paddingTop: 2, alignItems: "center", minHeight: 22 }}>
+              {cs.length > 0
+                ? cs.map((c) => <Chip key={c.key} c={c} onTap={onTap} />)
+                : past
+                  ? <span style={{ fontSize: 13, color: "#6b7080" }}>⭐ Rest</span>
+                  : <button onClick={() => onDate(d)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 10, background: "transparent", border: "1px dashed rgba(255,255,255,0.14)", color: "#7a8194", cursor: "pointer", font: "inherit", fontSize: 12, fontWeight: 600 }}>＋ Plan</button>}
             </div>
           </div>
         );
@@ -243,8 +280,9 @@ function MonthGrid({ start, cells, today, onDay }: { start: string; cells: Map<s
             const inMonth = d.slice(0, 7) === mon;
             const cs = cells.get(d) || [];
             const isToday = d === today;
+            const tappable = cs.length > 0 || d >= today;
             return (
-              <button key={d} onClick={() => cs.length && onDay(d)} style={{ aspectRatio: "1", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "4px 0 0", borderRadius: 8, border: isToday ? "1px solid #a274ff" : "1px solid transparent", background: inMonth ? "rgba(255,255,255,0.02)" : "transparent", cursor: cs.length ? "pointer" : "default", opacity: inMonth ? 1 : 0.3, font: "inherit" }}>
+              <button key={d} onClick={() => tappable && onDay(d)} style={{ aspectRatio: "1", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "4px 0 0", borderRadius: 8, border: isToday ? "1px solid #a274ff" : "1px solid transparent", background: inMonth ? "rgba(255,255,255,0.02)" : "transparent", cursor: tappable ? "pointer" : "default", opacity: inMonth ? 1 : 0.3, font: "inherit" }}>
                 <span className="tnum" style={{ fontSize: 11, fontWeight: 600, color: isToday ? "#fff" : "#9aa0b0" }}>{dnum(d)}</span>
                 <span style={{ display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "center" }}>
                   {cs.slice(0, 4).map((c) => <span key={c.key} style={{ width: 5, height: 5, borderRadius: 999, background: SPORT[c.sport].color, opacity: c.planned ? 0.45 : 1 }} />)}
@@ -268,24 +306,23 @@ function SportBlocks({ from, to, str, car }: { from: string; to: string; str: St
   }, [from, to, str, car]);
   if (!blocks.length) return <div className="subtle tiny center" style={{ padding: "16px 0" }}>No sessions logged in this window yet.</div>;
   return (
-    <div>
-      <div className="eyebrow">By sport</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {blocks.map((b) => {
-          const s = SPORT[b.sport];
-          const val = b.sport === "strength" ? `${Math.round(b.vol).toLocaleString("en-US")} kg` : `${b.km.toFixed(1)} km`;
-          return (
-            <div key={b.sport} className="card" style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", marginBottom: 0 }}>
-              <span style={{ fontSize: 22, width: 30, textAlign: "center" }}>{s.emoji}</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>{s.label}</div>
-                <div className="subtle tiny">{b.sessions} session{b.sessions === 1 ? "" : "s"}</div>
-              </div>
-              <div className="tnum" style={{ fontWeight: 700, fontSize: 15, color: s.color }}>{val}</div>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+      {blocks.map((b) => {
+        const s = SPORT[b.sport];
+        const isStr = b.sport === "strength";
+        const val = isStr ? Math.round(b.vol).toLocaleString("en-US") : b.km.toFixed(1);
+        const unit = isStr ? "kg" : "km";
+        const vfont = val.length >= 8 ? 15 : val.length >= 6 ? 18 : 21; // keep long kg totals compact
+        return (
+          <div key={b.sport} style={{ background: hexA(s.color, 0.07), border: `1px solid ${hexA(s.color, 0.18)}`, borderRadius: 14, padding: "12px 10px", textAlign: "center" }}>
+            <div style={{ fontSize: 18, lineHeight: 1 }}>{s.emoji}</div>
+            <div className="tnum" style={{ marginTop: 6, fontWeight: 800, fontSize: vfont, color: "#f4f4f7", letterSpacing: "-0.4px", lineHeight: 1.1 }}>
+              {val}<span style={{ fontSize: 11, fontWeight: 700, color: "#9aa0b0", marginLeft: 2 }}>{unit}</span>
             </div>
-          );
-        })}
-      </div>
+            <div className="subtle tiny" style={{ marginTop: 3 }}>{s.label} · {b.sessions} session{b.sessions === 1 ? "" : "s"}</div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -321,7 +358,33 @@ function StrengthSessionDetail({ s, onBack }: { s: StrengthSession; onBack: () =
 type Open = { kind: "strength"; s: StrengthSession } | { kind: "cardio"; id: string; sport: string } | null;
 const CARDIO_API: Record<Sport, string> = { run: "running", cycle: "cycling", swim: "swimming", walk: "walking", strength: "strength" };
 
+function DaySheet({ date, cells, today, onTap, onDate, onClose }: { date: string; cells: Map<string, Cell[]>; today: string; onTap: (c: Cell) => void; onDate: (d: string) => void; onClose: () => void }) {
+  const cs = cells.get(date) || [];
+  const past = date < today;
+  const dt = new Date(date + "T00:00:00");
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 430, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+      <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 480, margin: 0, borderRadius: "18px 18px 0 0", padding: 16, maxHeight: "70vh", overflowY: "auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ fontWeight: 800, fontSize: 15 }}>{DOW[(dt.getDay() + 6) % 7]} {dt.getDate()} {MON[dt.getMonth()]}</div>
+          <button onClick={onClose} aria-label="Close" style={{ background: "none", border: "none", color: "#8a90a6", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>
+        </div>
+        {cs.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: past ? 0 : 12 }}>
+            {cs.map((c) => <Chip key={c.key} c={c} onTap={(cc) => { onClose(); onTap(cc); }} />)}
+          </div>
+        )}
+        {cs.length === 0 && past && <div className="subtle tiny">⭐ Rest day</div>}
+        {!past && (
+          <button onClick={() => { onClose(); onDate(date); }} style={{ width: "100%", padding: "11px", borderRadius: 12, background: "transparent", border: "1px dashed rgba(255,255,255,0.18)", color: "#c9b6ff", cursor: "pointer", font: "inherit", fontSize: 13, fontWeight: 700 }}>＋ Add or edit in calendar</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Summary() {
+  const router = useRouter();
   const [mode, setMode] = useState<"Week" | "Month">("Week");
   const [off, setOff] = useState(0); // 0 = current window; + = older, − = future
   const [str, setStr] = useState<StrengthSession[] | null>(null);
@@ -354,13 +417,17 @@ function Summary() {
 
   const loading = str == null || car == null;
   const cells = loading ? new Map<string, Cell[]>() : buildCells(from, to, str ?? [], car ?? [], plan, today);
-  const onOpen = (c: Cell) => { if (c.cardioId) setOpen({ kind: "cardio", id: c.cardioId, sport: CARDIO_API[c.sport] }); else if (c.strength) setOpen({ kind: "strength", s: c.strength }); };
+  const openDate = (d: string) => router.push(`/more/schedule?date=${d}`);
+  const onTap = (c: Cell) => {
+    if (c.cardioId) setOpen({ kind: "cardio", id: c.cardioId, sport: CARDIO_API[c.sport] });
+    else if (c.strength) setOpen({ kind: "strength", s: c.strength });
+    else openDate(c.date); // planned/future → jump to the calendar at that date
+  };
   const label = mode === "Week" ? `${dnum(from)} ${MON[moni(from)]} – ${dnum(to)} ${MON[moni(to)]}` : `${MON[moni(from)]} ${from.slice(0, 4)}`;
 
   return (
     <div>
-      <KaiDailyCard scope="training" />
-
+      {/* 1 · filter */}
       <div style={{ display: "flex", justifyContent: "center", margin: "4px 0 10px" }}>
         <div style={{ display: "flex", gap: 3, background: "rgba(255,255,255,0.05)", borderRadius: 999, padding: 3 }}>
           {(["Week", "Month"] as const).map((m) => (
@@ -369,7 +436,7 @@ function Summary() {
         </div>
       </div>
 
-      <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", marginBottom: 8 }}>
+      <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", marginBottom: 10 }}>
         <button aria-label="Older" onClick={() => setOff((o) => Math.min(o + 1, 104))} style={{ background: "none", border: "none", color: "#c9b6ff", fontSize: 18, cursor: "pointer", padding: "0 12px", lineHeight: 1 }}>◀</button>
         <div style={{ fontWeight: 700, fontSize: 13 }}>{label}</div>
         <button aria-label="Newer" disabled={off <= -4} onClick={() => setOff((o) => Math.max(o - 1, -4))} style={{ background: "none", border: "none", color: off <= -4 ? "rgba(255,255,255,0.2)" : "#c9b6ff", fontSize: 18, cursor: off <= -4 ? "default" : "pointer", padding: "0 12px", lineHeight: 1 }}>▶</button>
@@ -377,29 +444,20 @@ function Summary() {
 
       {loading ? <div className="muted center pad">Loading…</div> : (
         <>
-          {mode === "Week"
-            ? <WeekGrid start={from} cells={cells} today={today} onOpen={onOpen} />
-            : <MonthGrid start={from} cells={cells} today={today} onDay={setDaySheet} />}
-          <div style={{ height: 10 }} />
+          {/* 2 · summary boxes */}
           <SportBlocks from={from} to={to} str={str ?? []} car={car ?? []} />
+          {/* 3 · calendar */}
+          <div className="eyebrow">Calendar</div>
+          {mode === "Week"
+            ? <WeekGrid start={from} cells={cells} today={today} onTap={onTap} onDate={openDate} />
+            : <MonthGrid start={from} cells={cells} today={today} onDay={setDaySheet} />}
+          {/* 4 · AI card */}
+          <div style={{ height: 12 }} />
+          <KaiDailyCard scope="training" />
         </>
       )}
 
-      {daySheet && (
-        <div onClick={() => setDaySheet(null)} style={{ position: "fixed", inset: 0, zIndex: 430, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-          <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 480, margin: 0, borderRadius: "18px 18px 0 0", padding: 16, maxHeight: "70vh", overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <div style={{ fontWeight: 800, fontSize: 15 }}>{DOW[(new Date(daySheet + "T00:00:00").getDay() + 6) % 7]} {dnum(daySheet)} {MON[moni(daySheet)]}</div>
-              <button onClick={() => setDaySheet(null)} aria-label="Close" style={{ background: "none", border: "none", color: "#8a90a6", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {(cells.get(daySheet) || []).length === 0
-                ? <div className="subtle tiny">⭐ Rest day</div>
-                : (cells.get(daySheet) || []).map((c) => <Chip key={c.key} c={c} onOpen={(cc) => { setDaySheet(null); onOpen(cc); }} />)}
-            </div>
-          </div>
-        </div>
-      )}
+      {daySheet && <DaySheet date={daySheet} cells={cells} today={today} onTap={onTap} onDate={openDate} onClose={() => setDaySheet(null)} />}
     </div>
   );
 }
