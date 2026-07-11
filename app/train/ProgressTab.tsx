@@ -509,7 +509,7 @@ const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct
 function dnum(s: string): number { return Number(s.slice(8, 10)); }
 function moni(s: string): number { return Number(s.slice(5, 7)) - 1; }
 
-type PlanSession = { session_date: string; session_type: string; completed: boolean; skipped?: boolean; is_rest_day: boolean };
+type PlanSession = { session_date: string; session_type: string; completed: boolean; skipped?: boolean; committed?: boolean; is_rest_day: boolean };
 type Cell = { key: string; sport: Sport; label: string; stat: string; planned: boolean; date: string; cardioId?: string; strength?: StrengthSession };
 
 function buildCells(from: string, to: string, str: StrengthSession[], car: CardioActivityLite[], plan: PlanSession[], today: string): Map<string, Cell[]> {
@@ -522,9 +522,9 @@ function buildCells(from: string, to: string, str: StrengthSession[], car: Cardi
     const stat = a.distance_km != null && a.distance_km > 0 ? `${a.distance_km.toFixed(1)} km` : a.duration_mins != null ? `${Math.round(a.duration_mins)} min` : "";
     push(a.date, { key: "c" + a.activity_id, sport: sp, label: SPORT[sp].label, stat, planned: false, date: a.date, cardioId: a.activity_id });
   }
-  // planned future sessions (dashed, tappable → calendar); only days > today, no shadowing an actual of same sport
+  // committed future sessions only (dashed, tappable → calendar); uncommitted Kai proposals are NOT shown here — accept them in the Schedule planner first
   for (const p of plan) {
-    const d = p.session_date; if (!d || d <= today || p.completed || p.skipped) continue;
+    const d = p.session_date; if (!d || d <= today || p.completed || p.skipped || !p.committed) continue;
     const sp = normPlan(p.session_type, p.is_rest_day); if (!sp) continue;
     if ((map.get(d) || []).some((c) => c.sport === sp)) continue;
     push(d, { key: "p" + d + sp, sport: sp, label: SPORT[sp].label, stat: "", planned: true, date: d });
