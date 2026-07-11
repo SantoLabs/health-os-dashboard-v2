@@ -175,14 +175,14 @@ function muscleRegion(mg: string): "push" | "pull" | "lower" | "core" | "other" 
   return "other";
 }
 function strengthSplit(s: StrengthSession): string {
-  const n = (s.name || "").toLowerCase();
-  if (/full\\s?body|total\\s?body/.test(n)) return "Full body";
-  const nPush = /push/.test(n), nPull = /pull/.test(n);
+  const nn = (s.name || "").toLowerCase().replace(/[^a-z]/g, "");
+  if (nn.includes("fullbody") || nn.includes("totalbody")) return "Full body";
+  const nPush = nn.includes("push"), nPull = nn.includes("pull");
   if (nPush && !nPull) return "Upper push";
   if (nPull && !nPush) return "Upper pull";
-  if (/upper/.test(n)) return "Upper";
-  if (/lower|leg/.test(n)) return "Lower";
-  if (/core|abs/.test(n)) return "Core";
+  if (nn.includes("upper")) return "Upper";
+  if (nn.includes("lower") || nn.includes("leg")) return "Lower";
+  if (nn.includes("core") || nn.includes("abs")) return "Core";
   const w = { push: 0, pull: 0, lower: 0, core: 0, other: 0 };
   for (const e of s.exercises || []) w[muscleRegion(e.muscle_group)] += e.sets || 1;
   const upper = w.push + w.pull;
