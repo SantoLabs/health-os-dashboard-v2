@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useTrain, useApi, actionGet, actionPost, planRange, strengthSessions, cardioActivities, type TrnPrs, type TrnProgress, type TrnPodiumRec, type TrnPodiumEntry, type StrengthSession, type CardioActivityLite } from "../lib/api";
+import { useTrain, useApi, actionGet, actionPost, planRange, strengthSessions, cardioActivities, type TrnPrs, type TrnProgress, type TrnPbRec, type TrnSport, type StrengthSession, type CardioActivityLite } from "../lib/api";
 import { Spark, SubPills, Delta, dShort } from "./ui";
 import KaiDailyCard from "../components/KaiDailyCard";
 import ExerciseDetail from "./ExerciseDetail";
@@ -281,94 +281,81 @@ function GoalsTab() {
   );
 }
 
-/* ═══ Personal Bests (Chunk 9 · §8) — gold/silver/bronze podium per scope, by sport ═══ */
-const RUN_DIST: Record<string, number> = { best_pace_1k: 1, best_pace_2k: 2, best_pace_5k: 5, best_pace_10k: 10, best_pace_HM: 21.0975, best_pace_marathon: 42.195 };
-const PB_LABEL: Record<string, string> = { best_pace_1k: "1K", best_pace_2k: "2K", best_pace_5k: "5K", best_pace_10k: "10K", best_pace_HM: "Half Marathon", best_pace_marathon: "Marathon", longest_run: "Longest run", longest_swim: "Longest swim", best_swolf: "Best SWOLF" };
-function fmtPaceV(v: number): string { let m = Math.floor(v); let s = Math.round((v - m) * 60); if (s === 60) { m += 1; s = 0; } return `${m}:${String(s).padStart(2, "0")}`; }
-function fmtDurMin(mins: number): string { const s = Math.round(mins * 60); const h = Math.floor(s / 3600); const m = Math.floor((s % 3600) / 60); const ss = s % 60; return h ? `${h}:${String(m).padStart(2, "0")}:${String(ss).padStart(2, "0")}` : `${m}:${String(ss).padStart(2, "0")}`; }
-const pbLabel = (rec: TrnPodiumRec): string => (rec.category === "strength" ? rec.scope_label : (PB_LABEL[rec.metric] || rec.scope_label));
-function pbPrimary(rec: TrnPodiumRec, e: TrnPodiumEntry): string {
-  if (rec.category === "running" && rec.metric.startsWith("best_pace_")) return fmtDurMin(e.value * (RUN_DIST[rec.metric] || 1));
-  if (rec.metric === "longest_run") return `${e.value.toFixed(2)} km`;
-  if (rec.metric === "longest_swim") return `${Math.round(e.value)} m`;
-  if (rec.metric === "best_swolf") return `${Math.round(e.value)}`;
-  return `${Math.round(e.value * 10) / 10} kg`;
-}
-const pbSecondary = (rec: TrnPodiumRec, e: TrnPodiumEntry): string | null => (rec.category === "running" && rec.metric.startsWith("best_pace_") ? `${fmtPaceV(e.value)}/km` : rec.metric === "best_swolf" ? "swolf" : null);
+/* ═══ Personal Bests — catalog PBs: sport selector · period slider · gold hero (server-formatted) ═══ */
+const PB_PERIODS: { key: string; label: string }[] = [
+  { key: "12m", label: "12m" },
+  { key: "24m", label: "24m" },
+  { key: "ytd", label: "YTD" },
+  { key: "all", label: "All-time" },
+];
 const MEDAL = ["🥇", "🥈", "🥉"];
 
-function PBRow({ rec }: { rec: TrnPodiumRec }) {
+function PBRow({ rec }: { rec: TrnPbRec }) {
   const [open, setOpen] = useState(false);
   const gold = rec.entries[0];
   const rest = rec.entries.slice(1);
   if (!gold) return null;
-  const sec = pbSecondary(rec, gold);
   return (
-    <div className="card" style={{ marginBottom: 6, padding: 0, overflow: "hidden" }}>
-      <button onClick={() => rest.length && setOpen((o) => !o)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", background: "none", border: "none", color: "inherit", cursor: rest.length ? "pointer" : "default", textAlign: "left", font: "inherit" }}>
-        <span style={{ fontSize: 18 }}>🥇</span>
+    <div className="card" style={{ marginBottom: 8, padding: 0, overflow: "hidden" }}>
+      <button onClick={() => rest.length && setOpen((o) => !o)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "13px 15px", background: "none", border: "none", color: "inherit", cursor: rest.length ? "pointer" : "default", textAlign: "left", font: "inherit" }}>
+        <span style={{ fontSize: 22, flex: "none", filter: "drop-shadow(0 0 7px rgba(245,197,66,0.55))" }}>🥇</span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{pbLabel(rec)}</div>
-          <div className="subtle tiny">{dShort(gold.achieved_on)}</div>
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: "#c8cde0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{rec.label}</div>
+          <div className="tnum" style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.2 }}>{gold.primary}</div>
+          <div className="subtle tiny">{gold.secondary ? `${gold.secondary} · ` : ""}{gold.date_label}</div>
         </div>
-        <div style={{ textAlign: "right", flex: "none" }}>
-          <div className="tnum" style={{ fontSize: 14, fontWeight: 800 }}>{pbPrimary(rec, gold)}</div>
-          {sec && <div className="subtle tiny tnum">{sec}</div>}
-        </div>
-        {rest.length > 0 && <span style={{ color: "#6b7080", fontSize: 11, flex: "none", width: 12, textAlign: "center" }}>{open ? "▲" : "▼"}</span>}
+        {rest.length > 0 && <span style={{ color: "#6b7080", fontSize: 12, flex: "none" }}>{open ? "▲" : "▼"}</span>}
       </button>
       {open && rest.map((e) => (
-        <div key={e.rnk} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-          <span style={{ fontSize: 15 }}>{MEDAL[e.rnk - 1] || "🎖"}</span>
-          <div className="subtle tiny" style={{ flex: 1 }}>{dShort(e.achieved_on)}</div>
-          <div className="tnum" style={{ fontSize: 13, fontWeight: 700 }}>{pbPrimary(rec, e)}</div>
-          {pbSecondary(rec, e) && <div className="subtle tiny tnum" style={{ minWidth: 54, textAlign: "right" }}>{pbSecondary(rec, e)}</div>}
+        <div key={e.rnk} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 15px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+          <span style={{ fontSize: 17, flex: "none" }}>{MEDAL[e.rnk - 1] || "🎖"}</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="tnum" style={{ fontSize: 15, fontWeight: 700 }}>{e.primary}</div>
+            <div className="subtle tiny">{e.secondary ? `${e.secondary} · ` : ""}{e.date_label}</div>
+          </div>
         </div>
       ))}
     </div>
   );
 }
 
-const PB_SECTIONS: { key: "running" | "swim" | "strength"; emoji: string; label: string }[] = [
-  { key: "running", emoji: "🏃", label: "Running" },
-  { key: "swim", emoji: "🏊", label: "Swimming" },
-  { key: "strength", emoji: "🏋️", label: "Strength" },
-];
-
 function History({ prs }: { prs: TrnPrs }) {
   const [tab, setTab] = useState<"Personal Bests" | "Adherence">("Personal Bests");
-  const [showAllStr, setShowAllStr] = useState(false);
-  const podium = prs.podium;
-  const anyPB = !!podium && PB_SECTIONS.some((s) => (podium[s.key] || []).length > 0);
+  const [sport, setSport] = useState<string | null>(prs.default_sport);
+  const [period, setPeriod] = useState<string>("all");
+  const sportKey = sport && prs.sports.some((s) => s.key === sport) ? sport : (prs.default_sport || prs.sports[0]?.key || null);
+  const recs: TrnPbRec[] = sportKey ? (prs.pb[period]?.[sportKey] || []) : [];
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "center", margin: "2px 0 4px" }}>
-        <span className="pill ok" style={{ fontSize: 13 }}>🔥 {prs.stats.week_streak} week streak</span>
-      </div>
-
       <SubPills items={["Personal Bests", "Adherence"] as const} value={tab} onChange={setTab} />
 
       {tab === "Personal Bests" ? (
-        <div>
-          {!podium && <div className="muted center pad">Loading…</div>}
-          {podium && !anyPB && <div className="subtle tiny center" style={{ padding: "16px 0" }}>No personal bests yet.</div>}
-          {podium && anyPB && PB_SECTIONS.filter((s) => (podium[s.key] || []).length > 0).map((s) => {
-            const recs = podium[s.key] || [];
-            const shown = s.key === "strength" && !showAllStr ? recs.slice(0, 8) : recs;
-            return (
-              <div key={s.key}>
-                <div className="eyebrow">{s.emoji} {s.label}</div>
-                {shown.map((rec) => <PBRow key={rec.metric + rec.scope_label} rec={rec} />)}
-                {s.key === "strength" && recs.length > 8 && (
-                  <button onClick={() => setShowAllStr((v) => !v)} style={{ width: "100%", padding: "9px", marginBottom: 6, borderRadius: 10, background: "transparent", border: "1px dashed rgba(255,255,255,0.16)", color: "#c9b6ff", cursor: "pointer", font: "inherit", fontSize: 12.5, fontWeight: 600 }}>
-                    {showAllStr ? "Show fewer" : `Show all ${recs.length} lifts`}
-                  </button>
-                )}
+        prs.sports.length === 0 ? (
+          <div className="subtle tiny center" style={{ padding: "20px 0" }}>No personal bests yet.</div>
+        ) : (
+          <div>
+            <div style={{ display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none", padding: "2px 0 10px", WebkitOverflowScrolling: "touch" }}>
+              {prs.sports.map((s) => (
+                <button key={s.key} onClick={() => setSport(s.key)} style={{ flex: "0 0 auto", display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 13px", borderRadius: 999, border: `1px solid ${sportKey === s.key ? "rgba(162,116,255,0.6)" : "rgba(255,255,255,0.1)"}`, background: sportKey === s.key ? "linear-gradient(135deg,rgba(95,125,255,0.28),rgba(162,116,255,0.28))" : "rgba(255,255,255,0.04)", color: sportKey === s.key ? "#fff" : "#9198ad", cursor: "pointer", font: "inherit", fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }}>
+                  <span>{s.emoji}</span>{s.label}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+              <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,0.05)", borderRadius: 999, padding: 2 }}>
+                {PB_PERIODS.map((p) => (
+                  <button key={p.key} onClick={() => setPeriod(p.key)} style={{ padding: "5px 13px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 11.5, fontWeight: 700, background: period === p.key ? "linear-gradient(135deg,#5f7dff,#a274ff)" : "transparent", color: period === p.key ? "#fff" : "#8a90a6" }}>{p.label}</button>
+                ))}
               </div>
-            );
-          })}
-        </div>
+            </div>
+
+            {recs.length === 0
+              ? <div className="subtle tiny center" style={{ padding: "18px 0" }}>No personal bests in this window.</div>
+              : recs.map((rec) => <PBRow key={rec.label} rec={rec} />)}
+          </div>
+        )
       ) : (
         <div className="card">
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
