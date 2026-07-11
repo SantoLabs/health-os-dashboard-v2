@@ -1,14 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useTrain, useApi, actionGet, actionPost, planRange, strengthSessions, cardioActivities, type TrnPrs, type TrnProgress, type TrnRecord, type StrengthSession, type CardioActivityLite } from "../lib/api";
-import { Spark, SubPills, Delta, kg, dShort } from "./ui";
+import { useTrain, useApi, actionGet, actionPost, planRange, strengthSessions, cardioActivities, type TrnPrs, type TrnProgress, type TrnPodiumRec, type TrnPodiumEntry, type StrengthSession, type CardioActivityLite } from "../lib/api";
+import { Spark, SubPills, Delta, dShort } from "./ui";
 import KaiDailyCard from "../components/KaiDailyCard";
 import ExerciseDetail from "./ExerciseDetail";
 import { CardioActivityDetail } from "./CardioTab";
 import { useRouter } from "next/navigation";
-
-const achIcon = (c: string): string => (c === "running" ? "🏃" : c === "swim" ? "🏊" : "🏆");
 
 /* Goals (Chunk 8) full CRUD, ported from /more/goals */
 type UGoal = { id: string; label: string; when_text?: string; target_date: string | null; goal_type: string; status: string; focus: string; deleted: boolean; created_at: string; updated_at: string; days_away: number | null; source?: string; completed_at?: string | null; early_days?: number | null };
@@ -283,39 +281,93 @@ function GoalsTab() {
   );
 }
 
+/* ═══ Personal Bests (Chunk 9 · §8) — gold/silver/bronze podium per scope, by sport ═══ */
+const RUN_DIST: Record<string, number> = { best_pace_1k: 1, best_pace_2k: 2, best_pace_5k: 5, best_pace_10k: 10, best_pace_HM: 21.0975, best_pace_marathon: 42.195 };
+const PB_LABEL: Record<string, string> = { best_pace_1k: "1K", best_pace_2k: "2K", best_pace_5k: "5K", best_pace_10k: "10K", best_pace_HM: "Half Marathon", best_pace_marathon: "Marathon", longest_run: "Longest run", longest_swim: "Longest swim", best_swolf: "Best SWOLF" };
+function fmtPaceV(v: number): string { let m = Math.floor(v); let s = Math.round((v - m) * 60); if (s === 60) { m += 1; s = 0; } return `${m}:${String(s).padStart(2, "0")}`; }
+function fmtDurMin(mins: number): string { const s = Math.round(mins * 60); const h = Math.floor(s / 3600); const m = Math.floor((s % 3600) / 60); const ss = s % 60; return h ? `${h}:${String(m).padStart(2, "0")}:${String(ss).padStart(2, "0")}` : `${m}:${String(ss).padStart(2, "0")}`; }
+const pbLabel = (rec: TrnPodiumRec): string => (rec.category === "strength" ? rec.scope_label : (PB_LABEL[rec.metric] || rec.scope_label));
+function pbPrimary(rec: TrnPodiumRec, e: TrnPodiumEntry): string {
+  if (rec.category === "running" && rec.metric.startsWith("best_pace_")) return fmtDurMin(e.value * (RUN_DIST[rec.metric] || 1));
+  if (rec.metric === "longest_run") return `${e.value.toFixed(2)} km`;
+  if (rec.metric === "longest_swim") return `${Math.round(e.value)} m`;
+  if (rec.metric === "best_swolf") return `${Math.round(e.value)}`;
+  return `${Math.round(e.value * 10) / 10} kg`;
+}
+const pbSecondary = (rec: TrnPodiumRec, e: TrnPodiumEntry): string | null => (rec.category === "running" && rec.metric.startsWith("best_pace_") ? `${fmtPaceV(e.value)}/km` : rec.metric === "best_swolf" ? "swolf" : null);
+const MEDAL = ["🥇", "🥈", "🥉"];
+
+function PBRow({ rec }: { rec: TrnPodiumRec }) {
+  const [open, setOpen] = useState(false);
+  const gold = rec.entries[0];
+  const rest = rec.entries.slice(1);
+  if (!gold) return null;
+  const sec = pbSecondary(rec, gold);
+  return (
+    <div className="card" style={{ marginBottom: 6, padding: 0, overflow: "hidden" }}>
+      <button onClick={() => rest.length && setOpen((o) => !o)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", background: "none", border: "none", color: "inherit", cursor: rest.length ? "pointer" : "default", textAlign: "left", font: "inherit" }}>
+        <span style={{ fontSize: 18 }}>🥇</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{pbLabel(rec)}</div>
+          <div className="subtle tiny">{dShort(gold.achieved_on)}</div>
+        </div>
+        <div style={{ textAlign: "right", flex: "none" }}>
+          <div className="tnum" style={{ fontSize: 14, fontWeight: 800 }}>{pbPrimary(rec, gold)}</div>
+          {sec && <div className="subtle tiny tnum">{sec}</div>}
+        </div>
+        {rest.length > 0 && <span style={{ color: "#6b7080", fontSize: 11, flex: "none", width: 12, textAlign: "center" }}>{open ? "▲" : "▼"}</span>}
+      </button>
+      {open && rest.map((e) => (
+        <div key={e.rnk} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+          <span style={{ fontSize: 15 }}>{MEDAL[e.rnk - 1] || "🎖"}</span>
+          <div className="subtle tiny" style={{ flex: 1 }}>{dShort(e.achieved_on)}</div>
+          <div className="tnum" style={{ fontSize: 13, fontWeight: 700 }}>{pbPrimary(rec, e)}</div>
+          {pbSecondary(rec, e) && <div className="subtle tiny tnum" style={{ minWidth: 54, textAlign: "right" }}>{pbSecondary(rec, e)}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const PB_SECTIONS: { key: "running" | "swim" | "strength"; emoji: string; label: string }[] = [
+  { key: "running", emoji: "🏃", label: "Running" },
+  { key: "swim", emoji: "🏊", label: "Swimming" },
+  { key: "strength", emoji: "🏋️", label: "Strength" },
+];
+
 function History({ prs }: { prs: TrnPrs }) {
-  const [tab, setTab] = useState<"PRs & milestones" | "Adherence">("PRs & milestones");
-  const strengthPRs = (prs.records.strength || []).filter((r) => r.metric === "peak_e1rm");
-  const allPRs: TrnRecord[] = [...strengthPRs, ...(prs.records.running || []), ...(prs.records.swim || [])];
-  const prs2026 = allPRs.filter((r) => r.achieved_on?.startsWith("2026")).length;
-  const timeline = [...allPRs].sort((a, b) => (b.achieved_on || "").localeCompare(a.achieved_on || "")).slice(0, 12);
+  const [tab, setTab] = useState<"Personal Bests" | "Adherence">("Personal Bests");
+  const [showAllStr, setShowAllStr] = useState(false);
+  const podium = prs.podium;
+  const anyPB = !!podium && PB_SECTIONS.some((s) => (podium[s.key] || []).length > 0);
 
   return (
     <div>
-      <div className="trn-statgrid" style={{ gridTemplateColumns: "repeat(3,1fr)" }}>
-        <div className="trn-cell hl"><div className="v tnum">{prs2026}</div><div className="l">PRs · 2026</div></div>
-        <div className="trn-cell"><div className="v tnum">{prs.stats.total_workouts}</div><div className="l">workouts</div></div>
-        <div className="trn-cell good"><div className="v tnum">🔥 {prs.stats.week_streak}</div><div className="l">wk streak</div></div>
+      <div style={{ display: "flex", justifyContent: "center", margin: "2px 0 4px" }}>
+        <span className="pill ok" style={{ fontSize: 13 }}>🔥 {prs.stats.week_streak} week streak</span>
       </div>
 
-      <SubPills items={["PRs & milestones", "Adherence"] as const} value={tab} onChange={setTab} />
+      <SubPills items={["Personal Bests", "Adherence"] as const} value={tab} onChange={setTab} />
 
-      {tab === "PRs & milestones" ? (
+      {tab === "Personal Bests" ? (
         <div>
-          <div className="eyebrow" style={{ marginTop: 0 }}>Recent achievements</div>
-          {timeline.map((r, i) => (
-            <div className="trn-ach" key={i}>
-              <div className="rail"><span className="dot" />{i < timeline.length - 1 && <span className="line" />}</div>
-              <div className="body">
-                <span style={{ fontSize: 17 }}>{achIcon(r.category)}</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="tt">{r.scope_label} · {r.category === "strength" ? `${kg(r.value)} ${r.unit}` : `${r.value} ${r.unit}`}</div>
-                  <div className="dd">{dShort(r.achieved_on)}</div>
-                </div>
-                <span className="trn-prbadge">PR</span>
+          {!podium && <div className="muted center pad">Loading…</div>}
+          {podium && !anyPB && <div className="subtle tiny center" style={{ padding: "16px 0" }}>No personal bests yet.</div>}
+          {podium && anyPB && PB_SECTIONS.filter((s) => (podium[s.key] || []).length > 0).map((s) => {
+            const recs = podium[s.key] || [];
+            const shown = s.key === "strength" && !showAllStr ? recs.slice(0, 8) : recs;
+            return (
+              <div key={s.key}>
+                <div className="eyebrow">{s.emoji} {s.label}</div>
+                {shown.map((rec) => <PBRow key={rec.metric + rec.scope_label} rec={rec} />)}
+                {s.key === "strength" && recs.length > 8 && (
+                  <button onClick={() => setShowAllStr((v) => !v)} style={{ width: "100%", padding: "9px", marginBottom: 6, borderRadius: 10, background: "transparent", border: "1px dashed rgba(255,255,255,0.16)", color: "#c9b6ff", cursor: "pointer", font: "inherit", fontSize: 12.5, fontWeight: 600 }}>
+                    {showAllStr ? "Show fewer" : `Show all ${recs.length} lifts`}
+                  </button>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="card">
@@ -716,21 +768,21 @@ function Summary() {
 }
 
 export default function ProgressTab() {
-  const [sub, setSub] = useState<"Summary" | "Goals" | "History" | "Body">("Summary");
+  const [sub, setSub] = useState<"Summary" | "Goals" | "Records" | "Body">("Summary");
   const { data: prs, error: e1 } = useTrain<TrnPrs>("prs");
   const { data: prog, error: e2 } = useTrain<TrnProgress>("progress");
   const error = e1 || e2;
 
   return (
     <div>
-      <SubPills items={["Summary", "Goals", "History", "Body"] as const} value={sub} onChange={setSub} />
+      <SubPills items={["Summary", "Goals", "Records", "Body"] as const} value={sub} onChange={setSub} />
       {sub === "Summary" ? (
         <Summary />
       ) : sub === "Goals" ? (
         <GoalsTab />
       ) : error ? (
         <div className="card error"><strong>Couldn&apos;t load</strong><div className="subtle">{error}</div></div>
-      ) : sub === "History" ? (
+      ) : sub === "Records" ? (
         prs ? <History prs={prs} /> : <div className="muted center pad">Loading…</div>
       ) : (
         prog ? <Body p={prog} /> : <div className="muted center pad">Loading…</div>
