@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useTrain, useApi, actionGet, actionPost, planRange, strengthSessions, cardioActivities, type TrnPrs, type TrnProgress, type TrnPbRec, type TrnSport, type StrengthSession, type CardioActivityLite } from "../lib/api";
+import { useTrain, useApi, actionGet, actionPost, planRange, strengthSessions, cardioActivities, useBadges, markBadgesSeen, type TrnPrs, type TrnProgress, type TrnPbRec, type TrnSport, type TrnBadge, type StrengthSession, type CardioActivityLite } from "../lib/api";
 import { Spark, SubPills, Delta, dShort } from "./ui";
 import KaiDailyCard from "../components/KaiDailyCard";
 import ExerciseDetail from "./ExerciseDetail";
@@ -319,8 +319,59 @@ function PBRow({ rec }: { rec: TrnPbRec }) {
   );
 }
 
+/* ═══ Badges (Chunk 10) — hexagonal tiered badges, Earned / Available ═══ */
+const TIER_COLORS: Record<string, [string, string]> = {
+  bronze: ["#a4703c", "#d89a5f"],
+  silver: ["#7d8595", "#c3ccdb"],
+  gold: ["#c99a2e", "#f5cf5e"],
+  platinum: ["#3f93b3", "#8fe6ff"],
+};
+const HEX_CLIP = "polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%)";
+function badgeDate(iso?: string): string { if (!iso) return ""; const d = new Date(iso + "T00:00:00Z"); return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("en-GB", { month: "short", year: "numeric", timeZone: "UTC" }); }
+
+function BadgeHex({ b, earned }: { b: TrnBadge; earned: boolean }) {
+  const [c1, c2] = TIER_COLORS[b.tier] || TIER_COLORS.bronze;
+  const prog = earned ? 1 : (b.progress || 0);
+  return (
+    <div style={{ width: "33.333%", display: "flex", flexDirection: "column", alignItems: "center", gap: 5, padding: "6px 3px 12px" }}>
+      <div style={{ position: "relative", width: 76, height: 84 }}>
+        <div style={{ position: "absolute", inset: 0, clipPath: HEX_CLIP, background: earned ? `linear-gradient(150deg, ${c1}, ${c2})` : "rgba(255,255,255,0.05)" }} />
+        <div style={{ position: "absolute", inset: 3, clipPath: HEX_CLIP, background: earned ? "rgba(0,0,0,0.14)" : "rgba(18,20,30,0.92)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <span style={{ fontSize: 27, opacity: earned ? 1 : 0.32, filter: earned ? "none" : "grayscale(1)" }}>{earned ? b.icon : "🔒"}</span>
+        </div>
+        {earned && b.seen === false && <span style={{ position: "absolute", top: -3, right: 2, background: "linear-gradient(135deg,#5f7dff,#a274ff)", color: "#fff", fontSize: 8, fontWeight: 800, letterSpacing: "0.04em", padding: "2px 5px", borderRadius: 999, boxShadow: "0 2px 6px rgba(0,0,0,0.4)" }}>NEW</span>}
+      </div>
+      <div style={{ fontSize: 10.5, fontWeight: 700, textAlign: "center", lineHeight: 1.2, color: earned ? "#e7e9f2" : "#7c8296", minHeight: 25 }}>{b.title}</div>
+      {earned
+        ? <div className="subtle" style={{ fontSize: 9, opacity: 0.7 }}>{badgeDate(b.earned_on)}</div>
+        : <div style={{ width: "68%", height: 3, borderRadius: 2, background: "rgba(255,255,255,0.09)", overflow: "hidden" }}><div style={{ width: `${Math.round(prog * 100)}%`, height: "100%", background: c2, borderRadius: 2 }} /></div>}
+    </div>
+  );
+}
+
+function Badges() {
+  const [tab, setTab] = useState<"Earned" | "Available">("Earned");
+  const { data, error } = useBadges();
+  useEffect(() => { if (data && data.counts.unseen > 0) markBadgesSeen(); }, [data]);
+  if (error) return <div className="card"><div className="subtle tiny">Couldn&apos;t load badges. {error}</div></div>;
+  if (!data) return <div className="muted center pad">Loading…</div>;
+  const list = tab === "Earned" ? data.earned : data.available;
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 7, margin: "2px 0 10px" }}>
+        <span className="tnum" style={{ fontSize: 20, fontWeight: 800 }}>{data.counts.earned}</span>
+        <span className="subtle tiny">of {data.counts.total} badges earned</span>
+      </div>
+      <SubPills items={["Earned", "Available"] as const} value={tab} onChange={setTab} />
+      {list.length === 0
+        ? <div className="subtle tiny center" style={{ padding: "18px 0" }}>{tab === "Earned" ? "No badges yet — keep training!" : "Everything unlocked. Legend."}</div>
+        : <div style={{ display: "flex", flexWrap: "wrap", marginTop: 10 }}>{list.map((b) => <BadgeHex key={b.id} b={b} earned={tab === "Earned"} />)}</div>}
+    </div>
+  );
+}
+
 function History({ prs }: { prs: TrnPrs }) {
-  const [tab, setTab] = useState<"Personal Bests" | "Adherence">("Personal Bests");
+  const [tab, setTab] = useState<"Personal Bests" | "Badges" | "Adherence">("Personal Bests");
   const [sport, setSport] = useState<string | null>(prs.default_sport);
   const [period, setPeriod] = useState<string>("all");
   const sportKey = sport && prs.sports.some((s) => s.key === sport) ? sport : (prs.default_sport || prs.sports[0]?.key || null);
@@ -328,7 +379,7 @@ function History({ prs }: { prs: TrnPrs }) {
 
   return (
     <div>
-      <SubPills items={["Personal Bests", "Adherence"] as const} value={tab} onChange={setTab} />
+      <SubPills items={["Personal Bests", "Badges", "Adherence"] as const} value={tab} onChange={setTab} />
 
       {tab === "Personal Bests" ? (
         prs.sports.length === 0 ? (
@@ -356,6 +407,8 @@ function History({ prs }: { prs: TrnPrs }) {
               : recs.map((rec) => <PBRow key={rec.label} rec={rec} />)}
           </div>
         )
+      ) : tab === "Badges" ? (
+        <Badges />
       ) : (
         <div className="card">
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
