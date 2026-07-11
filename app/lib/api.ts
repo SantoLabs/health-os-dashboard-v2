@@ -439,6 +439,17 @@ export async function nutriProfile<T>(): Promise<T> {
 
 // ---- training (Training tab revamp v2 — standalone `training` edge fn, read-only intelligence) ----
 const TRAIN = "/functions/v1/training";
+const BADGES = "/functions/v1/badges";
+export type TrnBadge = { id: string; family: string; sport: string | null; title: string; tier: string; threshold: number; unit: string; icon: string; sort: number; description: string; earned_on?: string; value?: number; seen?: boolean; current?: number; progress?: number };
+export type TrnBadges = { earned: TrnBadge[]; available: TrnBadge[]; counts: { earned: number; total: number; unseen: number }; metrics: Record<string, unknown> };
+export async function badgesGet(): Promise<TrnBadges> { const res = await authedFetch(`${BADGES}?api=list`); if (!res.ok) throw new Error(`Couldn't load badges (${res.status})`); return res.json(); }
+export async function markBadgesSeen(): Promise<void> { try { await authedFetch(`${BADGES}?api=seen`); } catch { /* best-effort */ } }
+export function useBadges() {
+  const [data, setData] = useState<TrnBadges | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => { let alive = true; badgesGet().then((d) => alive && setData(d)).catch((e) => alive && setError(e.message)); return () => { alive = false; }; }, []);
+  return { data, error };
+}
 export async function trainGet<T>(route: string): Promise<T> {
   const res = await authedFetch(`${TRAIN}?api=${route}`);
   if (!res.ok) throw new Error(`Couldn't load training (${res.status})`);
