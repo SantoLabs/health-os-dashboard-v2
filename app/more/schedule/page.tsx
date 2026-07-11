@@ -193,6 +193,17 @@ export default function SchedulePage() {
   const showToast = useCallback((t: string) => { setToast(t); }, []);
   useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(null), 2400); return () => clearTimeout(id); }, [toast]);
 
+  // Deep-link: ?date=YYYY-MM-DD (e.g. from the Progress → Summary calendar) lands on that week + day.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const qd = new URLSearchParams(window.location.search).get("date");
+    if (qd && qd.length === 10 && qd[4] === "-" && qd[7] === "-" && !Number.isNaN(Date.parse(qd + "T00:00:00"))) {
+      setWeekOffset(Math.round((parse(monOf(qd)).getTime() - parse(monOf(today)).getTime()) / 604800000));
+      setSelDate(qd);
+      setView("week");
+    }
+  }, [today]);
+
   /* ---- loaders ---- */
   const loadWeek = useCallback(async (ws: string) => {
     setWeekErr(null);
