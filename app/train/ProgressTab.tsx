@@ -306,20 +306,21 @@ function SportBlocks({ from, to, str, car }: { from: string; to: string; str: St
   }, [from, to, str, car]);
   if (!blocks.length) return <div className="subtle tiny center" style={{ padding: "16px 0" }}>No sessions logged in this window yet.</div>;
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+    <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2, scrollbarWidth: "none", msOverflowStyle: "none", WebkitOverflowScrolling: "touch" }}>
       {blocks.map((b) => {
         const s = SPORT[b.sport];
         const isStr = b.sport === "strength";
         const val = isStr ? Math.round(b.vol).toLocaleString("en-US") : b.km.toFixed(1);
         const unit = isStr ? "kg" : "km";
-        const vfont = val.length >= 8 ? 15 : val.length >= 6 ? 18 : 21; // keep long kg totals compact
+        const vfont = val.length >= 8 ? 14 : val.length >= 6 ? 17 : 20; // keep long kg totals compact
         return (
-          <div key={b.sport} style={{ background: hexA(s.color, 0.07), border: `1px solid ${hexA(s.color, 0.18)}`, borderRadius: 14, padding: "12px 10px", textAlign: "center" }}>
-            <div style={{ fontSize: 18, lineHeight: 1 }}>{s.emoji}</div>
-            <div className="tnum" style={{ marginTop: 6, fontWeight: 800, fontSize: vfont, color: "#f4f4f7", letterSpacing: "-0.4px", lineHeight: 1.1 }}>
-              {val}<span style={{ fontSize: 11, fontWeight: 700, color: "#9aa0b0", marginLeft: 2 }}>{unit}</span>
+          <div key={b.sport} style={{ flex: "0 0 auto", minWidth: 92, background: hexA(s.color, 0.07), border: `1px solid ${hexA(s.color, 0.18)}`, borderRadius: 14, padding: "10px 12px", textAlign: "center" }}>
+            <div style={{ fontSize: 16, lineHeight: 1 }}>{s.emoji}</div>
+            <div className="tnum" style={{ marginTop: 5, fontWeight: 800, fontSize: vfont, color: "#f4f4f7", letterSpacing: "-0.4px", lineHeight: 1.1, whiteSpace: "nowrap" }}>
+              {val}<span style={{ fontSize: 10.5, fontWeight: 700, color: "#9aa0b0", marginLeft: 2 }}>{unit}</span>
             </div>
-            <div className="subtle tiny" style={{ marginTop: 3 }}>{s.label} · {b.sessions} session{b.sessions === 1 ? "" : "s"}</div>
+            <div style={{ marginTop: 3, fontSize: 12, fontWeight: 600, color: "#c9cede", whiteSpace: "nowrap" }}>{s.label}</div>
+            <div className="subtle tiny" style={{ whiteSpace: "nowrap" }}>{b.sessions} session{b.sessions === 1 ? "" : "s"}</div>
           </div>
         );
       })}
