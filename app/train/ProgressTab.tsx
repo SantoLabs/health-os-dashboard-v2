@@ -1,54 +1,284 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useTrain, planRange, strengthSessions, cardioActivities, type TrnPrs, type TrnProgress, type TrnGoal, type TrnRecord, type StrengthSession, type CardioActivityLite } from "../lib/api";
-import { Spark, SubPills, kg, dShort } from "./ui";
+import { useTrain, useApi, actionGet, actionPost, planRange, strengthSessions, cardioActivities, type TrnPrs, type TrnProgress, type TrnRecord, type StrengthSession, type CardioActivityLite } from "../lib/api";
+import { Spark, SubPills, Delta, kg, dShort } from "./ui";
 import KaiDailyCard from "../components/KaiDailyCard";
 import ExerciseDetail from "./ExerciseDetail";
 import { CardioActivityDetail } from "./CardioTab";
 import { useRouter } from "next/navigation";
 
-const goalIcon = (label: string): string => {
-  const k = label.toLowerCase();
-  if (k.includes("tri")) return "🏊";
-  if (k.includes("cycl")) return "🚴";
-  if (k.includes("fat") || k.includes("loss")) return "🔥";
-  if (k.includes("body") || k.includes("composition")) return "⚖️";
-  if (k.includes("build")) return "🏗️";
-  if (k.includes("race") || k.includes("hm") || k.includes("marathon") || k.includes("run") || k.includes("tmm")) return "🏃";
-  return "🎯";
-};
 const achIcon = (c: string): string => (c === "running" ? "🏃" : c === "swim" ? "🏊" : "🏆");
-const statusChip = (s: string) =>
-  s === "in_progress"
-    ? <span className="trn-gstatus ip">In progress</span>
-    : <span className="trn-gstatus ns">Upcoming</span>;
 
-function Goals({ p, prs }: { p: TrnProgress; prs: TrnPrs | null }) {
-  const race = p.next_race;
-  const hm = prs?.projections?.find((x) => x.distance === "HM");
+/* Goals (Chunk 8) full CRUD, ported from /more/goals */
+type UGoal = { id: string; label: string; when_text?: string; target_date: string | null; goal_type: string; status: string; focus: string; deleted: boolean; created_at: string; updated_at: string; days_away: number | null; source?: string; completed_at?: string | null; early_days?: number | null };
+type GoalsApiResp = { body_comp: { bia_bf: number; dexa_bf: number; goal_bf: number; goal_by: string; latest_weight: number; weight_as_of: string; weight_history: { kg: number; date: string; source: string }[] } };
+
+const TYPE_META: Record<string, { emoji: string; label: string }> = {
+  race: { emoji: "🏁", label: "Race" }, run: { emoji: "🏃", label: "Run" }, swim: { emoji: "🏊", label: "Swim" },
+  bike: { emoji: "🚴", label: "Bike" }, strength: { emoji: "💪", label: "Strength" }, triathlon: { emoji: "🏅", label: "Triathlon" },
+  body: { emoji: "⚖️", label: "Body" }, other: { emoji: "🎯", label: "Other" },
+};
+const GTYPES = Object.keys(TYPE_META);
+const tEmoji = (t: string) => TYPE_META[t]?.emoji ?? "🎯";
+const G_STATUS: Record<string, { label: string; cls: string }> = {
+  not_started: { label: "Yet to start", cls: "st-todo" }, in_progress: { label: "In progress", cls: "st-prog" }, done: { label: "Done", cls: "st-done" },
+};
+const G_STATUSES = Object.keys(G_STATUS);
+const G_FOCUS: Record<string, { label: string; cls: string }> = {
+  low: { label: "Low", cls: "fo-low" }, medium: { label: "Med", cls: "fo-med" }, high: { label: "High", cls: "fo-high" },
+};
+const G_FOCUSES = Object.keys(G_FOCUS);
+const FOCUS_RANK: Record<string, number> = { high: 0, medium: 1, low: 2 };
+const G_STATUS_RANK: Record<string, number> = { in_progress: 0, not_started: 1, done: 2 };
+const gFmtDate = (d: string | null) => d ? new Date(d + "T00:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "No date";
+const gFmtShort = (iso?: string) => iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : "";
+function awayPill(days: number | null) {
+  if (days == null) return null;
+  const cls = days < 0 ? "ok" : days <= 30 ? "warn" : "";
+  const txt = days < 0 ? `${-days}d ago` : days === 0 ? "today" : `in ${days}d`;
+  return <span className={`pill ${cls}`}>{txt}</span>;
+}
+function completedMarker(g: UGoal): { text: string; cls: string } | null {
+  if (g.early_days == null) return null;
+  const n = Math.abs(g.early_days);
+  const dW = n === 1 ? "day" : "days";
+  if (g.early_days > 0) { const flavor = g.early_days >= 14 ? "smashed it" : g.early_days >= 4 ? "ahead of plan" : "early"; return { text: `🎯 ${n} ${dW} early — ${flavor}`, cls: "ok" }; }
+  if (g.early_days < 0) return { text: `${n} ${dW} past target — done is done`, cls: "warn" };
+  return { text: "🎯 right on the day", cls: "ok" };
+}
+type GSortKey = "date" | "priority" | "status" | "type";
+
+function GoalsTab() {
+  const { data, error } = useApi<GoalsApiResp>("goals");
+  const bc = data?.body_comp;
+  const progress = bc ? Math.max(0, Math.min(100, ((bc.dexa_bf - bc.bia_bf) / (bc.dexa_bf - bc.goal_bf)) * 100)) : 0;
+  const wStart = bc?.weight_history?.find((w) => w.source === "withings")?.kg;
+  const wDelta = bc && wStart ? bc.latest_weight - wStart : undefined;
+
+  const [goals, setGoals] = useState<UGoal[] | null>(null);
+  const [removed, setRemoved] = useState<UGoal[]>([]);
+  const [editing, setEditing] = useState<string | "new" | null>(null);
+  const [form, setForm] = useState({ label: "", target_date: "", goal_type: "race", status: "not_started", focus: "medium" });
+  const [busy, setBusy] = useState(false);
+  const [sort, setSort] = useState<GSortKey>("date");
+  const [confirmPurge, setConfirmPurge] = useState<string | null>(null);
+  const [bfEdit, setBfEdit] = useState(false);
+  const [bfVal, setBfVal] = useState("");
+  const [bfGoal, setBfGoal] = useState<number | null>(null);
+  useEffect(() => { if (bc?.goal_bf != null && bfGoal == null) setBfGoal(bc.goal_bf); }, [bc, bfGoal]);
+
+  function apply(d: { goals: UGoal[]; deleted_goals: UGoal[] }) { setGoals(d.goals); setRemoved(d.deleted_goals || []); }
+  useEffect(() => { let alive = true; actionGet<{ goals: UGoal[]; deleted_goals: UGoal[] }>("goals_list").then((d) => { if (alive) apply(d); }).catch(() => {}); return () => { alive = false; }; }, []);
+
+  const startEdit = (g: UGoal) => { setEditing(g.id); setForm({ label: g.label, target_date: g.target_date || "", goal_type: g.goal_type, status: g.status, focus: g.focus }); };
+  const startNew = () => { setEditing("new"); setForm({ label: "", target_date: "", goal_type: "race", status: "not_started", focus: "medium" }); };
+  async function save() {
+    if (!form.label.trim() || busy) return;
+    setBusy(true);
+    try {
+      const body: Record<string, unknown> = { ...form, label: form.label.trim(), target_date: form.target_date || null };
+      if (editing && editing !== "new") body.id = editing;
+      apply(await actionPost("goal_save", body)); setEditing(null);
+    } catch { /* keep open */ } finally { setBusy(false); }
+  }
+  async function runAct(route: string, id: string) {
+    if (busy) return; setBusy(true);
+    try { apply(await actionPost(route, { id })); if (editing === id) setEditing(null); }
+    catch { /* noop */ } finally { setBusy(false); }
+  }
+  async function saveBf() {
+    const n = parseFloat(bfVal); if (isNaN(n) || busy) return;
+    setBusy(true);
+    try { const r = await actionPost<{ body_fat_pct: number }>("bodyfat_target_save", { value: n }); setBfGoal(r.body_fat_pct); setBfEdit(false); }
+    catch { /* noop */ } finally { setBusy(false); }
+  }
+
+  const activeGoals = (goals || []).filter((g) => g.status !== "done");
+  const doneGoals = (goals || []).filter((g) => g.status === "done");
+  const sorted = useMemo(() => {
+    const byDate = (a: UGoal, b: UGoal) => (a.target_date || "9999").localeCompare(b.target_date || "9999");
+    const arr = [...activeGoals];
+    if (sort === "date") arr.sort(byDate);
+    else if (sort === "priority") arr.sort((a, b) => (FOCUS_RANK[a.focus] - FOCUS_RANK[b.focus]) || byDate(a, b));
+    else if (sort === "status") arr.sort((a, b) => (G_STATUS_RANK[a.status] - G_STATUS_RANK[b.status]) || byDate(a, b));
+    else if (sort === "type") arr.sort((a, b) => a.goal_type.localeCompare(b.goal_type) || byDate(a, b));
+    return arr;
+  }, [activeGoals, sort]);
+  const nextRace = useMemo(() => {
+    const races = activeGoals.filter((g) => (g.goal_type === "race" || g.goal_type === "triathlon") && g.target_date);
+    const hi = races.filter((g) => g.focus === "high");
+    return (hi.length ? hi : races).sort((a, b) => (a.target_date || "9999").localeCompare(b.target_date || "9999"))[0] || null;
+  }, [activeGoals]);
+
+  const Seg = <T extends string>(opts: { v: T; label: string }[], val: T, set: (v: T) => void, cls = "") => (
+    <div className={`seg ${cls}`}>
+      {opts.map((o) => <button key={o.v} className={o.v === val ? "seg-opt active" : "seg-opt"} onClick={() => set(o.v)}>{o.label}</button>)}
+    </div>
+  );
+
+  const EditForm = (
+    <div className="goal-form">
+      <input className="g-input" placeholder="Goal name" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} autoFocus />
+      <input className="g-input" type="date" value={form.target_date} onChange={(e) => setForm({ ...form, target_date: e.target.value })} />
+      <div className="g-field-label">Type</div>
+      <div className="type-row">
+        {GTYPES.map((t) => (
+          <button key={t} className={t === form.goal_type ? "type-btn active" : "type-btn"} onClick={() => setForm({ ...form, goal_type: t })}>
+            <span>{TYPE_META[t].emoji}</span><span className="type-cap">{TYPE_META[t].label}</span>
+          </button>
+        ))}
+      </div>
+      <div className="g-field-label">Status</div>
+      {Seg(G_STATUSES.map((s) => ({ v: s, label: G_STATUS[s].label })), form.status, (v) => setForm({ ...form, status: v }))}
+      <div className="g-field-label">Focus</div>
+      {Seg(G_FOCUSES.map((f) => ({ v: f, label: G_FOCUS[f].label })), form.focus, (v) => setForm({ ...form, focus: v }))}
+      <div className="goal-form-row">
+        <button className="btn" onClick={save} disabled={busy || !form.label.trim()}>{busy ? "Saving…" : "Save"}</button>
+        <button className="btn btn-ghost" onClick={() => setEditing(null)} disabled={busy}>Cancel</button>
+        {editing && editing !== "new" && <button className="btn btn-danger" onClick={() => runAct("goal_delete", editing)} disabled={busy} style={{ marginLeft: "auto" }}>Delete</button>}
+      </div>
+    </div>
+  );
+
+  const GoalRow = (g: UGoal) => (
+    <button className="goal-row" onClick={() => startEdit(g)}>
+      <span className="cardio-ic">{tEmoji(g.goal_type)}</span>
+      <div className="cardio-main">
+        <div className="session-title">{g.label}</div>
+        <div className="subtle tiny">{gFmtDate(g.target_date)} · added {gFmtShort(g.created_at)}{g.updated_at && g.updated_at !== g.created_at ? ` · edited ${gFmtShort(g.updated_at)}` : ""}</div>
+        <div className="chip-row">
+          <span className={`chip ${G_STATUS[g.status]?.cls}`}>{G_STATUS[g.status]?.label}</span>
+          <span className={`chip ${G_FOCUS[g.focus]?.cls}`}>{G_FOCUS[g.focus]?.label} focus</span>
+        </div>
+      </div>
+      {awayPill(g.days_away)}
+      <span className="chev-edit">✎</span>
+    </button>
+  );
+
   return (
     <div>
-      {race && (
+      {nextRace && (
         <div className="trn-race">
-          <div className="top"><span>🏁 Next race</span><span>{dShort(race.target_date)}</span></div>
-          <div className="nm">{race.label}</div>
-          <div className="meta">{statusChip(race.status)}</div>
-          <div className="days tnum">{race.days_to_go}<small>days to go</small></div>
-          {hm && <div className="subtle tiny" style={{ marginTop: 10 }}>Neutral projection · ~{hm.projected_time} @ {hm.projected_pace_min_km.toFixed(2)}/km (Riegel; goal-verdict lands with the race hub)</div>}
+          <div className="top"><span>{tEmoji(nextRace.goal_type)} Next race</span><span>{gFmtDate(nextRace.target_date)}</span></div>
+          <div className="nm">{nextRace.label}</div>
+          <div className="meta"><span className={`chip ${G_FOCUS[nextRace.focus]?.cls}`}>{G_FOCUS[nextRace.focus]?.label} focus</span></div>
+          {nextRace.days_away != null && <div className="days tnum">{Math.max(0, nextRace.days_away)}<small>days to go</small></div>}
         </div>
       )}
-      <div className="eyebrow">All goals · {p.goals.length}</div>
-      {p.goals.map((g: TrnGoal, i) => (
-        <div className="trn-goal" key={i}>
-          <span className="ic">{goalIcon(g.label)}</span>
-          <div className="main">
-            <div className="tt">{g.label}</div>
-            <div className="dt">{dShort(g.target_date)} · {g.days_to_go} days</div>
-          </div>
-          {statusChip(g.status)}
+
+      {bc && (
+        <>
+          <h2 className="section-title">Body composition</h2>
+          <section className="card">
+            <div className="lever-top">
+              <span>Body fat <strong>{bc.bia_bf}%</strong> <span className="subtle tiny">BIA · DEXA {bc.dexa_bf}%</span></span>
+              {!bfEdit ? (
+                <button className="goal-inline-edit" onClick={() => { setBfEdit(true); setBfVal(String(bfGoal ?? bc.goal_bf)); }}>goal {bfGoal ?? bc.goal_bf}% by {bc.goal_by} ✎</button>
+              ) : (
+                <span className="bf-edit">
+                  <input className="g-input bf-input" type="number" step="0.5" value={bfVal} onChange={(e) => setBfVal(e.target.value)} autoFocus />%
+                  <button className="btn btn-mini" onClick={saveBf} disabled={busy}>Save</button>
+                  <button className="btn btn-ghost btn-mini" onClick={() => setBfEdit(false)}>✕</button>
+                </span>
+              )}
+            </div>
+            <div className="track" style={{ marginTop: 12 }}><div className="fill" style={{ width: `${progress}%` }} /></div>
+            <div className="subtle tiny mt8">{Math.round(progress)}% of the way from {bc.dexa_bf}% → {bfGoal ?? bc.goal_bf}%</div>
+            <div className="lever-top" style={{ marginTop: 14 }}>
+              <span>Weight <strong>{bc.latest_weight}kg</strong></span>
+              {wDelta != null && <span className={`pill ${wDelta <= 0 ? "ok" : "warn"}`}>{wDelta > 0 ? "+" : ""}{wDelta.toFixed(1)}kg</span>}
+            </div>
+          </section>
+        </>
+      )}
+
+      <div className="lever-top" style={{ margin: "18px 4px 8px" }}>
+        <h2 className="section-title" style={{ margin: 0 }}>Goals</h2>
+        {editing !== "new" && <button className="btn-add" onClick={startNew}>+ Add</button>}
+      </div>
+
+      {goals && activeGoals.length > 1 && (
+        <div className="sort-row">
+          <span className="subtle tiny">Sort</span>
+          {Seg(([["date", "Date"], ["priority", "Priority"], ["status", "Status"], ["type", "Type"]] as [GSortKey, string][]).map(([v, l]) => ({ v, label: l })), sort, setSort, "seg-sm")}
         </div>
-      ))}
+      )}
+
+      {editing === "new" && <section className="card goal-card"><div className="goal-form" style={{ padding: "14px 16px" }}>{EditForm}</div></section>}
+
+      <section className="list">
+        {goals == null && !error && <div className="subtle tiny" style={{ padding: 12, textAlign: "center" }}>Loading goals…</div>}
+        {error && <div className="card error"><strong>Couldn&apos;t load goals</strong><div className="subtle">{error}</div></div>}
+        {goals?.length === 0 && editing !== "new" && <div className="subtle tiny" style={{ padding: "4px 4px 8px" }}>No goals yet — add your first one.</div>}
+        {sorted.map((g) => (
+          <div key={g.id} className="card goal-card">{editing === g.id ? EditForm : GoalRow(g)}</div>
+        ))}
+      </section>
+
+      {doneGoals.length > 0 && (
+        <>
+          <h2 className="section-title">Completed 🎉</h2>
+          <section className="list">
+            {doneGoals.map((g) => {
+              const mk = completedMarker(g);
+              return (
+                <div key={g.id} className="card goal-card done-card">
+                  {editing === g.id ? EditForm : (
+                    <button className="goal-row" onClick={() => startEdit(g)}>
+                      <span className="cardio-ic">🥳</span>
+                      <div className="cardio-main">
+                        <div className="session-title done-text">{tEmoji(g.goal_type)} {g.label}</div>
+                        <div className="subtle tiny">{g.completed_at ? `Completed ${gFmtDate(g.completed_at)}` : "Completed"}{g.target_date ? ` · target ${gFmtDate(g.target_date)}` : ""}</div>
+                        {mk && <div className="chip-row" style={{ marginTop: 6 }}><span className={`pill ${mk.cls}`}>{mk.text}</span></div>}
+                      </div>
+                      <span className="chev-edit">✎</span>
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </section>
+        </>
+      )}
+
+      {removed.length > 0 && (
+        <>
+          <h2 className="section-title">Removed</h2>
+          <section className="list">
+            {removed.map((g) => (
+              <div key={g.id} className="card goal-card removed-card">
+                {confirmPurge === g.id ? (
+                  <div className="goal-row static" style={{ alignItems: "flex-start" }}>
+                    <span className="cardio-ic">🗑</span>
+                    <div className="cardio-main">
+                      <div className="session-title">Permanently remove “{g.label}”?</div>
+                      <div className="subtle tiny">This deletes it for good — it can&apos;t be restored.</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexShrink: 0 }}>
+                      <button onClick={() => { setConfirmPurge(null); runAct("goal_purge", g.id); }} disabled={busy} style={{ background: "#ef4444", border: "none", color: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Yes, delete</button>
+                      <button onClick={() => setConfirmPurge(null)} disabled={busy} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.18)", color: "var(--muted)", borderRadius: 8, padding: "5px 11px", fontSize: 12, cursor: "pointer" }}>No</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="goal-row static">
+                    <span className="cardio-ic">{tEmoji(g.goal_type)}</span>
+                    <div className="cardio-main">
+                      <div className="session-title struck">{g.label}</div>
+                      <div className="subtle tiny">{gFmtDate(g.target_date)}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexShrink: 0 }}>
+                      <button className="btn-add" onClick={() => runAct("goal_restore", g.id)} disabled={busy}>↺ Restore</button>
+                      <button onClick={() => setConfirmPurge(g.id)} disabled={busy} style={{ background: "transparent", border: "1px solid rgba(248,113,113,0.4)", color: "#f87171", borderRadius: 999, padding: "4px 12px", fontSize: 13, cursor: "pointer" }}>🗑 Remove</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </section>
+        </>
+      )}
     </div>
   );
 }
@@ -107,11 +337,31 @@ function History({ prs }: { prs: TrnPrs }) {
   );
 }
 
+type BodyPt = TrnProgress["body_trend"][number];
 function Body({ p }: { p: TrnProgress }) {
   const b = p.body_latest;
   const trend = p.body_trend || [];
-  const weight = trend.map((x) => x.weight_kg);
-  const bf = trend.map((x) => x.body_fat_pct);
+  const [range, setRange] = useState<"3M" | "6M" | "1Y" | "All">("6M");
+  const win = useMemo(() => {
+    if (range === "All") return trend;
+    const days = range === "3M" ? 90 : range === "6M" ? 182 : 365;
+    const cutoff = new Date(Date.now() + 5.5 * 3600000 - days * 86400000).toISOString().slice(0, 10);
+    return trend.filter((x) => x.date >= cutoff);
+  }, [trend, range]);
+  const periodDelta = (pick: (x: BodyPt) => number | null): number | null => {
+    const nums = win.map(pick).filter((v): v is number => v != null);
+    return nums.length >= 2 ? nums[nums.length - 1] - nums[0] : null;
+  };
+  const RANGES: ("3M" | "6M" | "1Y" | "All")[] = ["3M", "6M", "1Y", "All"];
+  const graph = (title: string, pick: (x: BodyPt) => number | null, color: string, unit: string) => (
+    <div className="card">
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+        <div className="trn-eyebrow" style={{ margin: 0 }}>{title}</div>
+        <Delta v={periodDelta(pick)} unit={unit} suffix={range} />
+      </div>
+      <Spark values={win.map(pick)} color={color} height={100} />
+    </div>
+  );
   return (
     <div>
       <div className="trn-statgrid" style={{ gridTemplateColumns: "repeat(3,1fr)" }}>
@@ -119,14 +369,16 @@ function Body({ p }: { p: TrnProgress }) {
         <div className="trn-cell hl"><div className="v tnum">{b?.body_fat_pct != null ? `${b.body_fat_pct.toFixed(1)}%` : "—"}</div><div className="l">body fat</div></div>
         <div className="trn-cell good"><div className="v tnum">{b?.lean_mass_kg != null ? b.lean_mass_kg.toFixed(1) : "—"}</div><div className="l">lean kg</div></div>
       </div>
-      <div className="card">
-        <div className="trn-eyebrow">Weight · kg</div>
-        <Spark values={weight} color="#6d8bff" height={100} />
+      <div style={{ display: "flex", justifyContent: "center", margin: "10px 0" }}>
+        <div style={{ display: "flex", gap: 3, background: "rgba(255,255,255,0.05)", borderRadius: 999, padding: 3 }}>
+          {RANGES.map((r) => (
+            <button key={r} onClick={() => setRange(r)} style={{ padding: "5px 14px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, background: range === r ? "linear-gradient(135deg,#5f7dff,#a274ff)" : "transparent", color: range === r ? "#fff" : "#8a90a6" }}>{r}</button>
+          ))}
+        </div>
       </div>
-      <div className="card">
-        <div className="trn-eyebrow">Body fat · %</div>
-        <Spark values={bf} color="#ffb547" height={100} />
-      </div>
+      {graph("Weight · kg", (x) => x.weight_kg, "#6d8bff", "kg")}
+      {graph("Body fat · %", (x) => x.body_fat_pct, "#ffb547", "%")}
+      {graph("Lean mass · kg", (x) => x.lean_mass_kg, "#34d6a4", "kg")}
       {b?.date && <div className="subtle tiny center">Last measured {dShort(b.date)}</div>}
     </div>
   );
@@ -472,12 +724,12 @@ export default function ProgressTab() {
   return (
     <div>
       <SubPills items={["Summary", "Goals", "History", "Body"] as const} value={sub} onChange={setSub} />
-      {error ? (
-        <div className="card error"><strong>Couldn&apos;t load</strong><div className="subtle">{error}</div></div>
-      ) : sub === "Summary" ? (
+      {sub === "Summary" ? (
         <Summary />
       ) : sub === "Goals" ? (
-        prog ? <Goals p={prog} prs={prs} /> : <div className="muted center pad">Loading…</div>
+        <GoalsTab />
+      ) : error ? (
+        <div className="card error"><strong>Couldn&apos;t load</strong><div className="subtle">{error}</div></div>
       ) : sub === "History" ? (
         prs ? <History prs={prs} /> : <div className="muted center pad">Loading…</div>
       ) : (
