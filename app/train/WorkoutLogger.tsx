@@ -823,12 +823,15 @@ function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExi
   const [unmatched, setUnmatched] = useState<string[]>([]);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
+  const [ssFor, setSsFor] = useState<number | null>(null);
+  const [ssPick, setSsPick] = useState<number[]>([]);
+  const [exMenu, setExMenu] = useState<number | null>(null);
 
   useEffect(() => {
     if (!routineId) return;
     wkRoutine(routineId).then((r) => {
       if (r.routine) { setName(r.routine.name); setFocus(r.routine.focus || ""); }
-      setItems((r.items || []).map((it) => ({ exercise_name: it.exercise_name, muscle_group: it.muscle_group, target_sets: it.target_sets ?? 3, target_reps: it.target_reps ?? "", target_weight_kg: it.target_weight_kg ?? null })));
+      setItems((r.items || []).map((it) => ({ exercise_name: it.exercise_name, muscle_group: it.muscle_group, target_sets: it.target_sets ?? 3, target_reps: it.target_reps ?? "", target_weight_kg: it.target_weight_kg ?? null, superset_group: it.superset_group ?? null })));
     }).catch(() => {}).finally(() => setLoading(false));
   }, [routineId]);
 
@@ -860,6 +863,9 @@ function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExi
 
   if (loading) return <div className="muted center pad">Loading…</div>;
   const field: React.CSSProperties = { background: "rgba(255,255,255,0.05)", color: "inherit", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "8px 10px", fontSize: 13, fontFamily: "inherit" };
+  const SS_COLORS = ["#a274ff", "#79e0a8", "#5f9dff", "#ffb454", "#ff6f9e", "#4fd1c5"];
+  const ssColor = (v: number | null | undefined) => (v == null ? null : SS_COLORS[((v % SS_COLORS.length) + SS_COLORS.length) % SS_COLORS.length]);
+  function applySS(indices: number[], group: number | null) { setItems((xs) => xs.map((x, j) => (indices.includes(j) ? { ...x, superset_group: group } : x))); }
 
   return (
     <div className="card" style={{ padding: 14 }}>
@@ -884,10 +890,21 @@ function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExi
       <div className="eyebrow" style={{ marginTop: 14, marginBottom: 6 }}>Exercises</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {items.map((it, i) => (
-          <div key={i} data-ridx={i} style={{ padding: 10, borderRadius: 10, background: dragIdx !== null && overIdx === i ? "rgba(162,116,255,0.14)" : "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", opacity: dragIdx === i ? 0.6 : 1 }}>
+          <div key={i} data-ridx={i} style={{ padding: 10, borderRadius: 10, background: dragIdx !== null && overIdx === i ? "rgba(162,116,255,0.14)" : "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderLeft: ssColor(it.superset_group) ? `3px solid ${ssColor(it.superset_group)}` : "1px solid rgba(255,255,255,0.06)", opacity: dragIdx === i ? 0.6 : 1 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
               <span onPointerDown={(e) => { setDragIdx(i); setOverIdx(i); (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); }} onPointerMove={(e) => { if (dragIdx === null) return; const el = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest("[data-ridx]") as HTMLElement | null; if (el && el.dataset.ridx != null) setOverIdx(Number(el.dataset.ridx)); }} onPointerUp={(e) => { (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId); if (dragIdx !== null && overIdx !== null) move(dragIdx, overIdx); setDragIdx(null); setOverIdx(null); }} style={{ cursor: "grab", touchAction: "none", userSelect: "none", color: "var(--muted)", fontSize: 15, padding: "0 4px", flex: "0 0 auto" }} aria-label="Drag to reorder">⠿</span>
               <button onClick={() => setDetail(it.exercise_name)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit", textAlign: "left", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 5, flex: 1, minWidth: 0 }}>{it.exercise_name}<span className="subtle" style={{ fontSize: 11, fontWeight: 400 }}>ⓘ</span></button>
+              {it.superset_group != null ? <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.4, textTransform: "uppercase", color: ssColor(it.superset_group)!, border: `1px solid ${ssColor(it.superset_group)}`, borderRadius: 5, padding: "1px 5px", flex: "0 0 auto" }}>SS</span> : null}
+              <div style={{ position: "relative", flex: "0 0 auto" }}>
+                <button aria-label="Superset options" onClick={() => setExMenu(exMenu === i ? null : i)} style={{ width: 26, height: 26, borderRadius: 7, cursor: "pointer", background: "none", border: "none", color: "#8a90a6", fontSize: 16, lineHeight: 1 }}>⋯</button>
+                {exMenu === i ? (<>
+                  <div onClick={() => setExMenu(null)} style={{ position: "fixed", inset: 0, zIndex: 420 }} />
+                  <div style={{ position: "absolute", top: 28, right: 0, zIndex: 421, minWidth: 168, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: 6, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
+                    <button onClick={() => { setExMenu(null); setSsPick(items.map((x, j) => (x.superset_group != null && x.superset_group === it.superset_group && j !== i ? j : -1)).filter((j) => j >= 0)); setSsFor(i); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "#e6e9f2", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Add to superset</button>
+                    {it.superset_group != null ? <button onClick={() => { setExMenu(null); applySS([i], null); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "#ff8a8a", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Remove from superset</button> : null}
+                  </div>
+                </>) : null}
+              </div>
               <button className="trn-sub" onClick={() => remove(i)} style={{ padding: "4px 8px" }}>✕</button>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
@@ -908,6 +925,35 @@ function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExi
         {routineId ? <button onClick={del} disabled={saving} className="trn-sub" style={{ padding: "0 14px" }}>Delete</button> : null}
       </div>
       {detail ? <DetailOverlay title={detail} onClose={() => setDetail(null)} /> : null}
+      {ssFor != null ? (() => {
+        const forIt = items[ssFor];
+        const existing = forIt?.superset_group ?? null;
+        const grp = existing != null ? existing : (items.reduce((mx, x) => Math.max(mx, x.superset_group ?? -1), -1) + 1);
+        const col = ssColor(grp) || SS_COLORS[0];
+        return (
+          <div onClick={() => { setSsFor(null); setSsPick([]); }} style={{ position: "fixed", inset: 0, zIndex: 460, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, maxHeight: "75vh", background: "#12151d", borderTopLeftRadius: 16, borderTopRightRadius: 16, border: "1px solid rgba(255,255,255,0.12)", display: "flex", flexDirection: "column" }}>
+              <div style={{ padding: "14px 16px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                <div style={{ fontSize: 15, fontWeight: 800 }}>Superset with {forIt?.exercise_name}</div>
+                <div className="subtle tiny" style={{ marginTop: 2 }}>Pick the exercises to group together.</div>
+              </div>
+              <div style={{ flex: 1, overflowY: "auto", padding: 8 }}>
+                {items.map((x, j) => { if (j === ssFor) return null; const on = ssPick.includes(j); return (
+                  <button key={j} onClick={() => setSsPick((p) => (on ? p.filter((k) => k !== j) : [...p, j]))} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 10px", background: "none", border: "none", borderBottom: "1px solid rgba(255,255,255,0.05)", cursor: "pointer", color: "#fff", textAlign: "left" }}>
+                    <span style={{ width: 20, height: 20, borderRadius: 6, flex: "0 0 auto", border: on ? "none" : "1px solid rgba(255,255,255,0.3)", background: on ? col : "transparent", color: "#04110a", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>{on ? "✓" : ""}</span>
+                    <span style={{ fontSize: 14, fontWeight: 600, flex: 1, minWidth: 0 }}>{x.exercise_name}</span>
+                    {x.superset_group != null && x.superset_group !== existing ? <span className="subtle tiny" style={{ flex: "0 0 auto" }}>in another</span> : null}
+                  </button>
+                ); })}
+              </div>
+              <div style={{ padding: 12, borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", gap: 8 }}>
+                <button onClick={() => { setSsFor(null); setSsPick([]); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.05)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                <button disabled={ssPick.length === 0} onClick={() => { applySS([ssFor, ...ssPick], grp); setSsFor(null); setSsPick([]); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "none", background: ssPick.length ? col : "rgba(255,255,255,0.12)", color: ssPick.length ? "#04110a" : "#8a90a6", fontWeight: 800, fontSize: 13, cursor: ssPick.length ? "pointer" : "default" }}>{existing != null ? "Update superset" : "Create superset"}</button>
+              </div>
+            </div>
+          </div>
+        );
+      })() : null}
     </div>
   );
 }
