@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   wkActive, wkStart, wkAddSet, wkCompleteSet, wkEditSet, wkDeleteSet, wkAddExercise, wkFinish, wkDiscard,
-  wkRoutines, wkRoutine, wkSaveRoutine, wkDeleteRoutine, wkParseRoutine, wkExercises, planWeek, fmtVolume, wkRename, cardioList, cardioPrescribe, recoveryGet, wkSession, wkRecompute,
+  wkRoutines, wkRoutine, wkSaveRoutine, wkDeleteRoutine, wkParseRoutine, wkExercises, planWeek, fmtVolume, wkRename, cardioList, cardioPrescribe, recoveryGet, wkSession, wkRecompute, wkReorder, wkSetSuperset,
 } from "../lib/api";
 import type { WkBundle, WkSession, WkSet, WkFinish, WkRoutineSummary, WkRoutineItem, WkExercise, WkFacets, WkPrevSet, CardioRoutine } from "../lib/api";
 import ExerciseDetail from "./ExerciseDetail";
@@ -196,6 +196,11 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
   const [editSecs, setEditSecs] = useState<string | null>(null);
   const [finishConfirm, setFinishConfirm] = useState<{ type: "empty" | "partial"; n: number } | null>(null);
   const [, force] = useState(0);
+  const [dragG, setDragG] = useState<number | null>(null);
+  const [overG, setOverG] = useState<number | null>(null);
+  const [ssFor, setSsFor] = useState<number | null>(null);
+  const [ssPick, setSsPick] = useState<number[]>([]);
+  const [exMenu, setExMenu] = useState<number | null>(null);
   const tick = useRef<ReturnType<typeof setInterval> | null>(null);
   const wakeRef = useRef<any>(null);
 
@@ -424,8 +429,23 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
     const sets = bundle?.sets || [];
     const map = new Map<number, WkSet[]>();
     for (const s of sets) { const k = s.exercise_index ?? 0; if (!map.has(k)) map.set(k, []); map.get(k)!.push(s); }
-    return Array.from(map.entries()).sort((a, b) => a[0] - b[0]).map(([idx, ss]) => ({ idx, name: ss[0].exercise_name, muscle: ss[0].muscle_group, tt: ss[0].tracking_type || "weight_reps", sets: ss.sort((a, b) => a.set_number - b.set_number) }));
+    return Array.from(map.entries()).sort((a, b) => a[0] - b[0]).map(([idx, ss]) => ({ idx, name: ss[0].exercise_name, muscle: ss[0].muscle_group, tt: ss[0].tracking_type || "weight_reps", ssg: ss[0].superset_group ?? null, sets: ss.sort((a, b) => a.set_number - b.set_number) }));
   }, [bundle]);
+
+  function moveGroup(from: number, to: number) {
+    if (from === to || to < 0 || to >= groups.length) return;
+    const order = groups.map((g) => g.idx);
+    const [m] = order.splice(from, 1); order.splice(to, 0, m);
+    const pos: Record<number, number> = {}; order.forEach((oi, np) => { pos[oi] = np; });
+    patchSets((sets) => sets.map((x) => ({ ...x, exercise_index: pos[x.exercise_index ?? 0] ?? (x.exercise_index ?? 0) })));
+    const sid = bundle?.session?.id;
+    if (sid) wkReorder(sid, order).catch(() => { if (editSessionId) loadEditSession(); else reloadActive(); });
+  }
+  async function applySuperset(indexes: number[], group: number | null) {
+    const sid = bundle?.session?.id; if (!sid) return;
+    patchSets((sets) => sets.map((x) => (indexes.includes(x.exercise_index ?? 0) ? { ...x, superset_group: group } : x)));
+    try { await wkSetSuperset(sid, indexes, group); } catch { if (editSessionId) loadEditSession(); else reloadActive(); }
+  }
 
   if (editSessionId && (loading || !bundle?.session)) {
     return <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "#0b0d12", display: "flex", alignItems: "center", justifyContent: "center" }}><div className="muted">Loading&hellip;</div></div>;
@@ -477,6 +497,9 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
     const restRemain = restEnd ? Math.max(0, Math.ceil((restEnd - Date.now()) / 1000)) : 0;
     const resting = restRemain > 0;
     const upNext = (() => { for (const g of groups) { const gi = g.sets.findIndex((x) => !x.completed && !isTemp(x.id)); if (gi >= 0) return { name: g.name, n: gi + 1 }; } return null; })();
+    const SS_COLORS = ["#a274ff", "#79e0a8", "#5f9dff", "#ffb454", "#ff6f9e", "#4fd1c5"];
+    const ssVals = Array.from(new Set(groups.map((g) => g.ssg).filter((v): v is number => v != null))).sort((a, b) => a - b);
+    const ssColor = (v: number | null | undefined) => (v == null ? null : SS_COLORS[ssVals.indexOf(v) % SS_COLORS.length]);
 
     return (
       <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "#0b0d12", display: "flex", flexDirection: "column" }}>
@@ -513,11 +536,26 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
         {groups.length === 0 ? <div className="subtle tiny" style={{ marginTop: 12 }}>Add your first exercise below.</div> : null}
 
         <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
-          {groups.map((g) => {
+          {groups.map((g, gi) => {
             const prevList: WkPrevSet[] = prevMap[g.name] || [];
+            const sc = ssColor(g.ssg);
             return (
-              <div key={g.idx} style={{ padding: 12, borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                <button onClick={() => setDetail(g.name)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit", textAlign: "left", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 5 }}>{g.name}<span className="subtle" style={{ fontSize: 11, fontWeight: 400 }}>ⓘ</span>{g.muscle ? <span className="subtle tiny" style={{ fontWeight: 400 }}> · {g.muscle}</span> : null}</button>
+              <div key={g.idx} data-gidx={gi} style={{ padding: 12, borderRadius: 12, background: dragG !== null && overG === gi ? "rgba(162,116,255,0.14)" : "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderLeft: sc ? `3px solid ${sc}` : "1px solid rgba(255,255,255,0.06)", opacity: dragG === gi ? 0.55 : 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span onPointerDown={(e) => { setDragG(gi); setOverG(gi); (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); }} onPointerMove={(e) => { if (dragG === null) return; const el = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest("[data-gidx]") as HTMLElement | null; if (el && el.dataset.gidx != null) setOverG(Number(el.dataset.gidx)); }} onPointerUp={(e) => { (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId); if (dragG !== null && overG !== null) moveGroup(dragG, overG); setDragG(null); setOverG(null); }} style={{ cursor: "grab", touchAction: "none", userSelect: "none", color: "var(--muted)", fontSize: 15, padding: "0 2px", flex: "0 0 auto" }} aria-label="Drag to reorder">⠿</span>
+                  <button onClick={() => setDetail(g.name)} style={{ flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit", textAlign: "left", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 5 }}>{g.name}<span className="subtle" style={{ fontSize: 11, fontWeight: 400 }}>ⓘ</span>{g.muscle ? <span className="subtle tiny" style={{ fontWeight: 400 }}> · {g.muscle}</span> : null}</button>
+                  {sc ? <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.4, textTransform: "uppercase", color: sc, border: `1px solid ${sc}`, borderRadius: 5, padding: "1px 5px", flex: "0 0 auto" }}>Superset</span> : null}
+                  <div style={{ position: "relative", flex: "0 0 auto" }}>
+                    <button aria-label="Exercise options" onClick={() => setExMenu(exMenu === g.idx ? null : g.idx)} style={{ width: 26, height: 26, borderRadius: 7, cursor: "pointer", background: "none", border: "none", color: "#8a90a6", fontSize: 16, lineHeight: 1 }}>⋯</button>
+                    {exMenu === g.idx ? (<>
+                      <div onClick={() => setExMenu(null)} style={{ position: "fixed", inset: 0, zIndex: 420 }} />
+                      <div style={{ position: "absolute", top: 28, right: 0, zIndex: 421, minWidth: 168, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: 6, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
+                        <button onClick={() => { setExMenu(null); setSsPick(groups.filter((x) => x.ssg != null && x.ssg === g.ssg && x.idx !== g.idx).map((x) => x.idx)); setSsFor(g.idx); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "#e6e9f2", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Add to superset</button>
+                        {g.ssg != null ? <button onClick={() => { setExMenu(null); applySuperset([g.idx], null); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "#ff8a8a", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Remove from superset</button> : null}
+                      </div>
+                    </>) : null}
+                  </div>
+                </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, opacity: 0.5 }}>
                   <span className="tiny" style={{ width: 16 }}>#</span>
                   <span className="tiny" style={{ width: 52 }}>prev</span>
@@ -662,6 +700,36 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
             </div>
           </div>
         ) : null}
+        {ssFor != null ? (() => {
+          const forG = groups.find((x) => x.idx === ssFor);
+          const others = groups.filter((x) => x.idx !== ssFor);
+          const existing = forG?.ssg ?? null;
+          const grp = existing != null ? existing : (groups.reduce((mx, x) => Math.max(mx, x.ssg ?? -1), -1) + 1);
+          const col = existing != null ? (ssColor(existing) || SS_COLORS[0]) : SS_COLORS[ssVals.length % SS_COLORS.length];
+          return (
+            <div onClick={() => { setSsFor(null); setSsPick([]); }} style={{ position: "fixed", inset: 0, zIndex: 460, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+              <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, maxHeight: "75vh", background: "#12151d", borderTopLeftRadius: 16, borderTopRightRadius: 16, border: "1px solid rgba(255,255,255,0.12)", display: "flex", flexDirection: "column" }}>
+                <div style={{ padding: "14px 16px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+                  <div style={{ fontSize: 15, fontWeight: 800 }}>Superset with {forG?.name}</div>
+                  <div className="subtle tiny" style={{ marginTop: 2 }}>Pick the exercises to group together.</div>
+                </div>
+                <div style={{ flex: 1, overflowY: "auto", padding: 8 }}>
+                  {others.length === 0 ? <div className="subtle tiny" style={{ padding: 10 }}>Add another exercise first.</div> : others.map((x) => { const on = ssPick.includes(x.idx); return (
+                    <button key={x.idx} onClick={() => setSsPick((p) => (on ? p.filter((i) => i !== x.idx) : [...p, x.idx]))} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 10px", background: "none", border: "none", borderBottom: "1px solid rgba(255,255,255,0.05)", cursor: "pointer", color: "#fff", textAlign: "left" }}>
+                      <span style={{ width: 20, height: 20, borderRadius: 6, flex: "0 0 auto", border: on ? "none" : "1px solid rgba(255,255,255,0.3)", background: on ? col : "transparent", color: "#04110a", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>{on ? "✓" : ""}</span>
+                      <span style={{ fontSize: 14, fontWeight: 600, flex: 1, minWidth: 0 }}>{x.name}</span>
+                      {x.ssg != null && x.ssg !== existing ? <span className="subtle tiny" style={{ flex: "0 0 auto" }}>in another</span> : null}
+                    </button>
+                  ); })}
+                </div>
+                <div style={{ padding: 12, borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", gap: 8 }}>
+                  <button onClick={() => { setSsFor(null); setSsPick([]); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.05)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                  <button disabled={ssPick.length === 0} onClick={() => { applySuperset([ssFor, ...ssPick], grp); setSsFor(null); setSsPick([]); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "none", background: ssPick.length ? col : "rgba(255,255,255,0.12)", color: ssPick.length ? "#04110a" : "#8a90a6", fontWeight: 800, fontSize: 13, cursor: ssPick.length ? "pointer" : "default" }}>{existing != null ? "Update superset" : "Create superset"}</button>
+                </div>
+              </div>
+            </div>
+          );
+        })() : null}
       </div>
     );
   }
