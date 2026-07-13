@@ -569,6 +569,8 @@ export function wkActive() { return wkGet<WkBundle>("active"); }
 export function wkRoutines() { return wkGet<{ routines: WkRoutineSummary[] }>("routines"); }
 export function wkRoutine(id: string) { return wkGet<WkRoutine>(`routine&id=${encodeURIComponent(id)}`); }
 export function wkHistory(limit = 20) { return wkGet<{ sessions: WkSession[] }>(`history&limit=${limit}`); }
+export function wkSession(id: string) { return wkGet<WkBundle>(`session&id=${encodeURIComponent(id)}`); }
+export function wkRecompute(session_id: string) { return wkPost<{ ok: boolean; volume?: number; sets?: number }>("recompute", { session_id }); }
 export function wkExercises(q: string, filters?: { equipment?: string; muscle?: string; type?: string }) {
   const qs = [`q=${encodeURIComponent(q || "")}`];
   if (filters?.equipment) qs.push(`equipment=${encodeURIComponent(filters.equipment)}`);
