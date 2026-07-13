@@ -588,8 +588,9 @@ export function wkDeleteSet(id: string) { return wkPost<{ ok: boolean }>("delete
 export function wkAddExercise(body: { session_id: string; exercise_name: string; muscle_group?: string | null }) { return wkPost<{ ok: boolean; set?: WkSet }>("add_exercise", body); }
 export function wkAddSet(body: { session_id: string; exercise_name: string; muscle_group?: string | null; target_reps?: number | null; target_weight_kg?: number | null }) { return wkPost<{ ok: boolean; set?: WkSet }>("add_set", body); }
 export function wkDiscard(session_id: string) { return wkPost<{ ok: boolean; discarded?: string }>("discard", { session_id }); }
-export function wkFinish(body: { session_id: string; session_rpe?: number | null; notes?: string | null }) { return wkPost<WkFinish>("finish", body); }
+export function wkFinish(body: { session_id: string; session_rpe?: number | null; notes?: string | null; outcome?: string | null }) { return wkPost<WkFinish>("finish", body); }
 export function wkSaveRoutine(body: { id?: string; name: string; notes?: string | null; focus?: string | null; est_duration_mins?: number | null; items: WkRoutineItem[] }) { return wkPost<{ ok: boolean; id: string }>("save_routine", body); }
+export function wkSaveAsRoutine(session_id: string, name?: string, focus?: string | null) { return wkPost<{ ok: boolean; id?: string; error?: string }>("save_as_routine", { session_id, name, focus }); }
 export function wkDeleteRoutine(id: string) { return wkPost<{ ok: boolean }>("delete_routine", { id }); }
 export function wkParseRoutine(text: string) { return wkPost<WkParsedRoutine>("parse_routine", { text }); }
 export function wkRename(body: { session_id: string; title: string }) { return wkPost<{ ok: boolean; session?: { id: string; title: string } }>("rename", body); }
