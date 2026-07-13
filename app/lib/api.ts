@@ -549,7 +549,7 @@ export async function planDecline(id: string, reason = ""): Promise<{ ok: boolea
 
 // ---- workout (Phase 3: live logger + saved routines) ----
 const WK = "/functions/v1/workout";
-export type WkSet = { id: string; session_id: string; exercise_name: string; muscle_group?: string | null; exercise_index: number; set_number: number; set_type: string; weight_kg: number | null; reps: number | null; rpe: number | null; rir: number | null; target_reps: number | null; target_weight_kg: number | null; completed: boolean; note?: string | null };
+export type WkSet = { id: string; session_id: string; exercise_name: string; muscle_group?: string | null; exercise_index: number; set_number: number; set_type: string; weight_kg: number | null; reps: number | null; rpe: number | null; rir: number | null; target_reps: number | null; target_weight_kg: number | null; completed: boolean; tracking_type?: string; duration_s?: number | null; distance_m?: number | null; note?: string | null };
 export type WkSession = { id: string; date: string; title: string | null; status: string; source?: string; started_at?: string | null; ended_at?: string | null; duration_mins: number | null; total_volume_kg: number | null; muscles_worked?: Record<string, number> | null; session_rpe: number | null; notes?: string | null; linked_session_id?: string | null };
 export type WkPrevSet = { set_number: number; weight_kg: number | null; reps: number | null; ref_date: string | null };
 export type WkBundle = { session: WkSession | null; sets: WkSet[]; prev?: Record<string, WkPrevSet[]>; already_active?: boolean; error?: string };
@@ -577,9 +577,9 @@ export function wkExercises(q: string, filters?: { equipment?: string; muscle?: 
   return wkGet<{ exercises: WkExercise[]; facets?: WkFacets; source?: string }>(`exercises&${qs.join("&")}`);
 }
 export function wkStart(body: { plan_id?: string; routine_id?: string; title?: string }) { return wkPost<WkBundle>("start", body); }
-export function wkLogSet(body: { session_id: string; exercise_name: string; muscle_group?: string | null; weight_kg?: number | null; reps?: number | null; rpe?: number | null; rir?: number | null; set_type?: string }) { return wkPost<{ ok: boolean; set?: WkSet; error?: string }>("log_set", body); }
-export function wkCompleteSet(body: { id: string; weight_kg?: number | null; reps?: number | null; rpe?: number | null; rir?: number | null }) { return wkPost<{ ok: boolean; set?: WkSet; error?: string }>("complete_set", body); }
-export function wkEditSet(body: { id: string; weight_kg?: number | null; reps?: number | null; rpe?: number | null; set_type?: string; completed?: boolean }) { return wkPost<{ ok: boolean; set?: WkSet }>("edit_set", body); }
+export function wkLogSet(body: { session_id: string; exercise_name: string; muscle_group?: string | null; weight_kg?: number | null; reps?: number | null; duration_s?: number | null; distance_m?: number | null; rpe?: number | null; rir?: number | null; set_type?: string }) { return wkPost<{ ok: boolean; set?: WkSet; error?: string }>("log_set", body); }
+export function wkCompleteSet(body: { id: string; weight_kg?: number | null; reps?: number | null; duration_s?: number | null; distance_m?: number | null; rpe?: number | null; rir?: number | null }) { return wkPost<{ ok: boolean; set?: WkSet; error?: string }>("complete_set", body); }
+export function wkEditSet(body: { id: string; weight_kg?: number | null; reps?: number | null; duration_s?: number | null; distance_m?: number | null; rpe?: number | null; set_type?: string; completed?: boolean }) { return wkPost<{ ok: boolean; set?: WkSet }>("edit_set", body); }
 export function wkDeleteSet(id: string) { return wkPost<{ ok: boolean }>("delete_set", { id }); }
 export function wkAddExercise(body: { session_id: string; exercise_name: string; muscle_group?: string | null }) { return wkPost<{ ok: boolean; set?: WkSet }>("add_exercise", body); }
 export function wkAddSet(body: { session_id: string; exercise_name: string; muscle_group?: string | null; target_reps?: number | null; target_weight_kg?: number | null }) { return wkPost<{ ok: boolean; set?: WkSet }>("add_set", body); }
