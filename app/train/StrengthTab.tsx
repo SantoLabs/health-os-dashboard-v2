@@ -93,7 +93,7 @@ function SessionEditor({ sessionId, onClose, onCommitted }: { sessionId: string;
         const map = new Map<number, WkSet[]>();
         for (const s of b.sets) { const k = s.exercise_index ?? 0; if (!map.has(k)) map.set(k, []); map.get(k)!.push(s); }
         setExs(Array.from(map.entries()).sort((a, c) => a[0] - c[0]).map(([idx, ss]) => ({
-          key: "e" + idx, name: ss[0].exercise_name, muscle: ss[0].muscle_group, tt: ss[0].tracking_type || "weight_reps",
+          key: "e" + idx, name: ss[0].exercise_name, muscle: ss[0].muscle_group ?? null, tt: ss[0].tracking_type || "weight_reps",
           sets: ss.sort((a, c) => a.set_number - c.set_number).map((s) => ({ id: s.id, tt: s.tracking_type || "weight_reps", kg: s.weight_kg != null ? String(s.weight_kg) : "", reps: s.reps != null ? String(s.reps) : "", secs: s.duration_s != null ? String(s.duration_s) : "", dist: s.distance_m != null ? String(s.distance_m) : "" })),
         })));
       } finally { if (alive) setLoading(false); }
