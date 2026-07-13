@@ -37,6 +37,7 @@ function fmtClock(startTs?: string | null): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(ss)}` : `${m}:${pad(ss)}`;
 }
 function fmtSecs(s: number): string { const m = Math.floor(s / 60); const ss = s % 60; return `${m}:${String(ss).padStart(2, "0")}`; }
+function parseMMSS(str: string): number { const t = (str || "").trim(); if (!t) return 0; if (t.includes(":")) { const p = t.split(":"); const mm = parseInt(p[0], 10) || 0; const sv = parseInt(p[1], 10) || 0; return Math.max(0, mm * 60 + sv); } return Math.max(0, Math.round(Number(t) || 0)); }
 function emptyInput() { return { kg: "", reps: "", secs: "", dist: "" }; }
 function ttPayload(tt: string | undefined, v: { kg: string; reps: string; secs: string; dist: string }): { weight_kg?: number | null; reps?: number | null; duration_s?: number | null; distance_m?: number | null } {
   const n = (x: string) => (x === "" ? null : Number(x));
@@ -193,7 +194,7 @@ export default function WorkoutLogger() {
   const [restPickerOpen, setRestPickerOpen] = useState(false);
   const [liveTimer, setLiveTimer] = useState<{ id: string; startedAt: number } | null>(null);
   const [editSecs, setEditSecs] = useState<string | null>(null);
-  const [emptyWarn, setEmptyWarn] = useState(false);
+  const [finishConfirm, setFinishConfirm] = useState<{ type: "empty" | "partial"; n: number } | null>(null);
   const [, force] = useState(0);
   const tick = useRef<ReturnType<typeof setInterval> | null>(null);
   const wakeRef = useRef<any>(null);
@@ -473,7 +474,7 @@ export default function WorkoutLogger() {
             ) : (
               <button onClick={() => setTitleEdit(sessTitle)} style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", cursor: "text", color: "inherit", fontSize: 15, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", padding: 0 }}>{sessTitle}<span className="subtle" style={{ fontSize: 12, marginLeft: 6, fontWeight: 400 }}>✎</span></button>
             )}
-            <button onClick={() => { if (done === 0) { setEmptyWarn(true); } else { setEmptyWarn(false); setFinishing(true); } }} style={btn("rgba(121,224,168,0.9)")} disabled={busy}>Finish</button>
+            <button onClick={() => { const un = (bundle.sets || []).filter((x) => !x.completed && !isTemp(x.id)).length; if (done === 0) { setFinishConfirm({ type: "empty", n: 0 }); } else if (un > 0) { setFinishConfirm({ type: "partial", n: un }); } else { setFinishing(true); } }} style={btn("rgba(121,224,168,0.9)")} disabled={busy}>Finish</button>
             <div style={{ position: "relative", flex: "0 0 auto" }}>
               <button onClick={() => setMenuOpen((o) => !o)} aria-label="More" style={{ width: 34, height: 34, borderRadius: 9, cursor: "pointer", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff", fontSize: 18, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>⋯</button>
               {menuOpen ? (
@@ -531,11 +532,11 @@ export default function WorkoutLogger() {
                           const base = Number(v.secs || 0);
                           const shown = base + (running ? Math.max(0, Math.floor((Date.now() - (liveTimer as { startedAt: number }).startedAt) / 1000)) : 0);
                           return (<>
-                            <button aria-label={running ? "pause timer" : "start timer"} onClick={() => (running ? pauseTimer(s) : startTimer(s.id))} style={{ width: 36, height: 36, borderRadius: "50%", flex: "0 0 auto", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "2px solid #4f8cff", color: "#8ab4ff", padding: 0 }}>
-                              {running ? (<span style={{ display: "flex", gap: 3 }}><span style={{ width: 3, height: 13, background: "currentColor", borderRadius: 1 }} /><span style={{ width: 3, height: 13, background: "currentColor", borderRadius: 1 }} /></span>) : (<span style={{ width: 0, height: 0, borderTop: "6px solid transparent", borderBottom: "6px solid transparent", borderLeft: "10px solid currentColor", marginLeft: 3 }} />)}
+                            <button aria-label={running ? "pause timer" : "start timer"} onClick={() => (running ? pauseTimer(s) : startTimer(s.id))} style={{ width: 30, height: 30, borderRadius: "50%", flex: "0 0 auto", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "2px solid #4f8cff", color: "#8ab4ff", padding: 0 }}>
+                              {running ? (<span style={{ display: "flex", gap: 2 }}><span style={{ width: 3, height: 11, background: "currentColor", borderRadius: 1 }} /><span style={{ width: 3, height: 11, background: "currentColor", borderRadius: 1 }} /></span>) : (<span style={{ width: 0, height: 0, borderTop: "5px solid transparent", borderBottom: "5px solid transparent", borderLeft: "8px solid currentColor", marginLeft: 2 }} />)}
                             </button>
                             {editSecs === s.id ? (
-                              <input autoFocus inputMode="numeric" defaultValue={base ? String(base) : ""} placeholder="sec" onBlur={(e) => { const raw = e.target.value.trim(); const n = raw === "" ? "" : String(Math.max(0, Math.round(Number(raw) || 0))); setInputs((m) => ({ ...m, [s.id]: { ...(m[s.id] || emptyInput()), secs: n } })); setEditSecs(null); if (s.completed) { const dv = n === "" ? null : Number(n); patchSets((list) => list.map((x) => (x.id === s.id ? { ...x, duration_s: dv } : x))); wkEditSet({ id: s.id, duration_s: dv }).catch(() => {}); } }} style={{ ...inp, width: 72, textAlign: "left", fontWeight: 700 }} />
+                              <input autoFocus inputMode="text" defaultValue={base ? fmtSecs(base) : ""} placeholder="m:ss" onBlur={(e) => { const n = e.target.value.trim() === "" ? "" : String(parseMMSS(e.target.value)); setInputs((m) => ({ ...m, [s.id]: { ...(m[s.id] || emptyInput()), secs: n } })); setEditSecs(null); if (s.completed) { const dv = n === "" ? null : Number(n); patchSets((list) => list.map((x) => (x.id === s.id ? { ...x, duration_s: dv } : x))); wkEditSet({ id: s.id, duration_s: dv }).catch(() => {}); } }} style={{ ...inp, width: 72, textAlign: "left", fontWeight: 700 }} />
                             ) : (
                               <button onClick={() => { if (!running) setEditSecs(s.id); }} style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", cursor: running ? "default" : "text", padding: "0 8px", color: running ? "#8ab4ff" : (shown ? "#e6e9f2" : "#6b7180"), fontSize: 21, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{fmtSecs(shown)}</button>
                             )}
@@ -564,18 +565,37 @@ export default function WorkoutLogger() {
           <ExercisePicker onPick={addExercise} onPickMany={addExercises} />
         </div>
 
-        {emptyWarn && !finishing ? (
-          <div style={{ marginTop: 14, padding: 12, borderRadius: 12, background: "rgba(255,111,94,0.10)", border: "1px solid rgba(255,111,94,0.35)", color: "#ff8a8a", fontSize: 12, fontWeight: 600 }}>Log at least one set before finishing.</div>
+        {finishConfirm ? (
+          <div onClick={() => setFinishConfirm(null)} style={{ position: "fixed", inset: 0, zIndex: 430, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 340, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: 18 }}>
+              {finishConfirm.type === "empty" ? (
+                <>
+                  <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>You haven&apos;t logged any values.</div>
+                  <button onClick={() => setFinishConfirm(null)} style={{ ...btn(ACCENT), width: "100%", padding: 11 }}>OK</button>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{finishConfirm.n} exercise set{finishConfirm.n > 1 ? "s" : ""} without logging</div>
+                  <div className="subtle tiny" style={{ marginBottom: 14 }}>They won&apos;t be saved. Finish without them?</div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => setFinishConfirm(null)} style={{ flex: 1, padding: 11, borderRadius: 10, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.05)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>No</button>
+                    <button onClick={() => { setFinishConfirm(null); setFinishing(true); }} style={{ ...btn("rgba(121,224,168,0.9)"), flex: 1, padding: 11 }}>Yes</button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         ) : null}
         {finishing ? (
-          <div style={{ marginTop: 14, padding: 12, borderRadius: 12, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)" }}>
-            {(bundle.sets || []).filter((x) => !x.completed && !isTemp(x.id)).length > 0 ? (<div className="tiny" style={{ marginBottom: 8, color: "#ffca7a", fontWeight: 600 }}>{(bundle.sets || []).filter((x) => !x.completed && !isTemp(x.id)).length} unlogged set(s) won&apos;t be saved.</div>) : null}
-            <div className="tiny" style={{ fontWeight: 700, marginBottom: 8 }}>How hard was that? (session RPE)</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {[6, 7, 8, 9, 10].map((r) => (<button key={r} className="trn-sub" disabled={busy} onClick={() => doFinish(r)}>{r}</button>))}
-              <button className="trn-sub" disabled={busy} onClick={() => doFinish(null)}>Skip</button>
+          <div onClick={() => !busy && setFinishing(false)} style={{ position: "fixed", inset: 0, zIndex: 430, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 340, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: 18 }}>
+              <div className="tiny" style={{ fontWeight: 700, marginBottom: 10 }}>How hard was that? (session RPE)</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {[6, 7, 8, 9, 10].map((r) => (<button key={r} className="trn-sub" disabled={busy} onClick={() => doFinish(r)}>{r}</button>))}
+                <button className="trn-sub" disabled={busy} onClick={() => doFinish(null)}>Skip</button>
+              </div>
+              <button className="trn-sub" style={{ marginTop: 10 }} onClick={() => setFinishing(false)}>Keep logging</button>
             </div>
-            <button className="trn-sub" style={{ marginTop: 8 }} onClick={() => setFinishing(false)}>Keep logging</button>
           </div>
         ) : null}
 
