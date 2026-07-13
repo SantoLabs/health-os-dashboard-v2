@@ -192,6 +192,8 @@ export default function WorkoutLogger() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [restPickerOpen, setRestPickerOpen] = useState(false);
   const [liveTimer, setLiveTimer] = useState<{ id: string; startedAt: number } | null>(null);
+  const [editSecs, setEditSecs] = useState<string | null>(null);
+  const [emptyWarn, setEmptyWarn] = useState(false);
   const [, force] = useState(0);
   const tick = useRef<ReturnType<typeof setInterval> | null>(null);
   const wakeRef = useRef<any>(null);
@@ -312,9 +314,27 @@ export default function WorkoutLogger() {
       } else patchSets((s) => s.filter((x) => x.id !== id));
     } catch { patchSets((s) => s.filter((x) => x.id !== id)); }
   }
+  const startTimer = (id: string) => {
+    setLiveTimer((cur) => {
+      if (cur && cur.id !== id) { const el = Math.max(0, Math.floor((Date.now() - cur.startedAt) / 1000)); setInputs((m) => ({ ...m, [cur.id]: { ...(m[cur.id] || emptyInput()), secs: String(Number(m[cur.id]?.secs || 0) + el) } })); }
+      return { id, startedAt: Date.now() };
+    });
+  };
+  const pauseTimer = (s: WkSet) => {
+    const cur = liveTimer; if (!cur || cur.id !== s.id) { setLiveTimer(null); return; }
+    const el = Math.max(0, Math.floor((Date.now() - cur.startedAt) / 1000));
+    setInputs((m) => { const total = Number(m[s.id]?.secs || 0) + el; if (s.completed) wkEditSet({ id: s.id, duration_s: total }).catch(() => {}); return { ...m, [s.id]: { ...(m[s.id] || emptyInput()), secs: String(total) } }; });
+    setLiveTimer(null);
+  };
   async function toggleComplete(s: WkSet) {
     if (isTemp(s.id)) return;
-    const v = inputs[s.id] || emptyInput();
+    let v = inputs[s.id] || emptyInput();
+    if (s.tracking_type === "time" && liveTimer?.id === s.id) {
+      const el = Math.max(0, Math.floor((Date.now() - liveTimer.startedAt) / 1000));
+      v = { ...v, secs: String(Number(v.secs || 0) + el) };
+      setInputs((m) => ({ ...m, [s.id]: v }));
+      setLiveTimer(null);
+    }
     const target = !s.completed;
     if (target) {
       const sets = bundle?.sets || [];
@@ -453,7 +473,7 @@ export default function WorkoutLogger() {
             ) : (
               <button onClick={() => setTitleEdit(sessTitle)} style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", cursor: "text", color: "inherit", fontSize: 15, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", padding: 0 }}>{sessTitle}<span className="subtle" style={{ fontSize: 12, marginLeft: 6, fontWeight: 400 }}>✎</span></button>
             )}
-            <button onClick={() => setFinishing(true)} style={btn("rgba(121,224,168,0.9)")} disabled={busy}>Finish</button>
+            <button onClick={() => { if (done === 0) { setEmptyWarn(true); } else { setEmptyWarn(false); setFinishing(true); } }} style={btn("rgba(121,224,168,0.9)")} disabled={busy}>Finish</button>
             <div style={{ position: "relative", flex: "0 0 auto" }}>
               <button onClick={() => setMenuOpen((o) => !o)} aria-label="More" style={{ width: 34, height: 34, borderRadius: 9, cursor: "pointer", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff", fontSize: 18, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>⋯</button>
               {menuOpen ? (
@@ -508,10 +528,17 @@ export default function WorkoutLogger() {
                           <input inputMode="numeric" value={v.reps} placeholder={repsPh} onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, reps: e.target.value } }))} onBlur={() => commitEdit(s)} style={{ ...inp, width: 60, fontWeight: v.reps ? 700 : 400, background: s.completed ? "rgba(121,224,168,0.10)" : (inp.background as string) }} />
                         ) : g.tt === "time" ? (() => {
                           const running = liveTimer?.id === s.id;
-                          const live = running ? Math.max(0, Math.floor((Date.now() - (liveTimer as { startedAt: number }).startedAt) / 1000)) : 0;
+                          const base = Number(v.secs || 0);
+                          const shown = base + (running ? Math.max(0, Math.floor((Date.now() - (liveTimer as { startedAt: number }).startedAt) / 1000)) : 0);
                           return (<>
-                            <input inputMode="numeric" value={running ? String(live) : v.secs} placeholder="sec" readOnly={running} onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, secs: e.target.value } }))} onBlur={() => commitEdit(s)} style={{ ...inp, width: 56, fontWeight: (v.secs || running) ? 700 : 400, background: s.completed ? "rgba(121,224,168,0.10)" : (inp.background as string) }} />
-                            <button onClick={() => { if (running) { setLiveTimer(null); setInputs((m) => ({ ...m, [s.id]: { ...(m[s.id] || emptyInput()), secs: String(live) } })); } else setLiveTimer({ id: s.id, startedAt: Date.now() }); }} style={{ width: 58, height: 30, borderRadius: 8, flex: "0 0 auto", cursor: "pointer", fontSize: 12, fontWeight: 700, border: "none", color: running ? "#04110a" : "#cdd3e6", background: running ? "#ffca7a" : "rgba(255,255,255,0.08)" }}>{running ? fmtSecs(live) : "Start"}</button>
+                            <button aria-label={running ? "pause timer" : "start timer"} onClick={() => (running ? pauseTimer(s) : startTimer(s.id))} style={{ width: 36, height: 36, borderRadius: "50%", flex: "0 0 auto", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "2px solid #4f8cff", color: "#8ab4ff", padding: 0 }}>
+                              {running ? (<span style={{ display: "flex", gap: 3 }}><span style={{ width: 3, height: 13, background: "currentColor", borderRadius: 1 }} /><span style={{ width: 3, height: 13, background: "currentColor", borderRadius: 1 }} /></span>) : (<span style={{ width: 0, height: 0, borderTop: "6px solid transparent", borderBottom: "6px solid transparent", borderLeft: "10px solid currentColor", marginLeft: 3 }} />)}
+                            </button>
+                            {editSecs === s.id ? (
+                              <input autoFocus inputMode="numeric" defaultValue={base ? String(base) : ""} placeholder="sec" onBlur={(e) => { const raw = e.target.value.trim(); const n = raw === "" ? "" : String(Math.max(0, Math.round(Number(raw) || 0))); setInputs((m) => ({ ...m, [s.id]: { ...(m[s.id] || emptyInput()), secs: n } })); setEditSecs(null); if (s.completed) { const dv = n === "" ? null : Number(n); patchSets((list) => list.map((x) => (x.id === s.id ? { ...x, duration_s: dv } : x))); wkEditSet({ id: s.id, duration_s: dv }).catch(() => {}); } }} style={{ ...inp, width: 72, textAlign: "left", fontWeight: 700 }} />
+                            ) : (
+                              <button onClick={() => { if (!running) setEditSecs(s.id); }} style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", cursor: running ? "default" : "text", padding: "0 8px", color: running ? "#8ab4ff" : (shown ? "#e6e9f2" : "#6b7180"), fontSize: 21, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{fmtSecs(shown)}</button>
+                            )}
                           </>);
                         })() : (
                           <input inputMode="decimal" value={v.dist} placeholder="m" onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, dist: e.target.value } }))} onBlur={() => commitEdit(s)} style={{ ...inp, width: 80, fontWeight: v.dist ? 700 : 400, background: s.completed ? "rgba(121,224,168,0.10)" : (inp.background as string) }} />
@@ -537,8 +564,12 @@ export default function WorkoutLogger() {
           <ExercisePicker onPick={addExercise} onPickMany={addExercises} />
         </div>
 
+        {emptyWarn && !finishing ? (
+          <div style={{ marginTop: 14, padding: 12, borderRadius: 12, background: "rgba(255,111,94,0.10)", border: "1px solid rgba(255,111,94,0.35)", color: "#ff8a8a", fontSize: 12, fontWeight: 600 }}>Log at least one set before finishing.</div>
+        ) : null}
         {finishing ? (
           <div style={{ marginTop: 14, padding: 12, borderRadius: 12, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)" }}>
+            {(bundle.sets || []).filter((x) => !x.completed && !isTemp(x.id)).length > 0 ? (<div className="tiny" style={{ marginBottom: 8, color: "#ffca7a", fontWeight: 600 }}>{(bundle.sets || []).filter((x) => !x.completed && !isTemp(x.id)).length} unlogged set(s) won&apos;t be saved.</div>) : null}
             <div className="tiny" style={{ fontWeight: 700, marginBottom: 8 }}>How hard was that? (session RPE)</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {[6, 7, 8, 9, 10].map((r) => (<button key={r} className="trn-sub" disabled={busy} onClick={() => doFinish(r)}>{r}</button>))}
