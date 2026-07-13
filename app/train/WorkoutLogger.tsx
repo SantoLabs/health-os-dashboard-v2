@@ -37,6 +37,14 @@ function fmtClock(startTs?: string | null): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(ss)}` : `${m}:${pad(ss)}`;
 }
 function fmtSecs(s: number): string { const m = Math.floor(s / 60); const ss = s % 60; return `${m}:${String(ss).padStart(2, "0")}`; }
+function emptyInput() { return { kg: "", reps: "", secs: "", dist: "" }; }
+function ttPayload(tt: string | undefined, v: { kg: string; reps: string; secs: string; dist: string }): { weight_kg?: number | null; reps?: number | null; duration_s?: number | null; distance_m?: number | null } {
+  const n = (x: string) => (x === "" ? null : Number(x));
+  if (tt === "reps") return { reps: n(v.reps) };
+  if (tt === "time") return { duration_s: n(v.secs) };
+  if (tt === "distance") return { distance_m: n(v.dist) };
+  return { weight_kg: n(v.kg), reps: n(v.reps) };
+}
 function DetailOverlay({ title, onClose }: { title: string; onClose: () => void }) {
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 400, background: "#0b0d12", overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
@@ -172,7 +180,7 @@ export default function WorkoutLogger() {
   const [plannedCardio, setPlannedCardio] = useState<Record<string, boolean>>({});
   const [planToday, setPlanToday] = useState<PlanToday[]>([]);
   const [celebrate, setCelebrate] = useState<WkFinish | null>(null);
-  const [inputs, setInputs] = useState<Record<string, { kg: string; reps: string }>>({});
+  const [inputs, setInputs] = useState<Record<string, { kg: string; reps: string; secs: string; dist: string }>>({});
   const [finishing, setFinishing] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const [titleEdit, setTitleEdit] = useState<string | null>(null);
@@ -183,19 +191,20 @@ export default function WorkoutLogger() {
   const [buildId, setBuildId] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [restPickerOpen, setRestPickerOpen] = useState(false);
+  const [liveTimer, setLiveTimer] = useState<{ id: string; startedAt: number } | null>(null);
   const [, force] = useState(0);
   const tick = useRef<ReturnType<typeof setInterval> | null>(null);
   const wakeRef = useRef<any>(null);
 
   const seedInputs = useCallback((sets: WkSet[]) => {
-    const m: Record<string, { kg: string; reps: string }> = {};
-    for (const s of sets) m[s.id] = { kg: s.weight_kg != null ? String(s.weight_kg) : "", reps: s.reps != null ? String(s.reps) : "" };
+    const m: Record<string, { kg: string; reps: string; secs: string; dist: string }> = {};
+    for (const s of sets) m[s.id] = { kg: s.weight_kg != null ? String(s.weight_kg) : "", reps: s.reps != null ? String(s.reps) : "", secs: s.duration_s != null ? String(s.duration_s) : "", dist: s.distance_m != null ? String(s.distance_m) : "" };
     setInputs(m);
   }, []);
   const mergeSeed = useCallback((sets: WkSet[]) => {
     setInputs((prev) => {
-      const m: Record<string, { kg: string; reps: string }> = {};
-      for (const s of sets) m[s.id] = prev[s.id] || { kg: s.weight_kg != null ? String(s.weight_kg) : "", reps: s.reps != null ? String(s.reps) : "" };
+      const m: Record<string, { kg: string; reps: string; secs: string; dist: string }> = {};
+      for (const s of sets) m[s.id] = prev[s.id] || { kg: s.weight_kg != null ? String(s.weight_kg) : "", reps: s.reps != null ? String(s.reps) : "", secs: s.duration_s != null ? String(s.duration_s) : "", dist: s.distance_m != null ? String(s.distance_m) : "" };
       return m;
     });
   }, []);
@@ -293,19 +302,19 @@ export default function WorkoutLogger() {
     const id = tmpId();
     const row: WkSet = { id, session_id: sid, exercise_name: g.name, muscle_group: g.muscle ?? null, exercise_index: g.idx, set_number: nextNum, set_type: "normal", weight_kg: null, reps: null, rpe: null, rir: null, target_reps: null, target_weight_kg: null, completed: false };
     patchSets((s) => [...s, row]);
-    setInputs((m) => ({ ...m, [id]: { kg: "", reps: "" } }));
+    setInputs((m) => ({ ...m, [id]: emptyInput() }));
     try {
       const r = await wkAddSet({ session_id: sid, exercise_name: g.name, muscle_group: g.muscle ?? null });
       if (r.ok && r.set) {
         const real = r.set;
         patchSets((s) => s.map((x) => (x.id === id ? real : x)));
-        setInputs((m) => { const cur = m[id] || { kg: "", reps: "" }; const cp = { ...m }; delete cp[id]; cp[real.id] = cur; return cp; });
+        setInputs((m) => { const cur = m[id] || emptyInput(); const cp = { ...m }; delete cp[id]; cp[real.id] = cur; return cp; });
       } else patchSets((s) => s.filter((x) => x.id !== id));
     } catch { patchSets((s) => s.filter((x) => x.id !== id)); }
   }
   async function toggleComplete(s: WkSet) {
     if (isTemp(s.id)) return;
-    const v = inputs[s.id] || { kg: "", reps: "" };
+    const v = inputs[s.id] || emptyInput();
     const target = !s.completed;
     if (target) {
       const sets = bundle?.sets || [];
@@ -313,18 +322,19 @@ export default function WorkoutLogger() {
       const rl = restMap[s.exercise_name] ?? restLen;
       setRestEnd(moreLeft && rl > 0 ? Date.now() + rl * 1000 : null);
     } else setRestEnd(null);
-    patchSets((list) => list.map((x) => (x.id === s.id ? { ...x, completed: target, weight_kg: v.kg === "" ? x.weight_kg : Number(v.kg), reps: v.reps === "" ? x.reps : Number(v.reps) } : x)));
+    const pl = ttPayload(s.tracking_type, v);
+    patchSets((list) => list.map((x) => (x.id === s.id ? { ...x, completed: target, ...pl } : x)));
     try {
-      if (target) await wkCompleteSet({ id: s.id, weight_kg: v.kg === "" ? null : Number(v.kg), reps: v.reps === "" ? null : Number(v.reps) });
+      if (target) await wkCompleteSet({ id: s.id, ...pl });
       else await wkEditSet({ id: s.id, completed: false });
     } catch { patchSets((list) => list.map((x) => (x.id === s.id ? { ...x, completed: !target } : x))); }
   }
   function commitEdit(s: WkSet) {
     if (isTemp(s.id) || !s.completed) return;
     const v = inputs[s.id]; if (!v) return;
-    const kg = v.kg === "" ? null : Number(v.kg); const reps = v.reps === "" ? null : Number(v.reps);
-    patchSets((list) => list.map((x) => (x.id === s.id ? { ...x, weight_kg: kg, reps } : x)));
-    wkEditSet({ id: s.id, weight_kg: kg, reps }).catch(() => {});
+    const pl = ttPayload(s.tracking_type, v);
+    patchSets((list) => list.map((x) => (x.id === s.id ? { ...x, ...pl } : x)));
+    wkEditSet({ id: s.id, ...pl }).catch(() => {});
   }
   async function deleteSetRow(s: WkSet) {
     if (isTemp(s.id) || !bundle) return;
@@ -339,7 +349,7 @@ export default function WorkoutLogger() {
     const id = tmpId();
     const row: WkSet = { id, session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null, exercise_index: maxIdx + 1, set_number: 1, set_type: "normal", weight_kg: null, reps: null, rpe: null, rir: null, target_reps: null, target_weight_kg: null, completed: false };
     patchSets((s) => [...s, row]);
-    setInputs((m) => ({ ...m, [id]: { kg: "", reps: "" } }));
+    setInputs((m) => ({ ...m, [id]: emptyInput() }));
     try { await wkAddExercise({ session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null }); await reloadActive(); }
     catch { patchSets((s) => s.filter((x) => x.id !== id)); }
   }
@@ -356,7 +366,7 @@ export default function WorkoutLogger() {
       rows.push({ id, session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null, exercise_index: maxIdx, set_number: 1, set_type: "normal", weight_kg: null, reps: null, rpe: null, rir: null, target_reps: null, target_weight_kg: null, completed: false });
     }
     patchSets((s) => [...s, ...rows]);
-    setInputs((m) => { const cp = { ...m }; for (const id of temps) cp[id] = { kg: "", reps: "" }; return cp; });
+    setInputs((m) => { const cp = { ...m }; for (const id of temps) cp[id] = emptyInput(); return cp; });
     try { for (const e of picks) await wkAddExercise({ session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null }); await reloadActive(); }
     catch { const ids = new Set(temps); patchSets((s) => s.filter((x) => !ids.has(x.id))); }
   }
@@ -383,7 +393,7 @@ export default function WorkoutLogger() {
     const sets = bundle?.sets || [];
     const map = new Map<number, WkSet[]>();
     for (const s of sets) { const k = s.exercise_index ?? 0; if (!map.has(k)) map.set(k, []); map.get(k)!.push(s); }
-    return Array.from(map.entries()).sort((a, b) => a[0] - b[0]).map(([idx, ss]) => ({ idx, name: ss[0].exercise_name, muscle: ss[0].muscle_group, sets: ss.sort((a, b) => a.set_number - b.set_number) }));
+    return Array.from(map.entries()).sort((a, b) => a[0] - b[0]).map(([idx, ss]) => ({ idx, name: ss[0].exercise_name, muscle: ss[0].muscle_group, tt: ss[0].tracking_type || "weight_reps", sets: ss.sort((a, b) => a.set_number - b.set_number) }));
   }, [bundle]);
 
   // ---------------- CELEBRATE ----------------
@@ -476,13 +486,11 @@ export default function WorkoutLogger() {
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, opacity: 0.5 }}>
                   <span className="tiny" style={{ width: 16 }}>#</span>
                   <span className="tiny" style={{ width: 52 }}>prev</span>
-                  <span className="tiny" style={{ width: 50, textAlign: "center" }}>kg</span>
-                  <span className="tiny" style={{ width: 10 }} />
-                  <span className="tiny" style={{ width: 50, textAlign: "center" }}>reps</span>
+                  {g.tt === "weight_reps" ? (<><span className="tiny" style={{ width: 50, textAlign: "center" }}>kg</span><span className="tiny" style={{ width: 10 }} /><span className="tiny" style={{ width: 50, textAlign: "center" }}>reps</span></>) : g.tt === "reps" ? (<span className="tiny" style={{ width: 60, textAlign: "center" }}>reps</span>) : g.tt === "time" ? (<span className="tiny" style={{ width: 120, textAlign: "center" }}>time</span>) : (<span className="tiny" style={{ width: 90, textAlign: "center" }}>metres</span>)}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 4 }}>
                   {g.sets.map((s, si) => {
-                    const v = inputs[s.id] || { kg: "", reps: "" };
+                    const v = inputs[s.id] || emptyInput();
                     const pv = prevList[si];
                     const prevTxt = pv && pv.weight_kg != null ? `${pv.weight_kg}×${pv.reps ?? "—"}` : "–";
                     const kgPh = pv?.weight_kg != null ? String(pv.weight_kg) : "kg";
@@ -491,12 +499,23 @@ export default function WorkoutLogger() {
                     return (
                       <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, opacity: temp ? 0.55 : 1 }}>
                         <span className="tnum subtle" style={{ width: 16, fontSize: 12 }}>{si + 1}</span>
-                        <span onClick={() => { if (pv) setInputs((m) => ({ ...m, [s.id]: { kg: pv.weight_kg != null ? String(pv.weight_kg) : "", reps: pv.reps != null ? String(pv.reps) : "" } })); }} className="tnum" style={{ width: 52, fontSize: 12, opacity: 0.55, cursor: pv ? "pointer" : "default", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{prevTxt}</span>
-                        <input inputMode="decimal" value={v.kg} placeholder={kgPh} onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, kg: e.target.value } }))} onBlur={() => commitEdit(s)}
-                          style={{ ...inp, fontWeight: v.kg ? 700 : 400, background: s.completed ? "rgba(121,224,168,0.10)" : (inp.background as string) }} />
-                        <span className="subtle" style={{ fontSize: 12, width: 10, textAlign: "center" }}>×</span>
-                        <input inputMode="numeric" value={v.reps} placeholder={repsPh} onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, reps: e.target.value } }))} onBlur={() => commitEdit(s)}
-                          style={{ ...inp, fontWeight: v.reps ? 700 : 400, background: s.completed ? "rgba(121,224,168,0.10)" : (inp.background as string) }} />
+                        <span onClick={() => { if (pv) setInputs((m) => ({ ...m, [s.id]: { ...emptyInput(), kg: pv.weight_kg != null ? String(pv.weight_kg) : "", reps: pv.reps != null ? String(pv.reps) : "" } })); }} className="tnum" style={{ width: 52, fontSize: 12, opacity: 0.55, cursor: pv ? "pointer" : "default", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{prevTxt}</span>
+                        {g.tt === "weight_reps" ? (<>
+                          <input inputMode="decimal" value={v.kg} placeholder={kgPh} onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, kg: e.target.value } }))} onBlur={() => commitEdit(s)} style={{ ...inp, fontWeight: v.kg ? 700 : 400, background: s.completed ? "rgba(121,224,168,0.10)" : (inp.background as string) }} />
+                          <span className="subtle" style={{ fontSize: 12, width: 10, textAlign: "center" }}>×</span>
+                          <input inputMode="numeric" value={v.reps} placeholder={repsPh} onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, reps: e.target.value } }))} onBlur={() => commitEdit(s)} style={{ ...inp, fontWeight: v.reps ? 700 : 400, background: s.completed ? "rgba(121,224,168,0.10)" : (inp.background as string) }} />
+                        </>) : g.tt === "reps" ? (
+                          <input inputMode="numeric" value={v.reps} placeholder={repsPh} onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, reps: e.target.value } }))} onBlur={() => commitEdit(s)} style={{ ...inp, width: 60, fontWeight: v.reps ? 700 : 400, background: s.completed ? "rgba(121,224,168,0.10)" : (inp.background as string) }} />
+                        ) : g.tt === "time" ? (() => {
+                          const running = liveTimer?.id === s.id;
+                          const live = running ? Math.max(0, Math.floor((Date.now() - (liveTimer as { startedAt: number }).startedAt) / 1000)) : 0;
+                          return (<>
+                            <input inputMode="numeric" value={running ? String(live) : v.secs} placeholder="sec" readOnly={running} onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, secs: e.target.value } }))} onBlur={() => commitEdit(s)} style={{ ...inp, width: 56, fontWeight: (v.secs || running) ? 700 : 400, background: s.completed ? "rgba(121,224,168,0.10)" : (inp.background as string) }} />
+                            <button onClick={() => { if (running) { setLiveTimer(null); setInputs((m) => ({ ...m, [s.id]: { ...(m[s.id] || emptyInput()), secs: String(live) } })); } else setLiveTimer({ id: s.id, startedAt: Date.now() }); }} style={{ width: 58, height: 30, borderRadius: 8, flex: "0 0 auto", cursor: "pointer", fontSize: 12, fontWeight: 700, border: "none", color: running ? "#04110a" : "#cdd3e6", background: running ? "#ffca7a" : "rgba(255,255,255,0.08)" }}>{running ? fmtSecs(live) : "Start"}</button>
+                          </>);
+                        })() : (
+                          <input inputMode="decimal" value={v.dist} placeholder="m" onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, dist: e.target.value } }))} onBlur={() => commitEdit(s)} style={{ ...inp, width: 80, fontWeight: v.dist ? 700 : 400, background: s.completed ? "rgba(121,224,168,0.10)" : (inp.background as string) }} />
+                        )}
                         <button aria-label="complete set" onClick={() => toggleComplete(s)} disabled={temp}
                           style={{ marginLeft: "auto", width: 30, height: 30, borderRadius: 8, cursor: temp ? "default" : "pointer", flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 15, color: s.completed ? "#04110a" : "#8a90a6", background: s.completed ? "#79e0a8" : "rgba(255,255,255,0.05)", border: s.completed ? "none" : "1px solid rgba(255,255,255,0.18)" }}>
                           {s.completed ? "✓" : ""}
