@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   wkActive, wkStart, wkAddSet, wkCompleteSet, wkEditSet, wkDeleteSet, wkAddExercise, wkFinish, wkDiscard,
-  wkRoutines, wkRoutine, wkSaveRoutine, wkDeleteRoutine, wkParseRoutine, wkExercises, planWeek, fmtVolume, wkRename, cardioList, cardioPrescribe, recoveryGet, wkSession, wkRecompute, wkReorder, wkSetSuperset,
+  wkRoutines, wkRoutine, wkSaveRoutine, wkSaveAsRoutine, wkDeleteRoutine, wkParseRoutine, wkExercises, planWeek, fmtVolume, wkRename, cardioList, cardioPrescribe, recoveryGet, wkSession, wkRecompute, wkReorder, wkSetSuperset,
 } from "../lib/api";
 import type { WkBundle, WkSession, WkSet, WkFinish, WkRoutineSummary, WkRoutineItem, WkExercise, WkFacets, WkPrevSet, CardioRoutine } from "../lib/api";
 import ExerciseDetail from "./ExerciseDetail";
@@ -195,6 +195,8 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
   const [liveTimer, setLiveTimer] = useState<{ id: string; startedAt: number } | null>(null);
   const [editSecs, setEditSecs] = useState<string | null>(null);
   const [finishConfirm, setFinishConfirm] = useState<{ type: "empty" | "partial"; n: number } | null>(null);
+  const [finishOutcome, setFinishOutcome] = useState<"done" | "partial" | "failed">("done");
+  const [savedRoutine, setSavedRoutine] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [, force] = useState(0);
   const [dragG, setDragG] = useState<number | null>(null);
   const [overG, setOverG] = useState<number | null>(null);
@@ -273,6 +275,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
     setRestEnd((e) => (e == null ? e : v > 0 ? Date.now() + v * 1000 : null));
     setRestPickerOpen(false);
   }
+  function bumpRest(delta: number) { setRestEnd((e) => { if (e == null) return e; const next = e + delta * 1000; return next > Date.now() ? next : null; }); }
 
   // Keep the screen awake while logging (best-effort; unsupported browsers no-op). Re-acquire when the tab returns to foreground.
   useEffect(() => {
@@ -401,10 +404,15 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
     try { for (const e of picks) await wkAddExercise({ session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null }); await reloadActive(); }
     catch { const ids = new Set(temps); patchSets((s) => s.filter((x) => !ids.has(x.id))); }
   }
-  async function doFinish(rpe: number | null) {
+  async function doFinish(rpe: number | null, outcome: "done" | "partial" | "failed") {
     if (!bundle?.session) return;
     setBusy(true);
-    try { const r = await wkFinish({ session_id: bundle.session.id, session_rpe: rpe }); setCelebrate(r); setFinishing(false); setView("celebrate"); } finally { setBusy(false); }
+    try { const r = await wkFinish({ session_id: bundle.session.id, session_rpe: rpe, outcome }); setSavedRoutine("idle"); setCelebrate(r); setFinishing(false); setView("celebrate"); setFinishOutcome("done"); } finally { setBusy(false); }
+  }
+  async function saveSessionAsRoutine() {
+    if (!celebrate?.session_id) return;
+    setSavedRoutine("saving");
+    try { const r = await wkSaveAsRoutine(celebrate.session_id, celebrate.title || undefined); setSavedRoutine(r.ok ? "done" : "error"); } catch { setSavedRoutine("error"); }
   }
   async function doDone() {
     if (!editSessionId) return;
@@ -477,7 +485,10 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
             ))}
           </div>
         ) : <div className="subtle tiny" style={{ marginTop: 12 }}>No PRs this time — consistency is what compounds. Logged and counted.</div>}
-        <button onClick={() => { setCelebrate(null); setView("home"); loadHome(); }} style={{ ...btn(ACCENT), width: "100%", marginTop: 14, padding: 12 }}>Done</button>
+        <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+          <button onClick={saveSessionAsRoutine} disabled={savedRoutine === "saving" || savedRoutine === "done"} style={{ flex: 1, padding: 12, borderRadius: 10, border: "1px solid rgba(255,255,255,0.18)", background: savedRoutine === "done" ? "rgba(121,224,168,0.14)" : "rgba(255,255,255,0.05)", color: savedRoutine === "done" ? "#79e0a8" : "#fff", fontWeight: 700, fontSize: 13, cursor: savedRoutine === "saving" || savedRoutine === "done" ? "default" : "pointer" }}>{savedRoutine === "done" ? "Saved as routine ✓" : savedRoutine === "saving" ? "Saving…" : savedRoutine === "error" ? "Try again" : "Save as routine"}</button>
+          <button onClick={() => { setCelebrate(null); setView("home"); loadHome(); }} style={{ ...btn(ACCENT), flex: 1, padding: 12 }}>Done</button>
+        </div>
       </div>
     );
   }
@@ -640,10 +651,16 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
         {finishing ? (
           <div onClick={() => !busy && setFinishing(false)} style={{ position: "fixed", inset: 0, zIndex: 430, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
             <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 340, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: 18 }}>
+              <div className="tiny" style={{ fontWeight: 700, marginBottom: 8 }}>How did it go?</div>
+              <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+                {([["done", "Done", "rgba(121,224,168,0.9)"], ["partial", "Partial", "rgba(255,180,84,0.9)"], ["failed", "Failed", "rgba(255,111,94,0.9)"]] as const).map(([v, label, c]) => (
+                  <button key={v} className="trn-sub" onClick={() => setFinishOutcome(v)} style={{ flex: 1, ...(finishOutcome === v ? { background: c, color: "#04110a", border: "none", fontWeight: 800 } : {}) }}>{label}</button>
+                ))}
+              </div>
               <div className="tiny" style={{ fontWeight: 700, marginBottom: 10 }}>How hard was that? (session RPE)</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {[6, 7, 8, 9, 10].map((r) => (<button key={r} className="trn-sub" disabled={busy} onClick={() => doFinish(r)}>{r}</button>))}
-                <button className="trn-sub" disabled={busy} onClick={() => doFinish(null)}>Skip</button>
+                {[6, 7, 8, 9, 10].map((r) => (<button key={r} className="trn-sub" disabled={busy} onClick={() => doFinish(r, finishOutcome)}>{r}</button>))}
+                <button className="trn-sub" disabled={busy} onClick={() => doFinish(null, finishOutcome)}>Skip</button>
               </div>
               <button className="trn-sub" style={{ marginTop: 10 }} onClick={() => setFinishing(false)}>Keep logging</button>
             </div>
@@ -660,7 +677,8 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
                   <div style={{ height: "100%", width: `${Math.min(100, (restRemain / restLen) * 100)}%`, background: ACCENT }} />
                 </div>
               </div>
-              <button onClick={() => setRestPickerOpen(true)} className="trn-sub" style={{ padding: "7px 11px", fontVariantNumeric: "tabular-nums" }}>{restLen > 0 ? fmtSecs(restLen) : "Off"}</button>
+              <button onClick={() => bumpRest(-15)} className="trn-sub" aria-label="minus 15 seconds" style={{ padding: "7px 9px", fontVariantNumeric: "tabular-nums" }}>−15</button>
+              <button onClick={() => bumpRest(15)} className="trn-sub" aria-label="plus 15 seconds" style={{ padding: "7px 9px", fontVariantNumeric: "tabular-nums" }}>+15</button>
               <button onClick={() => setRestEnd(null)} style={btn("rgba(121,224,168,0.9)")}>Skip</button>
             </>
           ) : (
