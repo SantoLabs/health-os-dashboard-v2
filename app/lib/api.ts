@@ -549,7 +549,7 @@ export async function planDecline(id: string, reason = ""): Promise<{ ok: boolea
 
 // ---- workout (Phase 3: live logger + saved routines) ----
 const WK = "/functions/v1/workout";
-export type WkSet = { id: string; session_id: string; exercise_name: string; muscle_group?: string | null; exercise_index: number; set_number: number; set_type: string; weight_kg: number | null; reps: number | null; rpe: number | null; rir: number | null; target_reps: number | null; target_weight_kg: number | null; completed: boolean; tracking_type?: string; duration_s?: number | null; distance_m?: number | null; note?: string | null };
+export type WkSet = { id: string; session_id: string; exercise_name: string; muscle_group?: string | null; exercise_index: number; set_number: number; set_type: string; weight_kg: number | null; reps: number | null; rpe: number | null; rir: number | null; target_reps: number | null; target_weight_kg: number | null; completed: boolean; tracking_type?: string; duration_s?: number | null; distance_m?: number | null; note?: string | null; superset_group?: number | null };
 export type WkSession = { id: string; date: string; title: string | null; status: string; source?: string; started_at?: string | null; ended_at?: string | null; duration_mins: number | null; total_volume_kg: number | null; muscles_worked?: Record<string, number> | null; session_rpe: number | null; notes?: string | null; linked_session_id?: string | null };
 export type WkPrevSet = { set_number: number; weight_kg: number | null; reps: number | null; ref_date: string | null };
 export type WkBundle = { session: WkSession | null; sets: WkSet[]; prev?: Record<string, WkPrevSet[]>; already_active?: boolean; error?: string };
@@ -571,6 +571,8 @@ export function wkRoutine(id: string) { return wkGet<WkRoutine>(`routine&id=${en
 export function wkHistory(limit = 20) { return wkGet<{ sessions: WkSession[] }>(`history&limit=${limit}`); }
 export function wkSession(id: string) { return wkGet<WkBundle>(`session&id=${encodeURIComponent(id)}`); }
 export function wkRecompute(session_id: string) { return wkPost<{ ok: boolean; volume?: number; sets?: number }>("recompute", { session_id }); }
+export function wkReorder(session_id: string, order: number[]) { return wkPost<{ ok: boolean }>("reorder", { session_id, order }); }
+export function wkSetSuperset(session_id: string, exercise_indexes: number[], group: number | null) { return wkPost<{ ok: boolean }>("set_superset", { session_id, exercise_indexes, group }); }
 export function wkExercises(q: string, filters?: { equipment?: string; muscle?: string; type?: string }) {
   const qs = [`q=${encodeURIComponent(q || "")}`];
   if (filters?.equipment) qs.push(`equipment=${encodeURIComponent(filters.equipment)}`);
