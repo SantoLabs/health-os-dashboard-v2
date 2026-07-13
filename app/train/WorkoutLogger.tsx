@@ -498,8 +498,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
     const resting = restRemain > 0;
     const upNext = (() => { for (const g of groups) { const gi = g.sets.findIndex((x) => !x.completed && !isTemp(x.id)); if (gi >= 0) return { name: g.name, n: gi + 1 }; } return null; })();
     const SS_COLORS = ["#a274ff", "#79e0a8", "#5f9dff", "#ffb454", "#ff6f9e", "#4fd1c5"];
-    const ssVals = Array.from(new Set(groups.map((g) => g.ssg).filter((v): v is number => v != null))).sort((a, b) => a - b);
-    const ssColor = (v: number | null | undefined) => (v == null ? null : SS_COLORS[ssVals.indexOf(v) % SS_COLORS.length]);
+    const ssColor = (v: number | null | undefined) => (v == null ? null : SS_COLORS[((v % SS_COLORS.length) + SS_COLORS.length) % SS_COLORS.length]);
 
     return (
       <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "#0b0d12", display: "flex", flexDirection: "column" }}>
@@ -705,7 +704,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
           const others = groups.filter((x) => x.idx !== ssFor);
           const existing = forG?.ssg ?? null;
           const grp = existing != null ? existing : (groups.reduce((mx, x) => Math.max(mx, x.ssg ?? -1), -1) + 1);
-          const col = existing != null ? (ssColor(existing) || SS_COLORS[0]) : SS_COLORS[ssVals.length % SS_COLORS.length];
+          const col = ssColor(grp) || SS_COLORS[0];
           return (
             <div onClick={() => { setSsFor(null); setSsPick([]); }} style={{ position: "fixed", inset: 0, zIndex: 460, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
               <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, maxHeight: "75vh", background: "#12151d", borderTopLeftRadius: 16, borderTopRightRadius: 16, border: "1px solid rgba(255,255,255,0.12)", display: "flex", flexDirection: "column" }}>
