@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   wkActive, wkStart, wkAddSet, wkCompleteSet, wkEditSet, wkDeleteSet, wkAddExercise, wkFinish, wkDiscard,
-  wkRoutines, wkRoutine, wkSaveRoutine, wkDeleteRoutine, wkParseRoutine, wkExercises, planWeek, fmtVolume, wkRename, cardioList, cardioPrescribe, recoveryGet, wkHistory, wkSession, wkRecompute,
+  wkRoutines, wkRoutine, wkSaveRoutine, wkDeleteRoutine, wkParseRoutine, wkExercises, planWeek, fmtVolume, wkRename, cardioList, cardioPrescribe, recoveryGet,
 } from "../lib/api";
 import type { WkBundle, WkSession, WkSet, WkFinish, WkRoutineSummary, WkRoutineItem, WkExercise, WkFacets, WkPrevSet, CardioRoutine } from "../lib/api";
 import ExerciseDetail from "./ExerciseDetail";
@@ -170,118 +170,6 @@ function ExercisePicker({ onPick, onPickMany, placeholder }: { onPick: (e: { nam
   );
 }
 
-function HistoryPanel({ onClose }: { onClose: () => void }) {
-  const [sessions, setSessions] = useState<WkSession[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [sel, setSel] = useState<string | null>(null);
-  const [detail, setDetail] = useState<WkBundle | null>(null);
-  const [vals, setVals] = useState<Record<string, { kg: string; reps: string; secs: string; dist: string }>>({});
-  const [confirmDel, setConfirmDel] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const loadList = useCallback(async () => { setLoading(true); try { const r = await wkHistory(50); setSessions(r.sessions || []); } finally { setLoading(false); } }, []);
-  useEffect(() => { loadList(); }, [loadList]);
-
-  async function openSession(id: string) {
-    setSel(id); setDetail(null);
-    const b = await wkSession(id); setDetail(b);
-    const m: Record<string, { kg: string; reps: string; secs: string; dist: string }> = {};
-    for (const x of b.sets) m[x.id] = { kg: x.weight_kg != null ? String(x.weight_kg) : "", reps: x.reps != null ? String(x.reps) : "", secs: x.duration_s != null ? String(x.duration_s) : "", dist: x.distance_m != null ? String(x.distance_m) : "" };
-    setVals(m);
-  }
-  async function saveField(st: WkSet, patch: { weight_kg?: number | null; reps?: number | null; duration_s?: number | null; distance_m?: number | null }) {
-    setDetail((d) => (d ? { ...d, sets: d.sets.map((x) => (x.id === st.id ? { ...x, ...patch } : x)) } : d));
-    try { await wkEditSet({ id: st.id, ...patch }); if (sel) await wkRecompute(sel); } catch { /* ignore */ }
-  }
-  async function delSet(st: WkSet) {
-    setDetail((d) => (d ? { ...d, sets: d.sets.filter((x) => x.id !== st.id) } : d));
-    try { await wkDeleteSet(st.id); if (sel) await wkRecompute(sel); } catch { /* ignore */ }
-  }
-  async function delSession(id: string) {
-    setBusy(true);
-    try { await wkDiscard(id); setConfirmDel(null); if (sel === id) { setSel(null); setDetail(null); } await loadList(); } finally { setBusy(false); }
-  }
-
-  const groups = (() => {
-    if (!detail) return [] as { idx: number; name: string; muscle: string | null | undefined; tt: string; sets: WkSet[] }[];
-    const map = new Map<number, WkSet[]>();
-    for (const x of detail.sets) { const k = x.exercise_index ?? 0; if (!map.has(k)) map.set(k, []); map.get(k)!.push(x); }
-    return Array.from(map.entries()).sort((a, b) => a[0] - b[0]).map(([idx, ss]) => ({ idx, name: ss[0].exercise_name, muscle: ss[0].muscle_group, tt: ss[0].tracking_type || "weight_reps", sets: ss.sort((a, b) => a.set_number - b.set_number) }));
-  })();
-
-  return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "#0b0d12", display: "flex", flexDirection: "column" }}>
-      <div style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", background: "#0b0d12" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", width: "100%", maxWidth: 480, margin: "0 auto" }}>
-          <button aria-label="Back" onClick={() => { if (sel) { setSel(null); setDetail(null); } else onClose(); }} style={{ width: 34, height: 34, borderRadius: 9, flex: "0 0 auto", cursor: "pointer", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff", fontSize: 20, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>&lsaquo;</button>
-          <div style={{ flex: 1, minWidth: 0, fontSize: 15, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sel ? (detail?.session?.title || "Workout") : "History"}</div>
-          {sel ? (<button onClick={() => setConfirmDel(sel)} style={btn("rgba(255,111,94,0.9)")}>Delete</button>) : null}
-        </div>
-      </div>
-      <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", padding: 14, width: "100%", maxWidth: 480, margin: "0 auto" }}>
-        {!sel ? (
-          loading ? <div className="subtle tiny">Loading&hellip;</div> : sessions.length === 0 ? <div className="subtle tiny">No finished workouts yet.</div> : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {sessions.map((ss) => (
-                <div key={ss.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: 12, borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                  <button onClick={() => openSession(ss.id)} style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "inherit", padding: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>{ss.title || "Workout"}</div>
-                    <div className="subtle tiny" style={{ marginTop: 2 }}>{ss.date} &middot; {ss.duration_mins ?? "&mdash;"}m{ss.total_volume_kg ? " \u00b7 " + fmtVolume(ss.total_volume_kg) : ""}</div>
-                  </button>
-                  <button aria-label="delete workout" onClick={() => setConfirmDel(ss.id)} style={{ width: 30, height: 30, borderRadius: 8, flex: "0 0 auto", background: "none", border: "none", color: "rgba(255,138,138,0.7)", fontSize: 14, cursor: "pointer" }}>&times;</button>
-                </div>
-              ))}
-            </div>
-          )
-        ) : (
-          !detail ? <div className="subtle tiny">Loading&hellip;</div> : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {groups.map((g) => (
-                <div key={g.idx} style={{ padding: 12, borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>{g.name}{g.muscle ? <span className="subtle tiny" style={{ fontWeight: 400 }}> &middot; {g.muscle}</span> : null}</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
-                    {g.sets.map((st, si) => {
-                      const v = vals[st.id] || { kg: "", reps: "", secs: "", dist: "" };
-                      return (
-                        <div key={st.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span className="tnum subtle" style={{ width: 16, fontSize: 12 }}>{si + 1}</span>
-                          {g.tt === "weight_reps" ? (<>
-                            <input inputMode="decimal" value={v.kg} placeholder="kg" onChange={(e) => setVals((m) => ({ ...m, [st.id]: { ...v, kg: e.target.value } }))} onBlur={() => saveField(st, { weight_kg: v.kg === "" ? null : Number(v.kg) })} style={{ ...inp, fontWeight: v.kg ? 700 : 400 }} />
-                            <span className="subtle" style={{ width: 10, textAlign: "center", fontSize: 12 }}>&times;</span>
-                            <input inputMode="numeric" value={v.reps} placeholder="reps" onChange={(e) => setVals((m) => ({ ...m, [st.id]: { ...v, reps: e.target.value } }))} onBlur={() => saveField(st, { reps: v.reps === "" ? null : Number(v.reps) })} style={{ ...inp, fontWeight: v.reps ? 700 : 400 }} />
-                          </>) : g.tt === "reps" ? (
-                            <input inputMode="numeric" value={v.reps} placeholder="reps" onChange={(e) => setVals((m) => ({ ...m, [st.id]: { ...v, reps: e.target.value } }))} onBlur={() => saveField(st, { reps: v.reps === "" ? null : Number(v.reps) })} style={{ ...inp, width: 70, fontWeight: v.reps ? 700 : 400 }} />
-                          ) : g.tt === "time" ? (
-                            <input inputMode="text" value={v.secs} placeholder="m:ss" onChange={(e) => setVals((m) => ({ ...m, [st.id]: { ...v, secs: e.target.value } }))} onBlur={() => { const raw = v.secs.trim(); const sec = raw === "" ? null : parseMMSS(v.secs); setVals((m) => ({ ...m, [st.id]: { ...v, secs: sec == null ? "" : String(sec) } })); saveField(st, { duration_s: sec }); }} style={{ ...inp, width: 84, textAlign: "left", fontWeight: v.secs ? 700 : 400 }} />
-                          ) : (
-                            <input inputMode="decimal" value={v.dist} placeholder="m" onChange={(e) => setVals((m) => ({ ...m, [st.id]: { ...v, dist: e.target.value } }))} onBlur={() => saveField(st, { distance_m: v.dist === "" ? null : Number(v.dist) })} style={{ ...inp, width: 84, fontWeight: v.dist ? 700 : 400 }} />
-                          )}
-                          <button aria-label="delete set" onClick={() => delSet(st)} style={{ marginLeft: "auto", width: 24, height: 30, borderRadius: 8, flex: "0 0 auto", background: "none", border: "none", color: "rgba(255,138,138,0.7)", fontSize: 13, cursor: "pointer" }}>&times;</button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )
-        )}
-      </div>
-      {confirmDel ? (
-        <div onClick={() => !busy && setConfirmDel(null)} style={{ position: "fixed", inset: 0, zIndex: 440, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 340, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: 16 }}>
-            <div className="tiny" style={{ color: "#ff8a8a", marginBottom: 12, fontWeight: 600 }}>Delete this workout permanently? This can&apos;t be undone.</div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button disabled={busy} onClick={() => delSession(confirmDel)} style={{ ...btn("rgba(255,111,94,0.9)"), flex: 1, padding: 10 }}>{busy ? "Deleting\u2026" : "Delete"}</button>
-              <button disabled={busy} onClick={() => setConfirmDel(null)} style={{ ...btn("rgba(255,255,255,0.12)"), flex: 1, padding: 10 }}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 export default function WorkoutLogger() {
   const [view, setView] = useState<View>("home");
   const [loading, setLoading] = useState(true);
@@ -307,7 +195,6 @@ export default function WorkoutLogger() {
   const [liveTimer, setLiveTimer] = useState<{ id: string; startedAt: number } | null>(null);
   const [editSecs, setEditSecs] = useState<string | null>(null);
   const [finishConfirm, setFinishConfirm] = useState<{ type: "empty" | "partial"; n: number } | null>(null);
-  const [showHistory, setShowHistory] = useState(false);
   const [, force] = useState(0);
   const tick = useRef<ReturnType<typeof setInterval> | null>(null);
   const wakeRef = useRef<any>(null);
@@ -768,7 +655,6 @@ export default function WorkoutLogger() {
   // ---------------- HOME ----------------
   return (
     <div>
-      {showHistory ? <HistoryPanel onClose={() => { setShowHistory(false); loadHome(); }} /> : null}
       {loading ? <div className="muted center pad">Loading…</div> : (
         <>
           {bundle?.session ? (
@@ -796,7 +682,6 @@ export default function WorkoutLogger() {
             </div>
           )}
 
-          <button onClick={() => setShowHistory(true)} className="trn-sub" style={{ marginTop: 10, width: "100%", padding: 11 }}>View workout history</button>
 
           <div className="eyebrow" style={{ marginTop: 4 }}>Saved routines</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
