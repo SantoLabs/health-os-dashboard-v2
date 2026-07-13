@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   wkActive, wkStart, wkAddSet, wkCompleteSet, wkEditSet, wkDeleteSet, wkAddExercise, wkFinish, wkDiscard,
-  wkRoutines, wkRoutine, wkSaveRoutine, wkDeleteRoutine, wkParseRoutine, wkExercises, planWeek, fmtVolume, wkRename, cardioList, cardioPrescribe, recoveryGet,
+  wkRoutines, wkRoutine, wkSaveRoutine, wkDeleteRoutine, wkParseRoutine, wkExercises, planWeek, fmtVolume, wkRename, cardioList, cardioPrescribe, recoveryGet, wkSession, wkRecompute,
 } from "../lib/api";
 import type { WkBundle, WkSession, WkSet, WkFinish, WkRoutineSummary, WkRoutineItem, WkExercise, WkFacets, WkPrevSet, CardioRoutine } from "../lib/api";
 import ExerciseDetail from "./ExerciseDetail";
@@ -170,8 +170,8 @@ function ExercisePicker({ onPick, onPickMany, placeholder }: { onPick: (e: { nam
   );
 }
 
-export default function WorkoutLogger() {
-  const [view, setView] = useState<View>("home");
+export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessionId?: string; onExitEdit?: () => void } = {}) {
+  const [view, setView] = useState<View>(editSessionId ? "log" : "home");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [bundle, setBundle] = useState<WkBundle | null>(null);
@@ -231,10 +231,15 @@ export default function WorkoutLogger() {
     } finally { setLoading(false); }
   }, [seedInputs]);
 
-  useEffect(() => { loadHome(); }, [loadHome]);
+  const loadEditSession = useCallback(async () => {
+    if (!editSessionId) return;
+    setLoading(true);
+    try { const b = await wkSession(editSessionId); setBundle(b); seedInputs(b.sets); setView("log"); } finally { setLoading(false); }
+  }, [editSessionId, seedInputs]);
+  useEffect(() => { if (editSessionId) loadEditSession(); else loadHome(); }, [editSessionId, loadEditSession, loadHome]);
 
   useEffect(() => {
-    if (view === "log" && bundle?.session?.started_at) {
+    if (view === "log" && !editSessionId && bundle?.session?.started_at) {
       tick.current = setInterval(() => force((n) => n + 1), 1000);
       return () => { if (tick.current) clearInterval(tick.current); };
     }
@@ -279,7 +284,7 @@ export default function WorkoutLogger() {
   }, [view]);
 
   function patchSets(fn: (s: WkSet[]) => WkSet[]) { setBundle((b) => (b && b.session ? { ...b, sets: fn(b.sets) } : b)); }
-  const reloadActive = useCallback(async () => { const b = await wkActive(); setBundle(b); mergeSeed(b.sets); }, [mergeSeed]);
+  const reloadActive = useCallback(async () => { const b = editSessionId ? await wkSession(editSessionId) : await wkActive(); setBundle(b); mergeSeed(b.sets); }, [mergeSeed, editSessionId]);
 
   async function startFrom(opts: { plan_id?: string; routine_id?: string; title?: string }) {
     setBusy(true);
@@ -396,10 +401,15 @@ export default function WorkoutLogger() {
     setBusy(true);
     try { const r = await wkFinish({ session_id: bundle.session.id, session_rpe: rpe }); setCelebrate(r); setFinishing(false); setView("celebrate"); } finally { setBusy(false); }
   }
+  async function doDone() {
+    if (!editSessionId) return;
+    setBusy(true);
+    try { await wkRecompute(editSessionId); onExitEdit?.(); } finally { setBusy(false); }
+  }
   async function doDiscard() {
     if (!bundle?.session) return;
     setBusy(true);
-    try { await wkDiscard(bundle.session.id); setDiscarding(false); setView("home"); await loadHome(); } finally { setBusy(false); }
+    try { await wkDiscard(bundle.session.id); setDiscarding(false); if (editSessionId) { onExitEdit?.(); } else { setView("home"); await loadHome(); } } finally { setBusy(false); }
   }
   async function saveTitle() {
     const t = (titleEdit || "").trim();
@@ -416,6 +426,10 @@ export default function WorkoutLogger() {
     for (const s of sets) { const k = s.exercise_index ?? 0; if (!map.has(k)) map.set(k, []); map.get(k)!.push(s); }
     return Array.from(map.entries()).sort((a, b) => a[0] - b[0]).map(([idx, ss]) => ({ idx, name: ss[0].exercise_name, muscle: ss[0].muscle_group, tt: ss[0].tracking_type || "weight_reps", sets: ss.sort((a, b) => a.set_number - b.set_number) }));
   }, [bundle]);
+
+  if (editSessionId && (loading || !bundle?.session)) {
+    return <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "#0b0d12", display: "flex", alignItems: "center", justifyContent: "center" }}><div className="muted">Loading&hellip;</div></div>;
+  }
 
   // ---------------- CELEBRATE ----------------
   if (view === "celebrate" && celebrate) {
@@ -468,20 +482,20 @@ export default function WorkoutLogger() {
       <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "#0b0d12", display: "flex", flexDirection: "column" }}>
         <div style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", background: "#0b0d12" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", width: "100%", maxWidth: 480, margin: "0 auto" }}>
-            <button onClick={() => { setView("home"); loadHome(); }} aria-label="Back" style={{ width: 34, height: 34, borderRadius: 9, flex: "0 0 auto", cursor: "pointer", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff", fontSize: 20, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
+            <button onClick={() => { if (editSessionId) { onExitEdit?.(); } else { setView("home"); loadHome(); } }} aria-label="Back" style={{ width: 34, height: 34, borderRadius: 9, flex: "0 0 auto", cursor: "pointer", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff", fontSize: 20, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
             {titleEdit !== null ? (
               <input autoFocus value={titleEdit} onChange={(e) => setTitleEdit(e.target.value)} onBlur={saveTitle} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} style={{ flex: 1, minWidth: 0, background: "rgba(255,255,255,0.06)", color: "inherit", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 8, padding: "7px 10px", fontSize: 15, fontWeight: 800, fontFamily: "inherit" }} />
             ) : (
               <button onClick={() => setTitleEdit(sessTitle)} style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", cursor: "text", color: "inherit", fontSize: 15, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", padding: 0 }}>{sessTitle}<span className="subtle" style={{ fontSize: 12, marginLeft: 6, fontWeight: 400 }}>✎</span></button>
             )}
-            <button onClick={() => { const un = (bundle.sets || []).filter((x) => !x.completed && !isTemp(x.id)).length; if (done === 0) { setFinishConfirm({ type: "empty", n: 0 }); } else if (un > 0) { setFinishConfirm({ type: "partial", n: un }); } else { setFinishing(true); } }} style={btn("rgba(121,224,168,0.9)")} disabled={busy}>Finish</button>
+            <button onClick={() => { if (editSessionId) { doDone(); return; } const un = (bundle.sets || []).filter((x) => !x.completed && !isTemp(x.id)).length; if (done === 0) { setFinishConfirm({ type: "empty", n: 0 }); } else if (un > 0) { setFinishConfirm({ type: "partial", n: un }); } else { setFinishing(true); } }} style={btn("rgba(121,224,168,0.9)")} disabled={busy}>{editSessionId ? "Done" : "Finish"}</button>
             <div style={{ position: "relative", flex: "0 0 auto" }}>
               <button onClick={() => setMenuOpen((o) => !o)} aria-label="More" style={{ width: 34, height: 34, borderRadius: 9, cursor: "pointer", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff", fontSize: 18, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>⋯</button>
               {menuOpen ? (
                 <>
                   <div onClick={() => setMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 410 }} />
                   <div style={{ position: "absolute", top: 40, right: 0, zIndex: 411, minWidth: 160, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: 6, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
-                    <button onClick={() => { setMenuOpen(false); setDiscarding(true); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "#ff8a8a", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Discard workout</button>
+                    <button onClick={() => { setMenuOpen(false); setDiscarding(true); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "#ff8a8a", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>{editSessionId ? "Delete workout" : "Discard workout"}</button>
                   </div>
                 </>
               ) : null}
@@ -491,7 +505,7 @@ export default function WorkoutLogger() {
         <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", padding: 14, width: "100%", maxWidth: 480, margin: "0 auto" }}>
 
         <div className="trn-statgrid" style={{ gridTemplateColumns: "repeat(3,1fr)", marginTop: 12 }}>
-          <div className="trn-cell"><div className="v tnum" style={{ color: "#8ab4ff" }}>{fmtClock(bundle.session.started_at)}</div><div className="l">duration</div></div>
+          <div className="trn-cell"><div className="v tnum" style={{ color: "#8ab4ff" }}>{editSessionId ? (bundle.session.duration_mins != null ? bundle.session.duration_mins + "m" : "—") : fmtClock(bundle.session.started_at)}</div><div className="l">duration</div></div>
           <div className="trn-cell"><div className="v tnum" style={{ fontSize: 15 }}>{fmtVolume(liveVol)}</div><div className="l">volume</div></div>
           <div className="trn-cell"><div className="v tnum">{done}</div><div className="l">sets</div></div>
         </div>
