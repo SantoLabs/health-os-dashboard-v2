@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import {
   cardioParse, cardioList, cardioSave, cardioPrescribe, cardioDelete,
   type CardioParsed, type CardioRoutine, type CardioStructure, type CardioStepOrLoop,
-  type CardioStep, type CardioMeasure, type CardioTarget, type CardioValidator, type CardioLoop, type CardioProgression,
+  type CardioStep, type CardioMeasure, type CardioTarget, type CardioValidator, type CardioLoop, type CardioProgression, type CardioReminder,
 } from "../lib/api";
 
 // ---------- small utils ----------
@@ -38,6 +38,7 @@ type MeasKind = "distance" | "time" | "lap";
 type Role = "work" | "recovery" | "steady" | "rest" | "transition";
 type UITarget = { metric: Metric; low: string; high: string };
 type UIProg = { metric: Metric; step: string };
+type UIReminder = { uid: string; type: "fuel" | "hydrate"; everyMin: string; note: string };
 type UIStep = { uid: string; role: Role; reps: number; sport?: Sport | null; prog?: UIProg | null; meas: MeasKind; dist: string; distUnit: "m" | "km"; time: string; targets: UITarget[]; label: string };
 type UILoop = { uid: string; loop: true; repeat: number; label: string; prog?: UIProg | null; steps: MainItem[] };
 type MainItem = UIStep | UILoop;
@@ -117,12 +118,27 @@ function itemToUnified(it: MainItem, sport: Sport): CardioStepOrLoop {
   }
   return uStep;
 }
-function buildStructure(sport: Sport, warmup: UIStep[], main: MainItem[], cool: UIStep[]): CardioStructure {
+function remindersToUnified(rs: UIReminder[]): CardioReminder[] {
+  return rs.map((r) => {
+    const mins = num(r.everyMin);
+    const o: CardioReminder = { type: r.type };
+    if (mins != null && mins > 0) o.every_s = Math.round(mins * 60);
+    if (r.note.trim()) o.note = r.note.trim();
+    return o;
+  }).filter((o) => o.every_s != null);
+}
+function remindersFromUnified(rs?: CardioReminder[] | null): UIReminder[] {
+  return (rs || []).map((r) => ({ uid: uid(), type: (r.type === "hydrate" ? "hydrate" : "fuel") as "fuel" | "hydrate", everyMin: r.every_s ? String(Math.round(r.every_s / 60)) : "", note: r.note || "" })).filter((r) => r.everyMin);
+}
+function buildStructure(sport: Sport, warmup: UIStep[], main: MainItem[], cool: UIStep[], reminders: UIReminder[]): CardioStructure {
   const blocks: CardioStepOrLoop[] = [];
   for (const s of warmup) blocks.push(stepToUnified(s, "warmup", sport, false));
   for (const it of main) blocks.push(itemToUnified(it, sport));
   for (const s of cool) blocks.push(stepToUnified(s, "cooldown", sport, false));
-  return { schema_version: 1, blocks };
+  const out: CardioStructure = { schema_version: 1, blocks };
+  const rem = remindersToUnified(reminders);
+  if (rem.length) out.reminders = rem;
+  return out;
 }
 function stepFromUnified(b: CardioStep, sport: Sport): UIStep {
   const m = b.measure || ({ type: "time", seconds: 0 } as CardioMeasure);
@@ -161,7 +177,7 @@ function loadStructure(struct: CardioStructure | undefined, sport: Sport) {
     return { uid: uid(), loop: true, repeat: rep, label: lp.label || "", prog, steps: inner };
   };
   for (let k = i; k <= j; k++) mid.push(itemFromUnified(blks[k]));
-  return { w, mid, c: tail.length ? tail : c };
+  return { w, mid, c: tail.length ? tail : c, rem: remindersFromUnified(struct?.reminders) };
 }
 function paceMid(t?: CardioTarget): number | null {
   if (!t || t.metric !== "pace") return null;
@@ -218,6 +234,8 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
   const [main, setMain] = useState<MainItem[]>(startMode === "describe" ? [] : [blankStep("work", "distance")]);
   const [cool, setCool] = useState<UIStep[]>([]);
   const [brick, setBrick] = useState(false);
+  const [reminders, setReminders] = useState<UIReminder[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [routines, setRoutines] = useState<CardioRoutine[]>([]);
 
   useEffect(() => { cardioList().then((r) => setRoutines(r.routines || [])).catch(() => {}); }, [msg]);
@@ -234,26 +252,36 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
       const r: CardioParsed = await cardioParse(text.trim(), sport);
       if (r.ok && r.structure) {
         if (r.sport) setSport(normSport(r.sport));
-        const { w, mid, c } = loadStructure(r.structure, r.sport ? normSport(r.sport) : sport);
-        const sp2 = r.sport ? normSport(r.sport) : sport; setWarmup(w); setMain(mid); setCool(c); setBrick(detectBrick(mid, sp2)); setName(r.name || "Custom session"); setShowDescribe(false);
+        const { w, mid, c, rem } = loadStructure(r.structure, r.sport ? normSport(r.sport) : sport);
+        const sp2 = r.sport ? normSport(r.sport) : sport; setWarmup(w); setMain(mid); setCool(c); setReminders(rem); setBrick(detectBrick(mid, sp2)); setEditingId(null); setName(r.name || "Custom session"); setShowDescribe(false);
       } else setDErr(r.error || "Kai couldn't turn that into a workout — try rephrasing.");
     } catch { setDErr("Something went wrong creating that."); } finally { setBusy(false); }
   }
 
   // ---- save / prescribe ----
-  const structure = buildStructure(sport, warmup, main, cool);
+  const structure = buildStructure(sport, warmup, main, cool, reminders);
   const est = estimateTotals(structure);
   const hasBlocks = structure.blocks.length > 0;
   const paceOpts = genPaceOptions(sport);
 
-  async function doSave() {
+  async function doSave(asCopy?: boolean) {
     if (!hasBlocks || busy) return;
     setBusy(true); setMsg(null); setErr(null); setValidator(null); setSavedOk(false);
     try {
-      const r = await cardioSave({ name: name.trim() || "Custom session", sport, structure });
-      if (r.ok) { setSavedOk(true); setMsg("Saved — find it in Saved routines below. Add it to your calendar, or tap Back to finish."); if (r.validator) setValidator(r.validator); }
-      else setErr(r.error || "Couldn't save.");
+      const updating = !asCopy && !!editingId;
+      const nm = (name.trim() || "Custom session") + (asCopy ? " (copy)" : "");
+      const r = await cardioSave({ id: updating ? editingId as string : undefined, name: nm, sport, structure });
+      if (r.ok) {
+        setSavedOk(true);
+        if (r.id) setEditingId(r.id);
+        setMsg(updating ? "Updated — changes saved to this routine." : "Saved — find it in Saved routines below. Add it to your calendar, or tap Back to finish.");
+        if (r.validator) setValidator(r.validator);
+      } else setErr(r.error || "Couldn't save.");
     } catch { setErr("Couldn't save."); } finally { setBusy(false); }
+  }
+  function startNew() {
+    setWarmup([]); setMain([blankStep("work", "distance")]); setCool([]); setReminders([]);
+    setBrick(false); setEditingId(null); setName(""); setSavedOk(false); setValidator(null); setMsg(null); setErr(null); setShowDescribe(false);
   }
   async function doPrescribe() {
     if (!hasBlocks || busy) return;
@@ -270,7 +298,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
   }
   async function loadRoutine(rt: CardioRoutine) {
     if (busy) return; setBusy(true); setErr(null); setMsg(null);
-    try { const sp = normSport(rt.sport || sport); setSport(sp); const { w, mid, c } = loadStructure(rt.structure, sp); setWarmup(w); setMain(mid); setCool(c); setBrick(detectBrick(mid, sp)); setName(rt.name); setShowDescribe(false); }
+    try { const sp = normSport(rt.sport || sport); setSport(sp); const { w, mid, c, rem } = loadStructure(rt.structure, sp); setWarmup(w); setMain(mid); setCool(c); setReminders(rem); setBrick(detectBrick(mid, sp)); setEditingId(rt.id); setName(rt.name); setShowDescribe(false); }
     finally { setBusy(false); }
   }
   async function delRoutine(rt: CardioRoutine) {
@@ -461,12 +489,35 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
         <button onClick={() => setCool((a) => [...a, blankStep("steady", "time")])} style={dashBtn("rgba(255,255,255,0.18)")}>+ cooldown step</button>
       </Section>
 
+      {/* REMINDERS */}
+      <Section title="Fueling & hydration">
+        <div className="subtle tiny" style={{ marginBottom: 2 }}>In-app cues during the session — not sent to Garmin.</div>
+        {reminders.map((r) => (
+          <div key={r.uid} style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap", padding: "6px 8px", borderRadius: 8, background: "rgba(240,180,80,0.08)", border: "1px solid rgba(240,180,80,0.18)" }}>
+            <select value={r.type} onChange={(e) => setReminders((a) => a.map((x) => (x.uid === r.uid ? { ...x, type: e.target.value as "fuel" | "hydrate" } : x)))} style={sel}>
+              <option value="fuel">Fuel</option><option value="hydrate">Hydrate</option>
+            </select>
+            <span className="subtle tiny">every</span>
+            <input type="number" min={1} value={r.everyMin} placeholder="20" onChange={(e) => setReminders((a) => a.map((x) => (x.uid === r.uid ? { ...x, everyMin: e.target.value } : x)))} style={{ ...mini, width: 46 }} />
+            <span className="subtle tiny">min</span>
+            <input value={r.note} placeholder="note (optional)" onChange={(e) => setReminders((a) => a.map((x) => (x.uid === r.uid ? { ...x, note: e.target.value } : x)))} style={{ ...sel, flex: 1, minWidth: 80 }} />
+            <button onClick={() => setReminders((a) => a.filter((x) => x.uid !== r.uid))} title="Remove" style={{ background: "none", border: "none", color: "#6b7080", cursor: "pointer", fontSize: 15 }}>×</button>
+          </div>
+        ))}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button onClick={() => setReminders((a) => [...a, { uid: uid(), type: "fuel", everyMin: "20", note: "" }])} style={dashBtn("rgba(240,180,80,0.5)")}>+ fuel reminder</button>
+          <button onClick={() => setReminders((a) => [...a, { uid: uid(), type: "hydrate", everyMin: "15", note: "" }])} style={dashBtn("rgba(120,180,240,0.5)")}>+ hydrate reminder</button>
+        </div>
+      </Section>
+
       {/* actions */}
+      {editingId ? <div className="subtle tiny" style={{ marginTop: 10, color: "#9db0e0" }}>Editing a saved routine — <button onClick={startNew} style={{ background: "none", border: "none", color: "#a274ff", cursor: "pointer", fontSize: 11, padding: 0, textDecoration: "underline" }}>start new</button></div> : null}
       <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <span className="subtle tiny tnum" style={{ marginRight: "auto" }}>{totalsLine}</span>
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ background: "rgba(255,255,255,0.05)", color: "inherit", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "7px 9px", fontSize: 12, fontFamily: "inherit" }} />
         <button onClick={doPrescribe} disabled={busy || !hasBlocks} style={pill("rgba(121,224,168,0.9)")}>Add to calendar</button>
-        <button onClick={doSave} disabled={busy || !hasBlocks} className="trn-sub" style={savedOk ? { color: "#79e0a8" } : undefined}>{savedOk ? "Saved ✓" : intent === "routine" ? "Save routine" : "Save workout"}</button>
+        <button onClick={() => doSave()} disabled={busy || !hasBlocks} className="trn-sub" style={savedOk ? { color: "#79e0a8" } : undefined}>{savedOk ? (editingId ? "Updated ✓" : "Saved ✓") : editingId ? "Update routine" : intent === "routine" ? "Save routine" : "Save workout"}</button>
+        {editingId ? <button onClick={() => doSave(true)} disabled={busy || !hasBlocks} className="trn-sub" style={{ fontSize: 11 }}>Save as copy</button> : null}
       </div>
       {msg ? <div className="subtle tiny" style={{ marginTop: 8, color: "#79e0a8" }}>{msg}</div> : null}
       {err ? <div className="subtle tiny" style={{ marginTop: 8, color: "#ff8a8a" }}>{err}</div> : null}
