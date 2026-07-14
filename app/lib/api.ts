@@ -603,15 +603,21 @@ export function fmtVolume(kg: number | null | undefined): string { const n = Mat
 const CARD = "/functions/v1/cardio";
 async function cardGet<T>(route: string): Promise<T> { const res = await authedFetch(`${CARD}?api=${route}`); if (!res.ok) throw new Error(`Couldn't load (${res.status})`); return res.json(); }
 async function cardPost<T>(route: string, body: unknown): Promise<T> { const res = await authedFetch(`${CARD}?api=${route}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); if (!res.ok) throw new Error(`Request failed (${res.status})`); return res.json(); }
-export type CardioSegment = { role: string; distance_m?: number | null; duration_s?: number | null; intensity?: string | null; pace?: string | null; note?: string | null };
-export type CardioBlock = { label?: string | null; reps: number; segments: CardioSegment[] };
-export type CardioStructure = { blocks: CardioBlock[] };
+export type CardioMeasure = { type: "distance"; meters: number } | { type: "time"; seconds: number } | { type: "lap"; laps?: number } | { type: "open" };
+export type CardioTargetMetric = "pace" | "hr" | "power" | "cadence" | "rpe";
+export type CardioTarget = { metric: CardioTargetMetric; low?: number | null; high?: number | null };
+export type CardioStep = { block_type: "step"; kind: "warmup" | "cooldown" | "rest" | "segment" | "transition"; sport: string; role?: string | null; measure: CardioMeasure; targets?: CardioTarget[]; label?: string | null; notes?: string | null };
+export type CardioLoop = { block_type: "loop"; repeat: number; label?: string | null; steps: CardioStepOrLoop[] };
+export type CardioStepOrLoop = CardioStep | CardioLoop;
+export type CardioReminder = { type: "fuel" | "hydrate"; at_s?: number | null; every_s?: number | null; note?: string | null };
+export type CardioStructure = { schema_version: 1; blocks: CardioStepOrLoop[]; reminders?: CardioReminder[] };
 export type CardioRoutine = { id: string; name: string; sport: string | null; structure: CardioStructure; total_distance_m?: number | null; total_duration_s?: number | null; source?: string; updated_at?: string };
+export type CardioValidator = { valid: boolean | null; errors?: string[]; warnings?: string[]; repairs?: string[]; note?: string };
 export type CardioParsed = { ok: boolean; name?: string; sport?: string; structure?: CardioStructure; total_distance_m?: number; total_duration_s?: number; error?: string };
-export function cardioParse(text: string, sport?: string) { return cardPost<CardioParsed>("parse", { text, sport }); }
-export function cardioList() { return cardGet<{ routines: CardioRoutine[] }>("list"); }
-export function cardioGet(id: string) { return cardGet<{ routine: CardioRoutine | null }>(`get&id=${encodeURIComponent(id)}`); }
-export function cardioSave(body: { id?: string; name: string; sport?: string; structure: CardioStructure; source?: string; notes?: string }) { return cardPost<{ ok: boolean; id?: string; total_distance_m?: number; total_duration_s?: number; error?: string }>("save", body); }
+export function cardioParse(text: string, sport?: string) { return cardPost<CardioParsed>("parse", { text, sport, unified: true }); }
+export function cardioList() { return cardGet<{ routines: CardioRoutine[] }>("list&fmt=unified"); }
+export function cardioGet(id: string) { return cardGet<{ routine: CardioRoutine | null }>(`get&id=${encodeURIComponent(id)}&fmt=unified`); }
+export function cardioSave(body: { id?: string; name: string; sport?: string; structure: CardioStructure; source?: string; notes?: string }) { return cardPost<{ ok: boolean; id?: string; total_distance_m?: number; total_duration_s?: number; validator?: CardioValidator; error?: string }>("save", body); }
 export function cardioDelete(id: string) { return cardPost<{ ok: boolean }>("delete", { id }); }
 export function cardioPrescribe(body: { sport?: string; date?: string; routine_id?: string; structure?: CardioStructure; name?: string; duration_min?: number; distance_m?: number }) { return cardPost<{ ok: boolean; plan_id?: string; session_type?: string; date?: string; planned_duration?: number | null; distance_m?: number | null; error?: string }>("prescribe", body); }
 
