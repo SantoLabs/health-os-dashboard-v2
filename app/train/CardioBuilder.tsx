@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import {
   cardioParse, cardioList, cardioSave, cardioPrescribe, cardioDelete,
   type CardioParsed, type CardioRoutine, type CardioStructure, type CardioStepOrLoop,
-  type CardioStep, type CardioMeasure, type CardioTarget, type CardioValidator,
+  type CardioStep, type CardioMeasure, type CardioTarget, type CardioValidator, type CardioLoop, type CardioProgression,
 } from "../lib/api";
 
 // ---------- small utils ----------
@@ -37,8 +37,9 @@ function targetNumToIn(metric: Metric, val?: number | null): string { if (val ==
 type MeasKind = "distance" | "time" | "lap";
 type Role = "work" | "recovery" | "steady" | "rest";
 type UITarget = { metric: Metric; low: string; high: string };
-type UIStep = { uid: string; role: Role; reps: number; meas: MeasKind; dist: string; distUnit: "m" | "km"; time: string; targets: UITarget[]; label: string };
-type UILoop = { uid: string; loop: true; repeat: number; label: string; steps: MainItem[] };
+type UIProg = { metric: Metric; step: string };
+type UIStep = { uid: string; role: Role; reps: number; prog?: UIProg | null; meas: MeasKind; dist: string; distUnit: "m" | "km"; time: string; targets: UITarget[]; label: string };
+type UILoop = { uid: string; loop: true; repeat: number; label: string; prog?: UIProg | null; steps: MainItem[] };
 type MainItem = UIStep | UILoop;
 const isLoop = (it: MainItem): it is UILoop => (it as UILoop).loop === true;
 
@@ -78,15 +79,34 @@ function stepToUnified(st: UIStep, kind: CardioStep["kind"], sport: Sport, inclu
   if (st.label.trim()) out.label = st.label.trim();
   return out;
 }
+function progToUnified(p?: UIProg | null): CardioProgression | undefined {
+  if (!p || !p.metric) return undefined;
+  const step = num(p.step);
+  if (step == null || !isFinite(step)) return undefined;
+  return { mode: "linear", apply_to: "target", metric: p.metric, step };
+}
+function progFromUnified(pr: any): UIProg | undefined {
+  if (!pr || typeof pr !== "object" || pr.mode === "list") return undefined;
+  const metric = String(pr.metric || "");
+  if (!["pace", "hr", "power", "cadence", "rpe"].includes(metric)) return undefined;
+  return { metric: metric as Metric, step: pr.step != null ? String(pr.step) : "" };
+}
 function itemToUnified(it: MainItem, sport: Sport): CardioStepOrLoop {
   if (isLoop(it)) {
     const steps = it.steps.map((s) => itemToUnified(s, sport));
-    const loop: CardioStepOrLoop = { block_type: "loop", repeat: Math.max(1, Math.round(it.repeat || 1)), steps };
-    if (it.label.trim()) (loop as { label?: string }).label = it.label.trim();
+    const loop: CardioLoop = { block_type: "loop", repeat: Math.max(1, Math.round(it.repeat || 1)), steps };
+    if (it.label.trim()) loop.label = it.label.trim();
+    const pr = progToUnified(it.prog);
+    if (pr) loop.progression = pr;
     return loop;
   }
   const uStep = stepToUnified(it, it.role === "rest" ? "rest" : "segment", sport, true);
-  if (it.reps > 1) return { block_type: "loop", repeat: it.reps, steps: [uStep] };
+  if (it.reps > 1) {
+    const loop: CardioLoop = { block_type: "loop", repeat: it.reps, steps: [uStep] };
+    const pr = progToUnified(it.prog);
+    if (pr) loop.progression = pr;
+    return loop;
+  }
   return uStep;
 }
 function buildStructure(sport: Sport, warmup: UIStep[], main: MainItem[], cool: UIStep[]): CardioStructure {
@@ -127,8 +147,9 @@ function loadStructure(struct: CardioStructure | undefined, sport: Sport) {
     const lp = b as { repeat?: number; label?: string; steps?: CardioStepOrLoop[] };
     const inner = (lp.steps || []).map(itemFromUnified);
     const rep = Math.max(1, Math.round(lp.repeat || 1));
-    if (inner.length === 1 && !isLoop(inner[0]) && !(lp.label && lp.label.trim())) return { ...(inner[0] as UIStep), reps: rep };
-    return { uid: uid(), loop: true, repeat: rep, label: lp.label || "", steps: inner };
+    const prog = progFromUnified((b as CardioLoop).progression);
+    if (inner.length === 1 && !isLoop(inner[0]) && !(lp.label && lp.label.trim())) return { ...(inner[0] as UIStep), reps: rep, prog };
+    return { uid: uid(), loop: true, repeat: rep, label: lp.label || "", prog, steps: inner };
   };
   for (let k = i; k <= j; k++) mid.push(itemFromUnified(blks[k]));
   return { w, mid, c: tail.length ? tail : c };
@@ -256,6 +277,24 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
   const roleBg = (r?: Role) => (r === "work" ? "rgba(255,138,138,0.13)" : r === "recovery" || r === "rest" ? "rgba(121,224,168,0.11)" : "rgba(255,255,255,0.05)");
   const dashBtn = (c: string): React.CSSProperties => ({ background: "none", border: `1px dashed ${c}`, color: c, cursor: "pointer", fontSize: 12, borderRadius: 8, padding: "5px 10px", fontWeight: 600 });
 
+  // ---- ladder (per-loop progression) ----
+  const ladderRow = (prog: UIProg | null | undefined, onSet: (p: UIProg | null) => void) => {
+    if (!prog) return <button onClick={() => onSet({ metric: "pace", step: "" })} style={{ alignSelf: "flex-start", background: "none", border: "none", color: "#8a90a6", cursor: "pointer", fontSize: 11, padding: "1px 2px" }}>+ ladder (each lap ±)</button>;
+    const unit = prog.metric === "pace" ? "s/lap" : prog.metric === "power" ? "W/lap" : prog.metric === "hr" ? "bpm/lap" : prog.metric === "cadence" ? "rpm/lap" : "/lap";
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap", paddingLeft: 2 }}>
+        <span className="subtle tiny" style={{ color: "#a274ff", fontWeight: 700 }}>ladder</span>
+        <select value={prog.metric} onChange={(e) => onSet({ ...prog, metric: e.target.value as Metric })} style={sel}>
+          {METRICS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+        </select>
+        <input value={prog.step} placeholder="±0" onChange={(e) => onSet({ ...prog, step: e.target.value })} style={{ ...mini, width: 52 }} />
+        <span className="subtle tiny">{unit}</span>
+        {prog.metric === "pace" ? <span className="subtle tiny">(− faster)</span> : null}
+        <button onClick={() => onSet(null)} title="Remove ladder" style={{ background: "none", border: "none", color: "#6b7080", cursor: "pointer", fontSize: 13 }}>×</button>
+      </div>
+    );
+  };
+
   // ---- step editor (shared) ----
   const stepRow = (st: UIStep, isMain: boolean, onPatch: (p: Partial<UIStep>) => void, onRemove: () => void) => {
     const restLike = isMain && st.role === "rest";
@@ -314,6 +353,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
             <button onClick={() => onPatch({ targets: [...st.targets, { metric: st.targets.some((t) => t.metric === "pace") ? "hr" : "pace", low: "", high: "" }] })} style={{ alignSelf: "flex-start", background: "none", border: "none", color: "#8a90a6", cursor: "pointer", fontSize: 11, padding: "1px 2px" }}>+ target / alert</button>
           ) : null}
         </div>
+        {isMain && st.reps > 1 ? ladderRow(st.prog, (p) => onPatch({ prog: p })) : null}
       </div>
     );
   };
@@ -333,6 +373,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
         <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
           {n.steps.map((s) => renderItem(s, depth + 1))}
         </div>
+        <div style={{ marginTop: 6 }}>{ladderRow(n.prog, (p) => setMain((m) => patchLoop(m, n.uid, { prog: p })))}</div>
         <button onClick={() => setMain((m) => addToLoop(m, n.uid, blankStep("work", "distance")))} style={{ ...dashBtn("rgba(162,116,255,0.4)"), marginTop: 6, fontSize: 11, padding: "3px 8px" }}>+ step in set</button>
       </div>
     );
