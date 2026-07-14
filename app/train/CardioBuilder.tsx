@@ -13,8 +13,8 @@ const roleBg = (role?: string | null) =>
 
 function num(v: string): number | null { const n = parseFloat(v); return isFinite(n) ? n : null; }
 
-export default function CardioBuilder({ sportHint = "running" }: { sportHint?: string }) {
-  const [open, setOpen] = useState(false);
+export default function CardioBuilder({ sportHint = "running", onExit, intent = "workout", startMode = "build" }: { sportHint?: string; onExit?: () => void; intent?: "workout" | "routine"; startMode?: "describe" | "build" }) {
+  const [open, setOpen] = useState(!!onExit);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [parsed, setParsed] = useState<CardioParsed | null>(null);
@@ -26,6 +26,10 @@ export default function CardioBuilder({ sportHint = "running" }: { sportHint?: s
   const [routines, setRoutines] = useState<CardioRoutine[]>([]);
 
   useEffect(() => { if (!open) return; cardioList().then((r) => setRoutines(r.routines || [])).catch(() => {}); }, [open, msg]);
+  // Embedded build-mode: drop straight into the editor with one empty block.
+  useEffect(() => { if (onExit && startMode === "build" && !parsed && !edited) addBlock();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     if (parsed?.structure) { setEdited(JSON.parse(JSON.stringify(parsed.structure)) as CardioStructure); setName(parsed?.name || "Custom session"); }
     else setEdited(null);
@@ -94,8 +98,8 @@ export default function CardioBuilder({ sportHint = "running" }: { sportHint?: s
   return (
     <div className="card" style={{ marginBottom: 12 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <div style={{ fontSize: 14, fontWeight: 800 }}>Create a workout</div>
-        <button className="trn-sub" onClick={() => { setOpen(false); setParsed(null); setErr(null); setMsg(null); }}>Close</button>
+        <div style={{ fontSize: 14, fontWeight: 800 }}>{onExit ? (intent === "routine" ? "New cardio routine" : "New cardio workout") : "Create a workout"}</div>
+        <button className="trn-sub" onClick={() => { if (onExit) { onExit(); return; } setOpen(false); setParsed(null); setErr(null); setMsg(null); }}>{onExit ? "‹ Back" : "Close"}</button>
       </div>
       <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder="e.g. 10 min warmup, then 1 km hard + 2 min easy jog ×5, 10 min cooldown" style={{ ...fieldStyle, marginTop: 10 }} />
       <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
