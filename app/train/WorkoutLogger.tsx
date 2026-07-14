@@ -57,9 +57,12 @@ function DetailOverlay({ title, onClose }: { title: string; onClose: () => void 
 }
 
 const REX_KEY = "hos_ex_recents";
-// name -> tracking_type, warmed from picker results + loaded sessions so a newly-added
-// exercise renders the right inputs (reps / timed / distance) instantly, with no flip.
+const TT_KEY = "hos_tt_cache";
+// name -> tracking_type, persisted so a newly-added exercise renders the right inputs
+// (reps / timed / distance) instantly on every device, with no weight×reps flip.
 const TT_CACHE = new Map<string, string>();
+function ttLoad() { try { const o = JSON.parse(localStorage.getItem(TT_KEY) || "{}"); for (const k in o) if (typeof o[k] === "string") TT_CACHE.set(k, o[k]); } catch { /* ignore */ } }
+function ttSave() { try { localStorage.setItem(TT_KEY, JSON.stringify(Object.fromEntries(TT_CACHE))); } catch { /* ignore */ } }
 const TYPE_OPTS: { v: string; label: string }[] = [
   { v: "strength", label: "Strength" },
   { v: "mobility", label: "Mobility" },
@@ -93,13 +96,13 @@ function ExercisePicker({ onPick, onPickMany, placeholder }: { onPick: (e: { nam
   const [sel, setSel] = useState<{ name: string; muscle_group: string; tracking_type?: string | null }[]>([]);
   const [recents, setRecents] = useState<{ name: string; muscle_group: string }[]>([]);
   const filtered = !!(q.trim() || fType || fEquip || fMuscle);
-  useEffect(() => { if (open) setRecents(loadRecents()); }, [open]);
+  useEffect(() => { if (open) { ttLoad(); setRecents(loadRecents()); } }, [open]);
   useEffect(() => {
     let alive = true;
     if (!open) return;
     const t = setTimeout(() => {
       wkExercises(q, { type: fType || undefined, equipment: fEquip || undefined, muscle: fMuscle || undefined })
-        .then((r) => { if (!alive) return; setOpts(r.exercises || []); for (const e of r.exercises || []) { if (e.tracking_type) TT_CACHE.set(e.name, e.tracking_type); } if (r.facets) setFacets(r.facets); })
+        .then((r) => { if (!alive) return; setOpts(r.exercises || []); for (const e of r.exercises || []) { if (e.tracking_type) TT_CACHE.set(e.name, e.tracking_type); } ttSave(); if (r.facets) setFacets(r.facets); })
         .catch(() => {});
     }, 220);
     return () => { alive = false; clearTimeout(t); };
@@ -392,7 +395,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
     const row: WkSet = { id, session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null, exercise_index: maxIdx + 1, set_number: 1, set_type: "normal", weight_kg: null, reps: null, rpe: null, rir: null, target_reps: null, target_weight_kg: null, completed: false, tracking_type: e.tracking_type || TT_CACHE.get(e.name) || "weight_reps" };
     patchSets((s) => [...s, row]);
     setInputs((m) => ({ ...m, [id]: emptyInput() }));
-    try { await wkAddExercise({ session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null }); await reloadActive(); }
+    try { const r = await wkAddExercise({ session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null }); if (r.ok && r.set?.tracking_type) { const tt = r.set.tracking_type; TT_CACHE.set(e.name, tt); ttSave(); patchSets((list) => list.map((x) => (x.id === id ? { ...x, tracking_type: tt } : x))); } await reloadActive(); }
     catch { patchSets((s) => s.filter((x) => x.id !== id)); }
   }
   async function addExercises(picks: { name: string; muscle_group: string; tracking_type?: string | null }[]) {
@@ -409,7 +412,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
     }
     patchSets((s) => [...s, ...rows]);
     setInputs((m) => { const cp = { ...m }; for (const id of temps) cp[id] = emptyInput(); return cp; });
-    try { for (const e of picks) await wkAddExercise({ session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null }); await reloadActive(); }
+    try { for (let i = 0; i < picks.length; i++) { const e = picks[i]; const r = await wkAddExercise({ session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null }); if (r.ok && r.set?.tracking_type) { const tt = r.set.tracking_type; TT_CACHE.set(e.name, tt); patchSets((list) => list.map((x) => (x.id === temps[i] ? { ...x, tracking_type: tt } : x))); } } ttSave(); await reloadActive(); }
     catch { const ids = new Set(temps); patchSets((s) => s.filter((x) => !ids.has(x.id))); }
   }
   function sessionExerciseNames(sets: WkSet[]): string[] {
@@ -483,7 +486,8 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
     return Array.from(map.entries()).sort((a, b) => a[0] - b[0]).map(([idx, ss]) => ({ idx, name: ss[0].exercise_name, muscle: ss[0].muscle_group, tt: ss[0].tracking_type || "weight_reps", ssg: ss[0].superset_group ?? null, sets: ss.sort((a, b) => a.set_number - b.set_number) }));
   }, [bundle]);
 
-  useEffect(() => { for (const s of bundle?.sets || []) { if (s.tracking_type) TT_CACHE.set(s.exercise_name, s.tracking_type); } }, [bundle]);
+  useEffect(() => { ttLoad(); }, []);
+  useEffect(() => { let dirty = false; for (const s of bundle?.sets || []) { if (s.tracking_type && TT_CACHE.get(s.exercise_name) !== s.tracking_type) { TT_CACHE.set(s.exercise_name, s.tracking_type); dirty = true; } } if (dirty) ttSave(); }, [bundle]);
   // Reorder a single exercise, or the whole superset block it belongs to, as one unit.
   function moveGroup(from: number, to: number) {
     if (from === to || to < 0 || to >= groups.length) return;
@@ -1011,18 +1015,19 @@ function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExi
   function remove(i: number) { setItems((xs) => xs.filter((_, j) => j !== i)); }
   function move(from: number, to: number) {
     setItems((xs) => {
-      if (to < 0 || to >= xs.length || from === to) return xs;
-      const ssgs = xs.map((x) => x.superset_group ?? null);
-      let bStart = from, bEnd = from;
-      const dssg = ssgs[from];
-      if (dssg != null) { while (bStart > 0 && ssgs[bStart - 1] === dssg) bStart--; while (bEnd < ssgs.length - 1 && ssgs[bEnd + 1] === dssg) bEnd++; }
-      if (to >= bStart && to <= bEnd) return xs;
-      const block = xs.slice(bStart, bEnd + 1);
-      const rest = [...xs.slice(0, bStart), ...xs.slice(bEnd + 1)];
+      if (from < 0 || from >= xs.length || to < 0 || to >= xs.length || from === to) return xs;
+      const dssg = xs[from].superset_group ?? null;
+      const memberSet = new Set<number>();
+      if (dssg != null) xs.forEach((x, i) => { if ((x.superset_group ?? null) === dssg) memberSet.add(i); });
+      else memberSet.add(from);
+      if (memberSet.has(to)) return xs;
+      const block = xs.filter((_, i) => memberSet.has(i));
+      const rest = xs.filter((_, i) => !memberSet.has(i));
       const target = xs[to];
       let at = rest.indexOf(target);
       if (at < 0) return xs;
-      if (to > bEnd) at += 1;
+      let maxMember = -1; memberSet.forEach((i) => { if (i > maxMember) maxMember = i; });
+      if (to > maxMember) at += 1;
       return [...rest.slice(0, at), ...block, ...rest.slice(at)];
     });
   }
