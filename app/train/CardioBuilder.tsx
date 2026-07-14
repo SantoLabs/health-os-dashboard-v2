@@ -35,13 +35,20 @@ function targetInToNum(metric: Metric, raw: string): number | null { return metr
 function targetNumToIn(metric: Metric, val?: number | null): string { if (val == null) return ""; return metric === "pace" ? secToMMSS(val) : String(val); }
 
 type MeasKind = "distance" | "time" | "lap";
-type Role = "work" | "recovery" | "steady" | "rest";
+type Role = "work" | "recovery" | "steady" | "rest" | "transition";
 type UITarget = { metric: Metric; low: string; high: string };
 type UIProg = { metric: Metric; step: string };
-type UIStep = { uid: string; role: Role; reps: number; prog?: UIProg | null; meas: MeasKind; dist: string; distUnit: "m" | "km"; time: string; targets: UITarget[]; label: string };
+type UIStep = { uid: string; role: Role; reps: number; sport?: Sport | null; prog?: UIProg | null; meas: MeasKind; dist: string; distUnit: "m" | "km"; time: string; targets: UITarget[]; label: string };
 type UILoop = { uid: string; loop: true; repeat: number; label: string; prog?: UIProg | null; steps: MainItem[] };
 type MainItem = UIStep | UILoop;
 const isLoop = (it: MainItem): it is UILoop => (it as UILoop).loop === true;
+function detectBrick(items: MainItem[], top: Sport): boolean {
+  for (const it of items) {
+    if (isLoop(it)) { if (detectBrick(it.steps, top)) return true; }
+    else if (it.role === "transition" || (it.sport && it.sport !== top)) return true;
+  }
+  return false;
+}
 
 // ---------- main-set tree helpers (one level of nesting) ----------
 function patchStep(items: MainItem[], id: string, patch: Partial<UIStep>): MainItem[] {
@@ -65,7 +72,7 @@ function blankStep(role: Role = "work", meas: MeasKind = "distance"): UIStep {
 function stepToUnified(st: UIStep, kind: CardioStep["kind"], sport: Sport, includeRole: boolean): CardioStep {
   let measure: CardioMeasure;
   if (st.meas === "lap") measure = { type: "lap" };
-  else if (st.meas === "time" || kind === "rest") measure = { type: "time", seconds: Math.max(0, mmssToSec(st.time) || 0) };
+  else if (st.meas === "time" || kind === "rest" || kind === "transition") measure = { type: "time", seconds: Math.max(0, mmssToSec(st.time) || 0) };
   else measure = { type: "distance", meters: Math.max(0, st.distUnit === "km" ? Math.round((num(st.dist) || 0) * 1000) : Math.round(num(st.dist) || 0)) };
   const out: CardioStep = { block_type: "step", kind, sport, measure };
   if (includeRole) out.role = st.role;
@@ -100,8 +107,9 @@ function itemToUnified(it: MainItem, sport: Sport): CardioStepOrLoop {
     if (pr) loop.progression = pr;
     return loop;
   }
-  const uStep = stepToUnified(it, it.role === "rest" ? "rest" : "segment", sport, true);
-  if (it.reps > 1) {
+  const kind = it.role === "rest" ? "rest" : it.role === "transition" ? "transition" : "segment";
+  const uStep = stepToUnified(it, kind, it.sport || sport, true);
+  if (it.reps > 1 && it.role !== "transition") {
     const loop: CardioLoop = { block_type: "loop", repeat: it.reps, steps: [uStep] };
     const pr = progToUnified(it.prog);
     if (pr) loop.progression = pr;
@@ -123,8 +131,9 @@ function stepFromUnified(b: CardioStep, sport: Sport): UIStep {
   const km = meters >= 1000;
   return {
     uid: uid(),
-    role: b.kind === "rest" ? "rest" : ((b.role as Role) || "work"),
+    role: b.kind === "rest" ? "rest" : b.kind === "transition" ? "transition" : ((b.role as Role) || "work"),
     reps: 1,
+    sport: b.sport ? normSport(b.sport) : undefined,
     meas,
     dist: m.type === "distance" ? String(km ? +(meters / 1000).toFixed(2) : meters) : "",
     distUnit: km ? "km" : "m",
@@ -208,6 +217,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
   const [warmup, setWarmup] = useState<UIStep[]>([]);
   const [main, setMain] = useState<MainItem[]>(startMode === "describe" ? [] : [blankStep("work", "distance")]);
   const [cool, setCool] = useState<UIStep[]>([]);
+  const [brick, setBrick] = useState(false);
   const [routines, setRoutines] = useState<CardioRoutine[]>([]);
 
   useEffect(() => { cardioList().then((r) => setRoutines(r.routines || [])).catch(() => {}); }, [msg]);
@@ -225,7 +235,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
       if (r.ok && r.structure) {
         if (r.sport) setSport(normSport(r.sport));
         const { w, mid, c } = loadStructure(r.structure, r.sport ? normSport(r.sport) : sport);
-        setWarmup(w); setMain(mid); setCool(c); setName(r.name || "Custom session"); setShowDescribe(false);
+        const sp2 = r.sport ? normSport(r.sport) : sport; setWarmup(w); setMain(mid); setCool(c); setBrick(detectBrick(mid, sp2)); setName(r.name || "Custom session"); setShowDescribe(false);
       } else setDErr(r.error || "Kai couldn't turn that into a workout — try rephrasing.");
     } catch { setDErr("Something went wrong creating that."); } finally { setBusy(false); }
   }
@@ -260,7 +270,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
   }
   async function loadRoutine(rt: CardioRoutine) {
     if (busy) return; setBusy(true); setErr(null); setMsg(null);
-    try { const sp = normSport(rt.sport || sport); setSport(sp); const { w, mid, c } = loadStructure(rt.structure, sp); setWarmup(w); setMain(mid); setCool(c); setName(rt.name); setShowDescribe(false); }
+    try { const sp = normSport(rt.sport || sport); setSport(sp); const { w, mid, c } = loadStructure(rt.structure, sp); setWarmup(w); setMain(mid); setCool(c); setBrick(detectBrick(mid, sp)); setName(rt.name); setShowDescribe(false); }
     finally { setBusy(false); }
   }
   async function delRoutine(rt: CardioRoutine) {
@@ -297,6 +307,16 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
 
   // ---- step editor (shared) ----
   const stepRow = (st: UIStep, isMain: boolean, onPatch: (p: Partial<UIStep>) => void, onRemove: () => void) => {
+    if (isMain && st.role === "transition") {
+      return (
+        <div key={st.uid} style={{ padding: "7px 8px", borderRadius: 8, background: "rgba(120,140,200,0.12)", border: "1px dashed rgba(120,140,200,0.35)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          <span className="subtle tiny" style={{ fontWeight: 700, color: "#9db0e0" }}>⇄ Transition</span>
+          <input value={st.time} placeholder="mm:ss" onChange={(e) => onPatch({ time: e.target.value })} style={{ ...mini, width: 64 }} />
+          <span className="subtle tiny">mm:ss</span>
+          <button onClick={onRemove} title="Remove transition" style={{ marginLeft: "auto", background: "none", border: "none", color: "#6b7080", cursor: "pointer", fontSize: 15 }}>×</button>
+        </div>
+      );
+    }
     const restLike = isMain && st.role === "rest";
     const measKind: MeasKind = restLike ? "time" : st.meas;
     return (
@@ -305,6 +325,11 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
           {isMain ? (
             <select value={st.role} onChange={(e) => onPatch({ role: e.target.value as Role })} style={sel}>
               <option value="work">work</option><option value="recovery">recovery</option><option value="steady">steady</option><option value="rest">rest</option>
+            </select>
+          ) : null}
+          {brick && isMain ? (
+            <select value={st.sport || sport} onChange={(e) => onPatch({ sport: e.target.value as Sport })} title="segment sport" style={{ ...sel, fontWeight: 700, color: "#9db0e0" }}>
+              {SPORTS.map((sp) => <option key={sp.id} value={sp.id}>{sp.label}</option>)}
             </select>
           ) : null}
           {!restLike ? (
@@ -421,10 +446,12 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
 
       {/* MAIN */}
       <Section title="Main set">
+        {brick ? <div className="subtle tiny" style={{ marginBottom: 2, color: "#9db0e0" }}>Brick mode: set each segment’s sport; transitions sit between them.</div> : null}
         {main.map((it) => renderItem(it, 0))}
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button onClick={() => setMain((a) => [...a, blankStep("work", "distance")])} style={dashBtn("rgba(255,255,255,0.18)")}>+ step</button>
           <button onClick={() => setMain((a) => [...a, { uid: uid(), loop: true, repeat: 5, label: "", steps: [blankStep("work", "distance"), blankStep("recovery", "time")] }])} style={dashBtn("rgba(162,116,255,0.5)")}>+ interval set</button>
+          <button onClick={() => { setMain((a) => [...a, blankStep("transition", "time")]); setBrick(true); }} style={dashBtn("rgba(120,140,200,0.55)")}>+ transition</button>
         </div>
       </Section>
 
