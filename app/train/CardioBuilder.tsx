@@ -111,16 +111,42 @@ function loadStructure(struct: CardioStructure | undefined, sport: Sport) {
   }
   return { w, mid, c: tail.length ? tail : c };
 }
-function clientTotals(struct: CardioStructure): { d: number; t: number } {
-  const sum = (steps: CardioStepOrLoop[]): { d: number; t: number } => {
-    let d = 0, t = 0;
+function paceMid(t?: CardioTarget): number | null {
+  if (!t || t.metric !== "pace") return null;
+  const lo = t.low != null ? Number(t.low) : null, hi = t.high != null ? Number(t.high) : null;
+  if (lo != null && hi != null) return (lo + hi) / 2;
+  return lo != null ? lo : hi;
+}
+function estimateTotals(struct: CardioStructure): { d: number; secs: number; complete: boolean } {
+  let complete = true;
+  const walk = (steps: CardioStepOrLoop[]): { d: number; secs: number } => {
+    let d = 0, secs = 0;
     for (const s of steps) {
-      if ((s as CardioStep).block_type === "step") { const m = (s as CardioStep).measure; if (m.type === "distance") d += m.meters || 0; else if (m.type === "time") t += m.seconds || 0; }
-      else { const lp = s as { repeat?: number; steps?: CardioStepOrLoop[] }; const inner = sum(lp.steps || []); const r = Math.max(1, lp.repeat || 1); d += r * inner.d; t += r * inner.t; }
+      if ((s as CardioStep).block_type === "step") {
+        const st = s as CardioStep; const m = st.measure;
+        if (m.type === "distance") {
+          d += m.meters || 0;
+          const p = (st.targets || []).map(paceMid).find((x) => x != null) as number | undefined;
+          if (p != null && p > 0) secs += (st.sport === "swim" ? (m.meters || 0) / 100 : (m.meters || 0) / 1000) * p;
+          else complete = false;
+        } else if (m.type === "time") secs += m.seconds || 0;
+        else complete = false;
+      } else {
+        const lp = s as { repeat?: number; steps?: CardioStepOrLoop[] }; const inner = walk(lp.steps || []); const r = Math.max(1, lp.repeat || 1);
+        d += r * inner.d; secs += r * inner.secs;
+      }
     }
-    return { d, t };
+    return { d, secs };
   };
-  return sum(struct.blocks || []);
+  const r = walk(struct.blocks || []);
+  return { d: r.d, secs: Math.round(r.secs), complete };
+}
+function fmtMin(secs: number): string { return secs < 60 ? `${secs}s` : `${Math.round(secs / 60)} min`; }
+const PACE_RANGE: Record<Sport, [number, number]> = { run: [150, 540], bike: [60, 240], swim: [45, 210] };
+function genPaceOptions(sp: Sport): string[] {
+  const [lo, hi] = PACE_RANGE[sp]; const out: string[] = [];
+  for (let x = lo; x <= hi; x += 5) out.push(secToMMSS(x));
+  return out;
 }
 
 // ---------- component ----------
@@ -132,6 +158,8 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [validator, setValidator] = useState<CardioValidator | null>(null);
+  const [dErr, setDErr] = useState<string | null>(null);
+  const [savedOk, setSavedOk] = useState(false);
   const [text, setText] = useState("");
   const [showDescribe, setShowDescribe] = useState(startMode === "describe");
   const [warmup, setWarmup] = useState<UIStep[]>([]);
@@ -152,28 +180,29 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
   // ---- describe ----
   async function doParse() {
     if (!text.trim() || busy) return;
-    setBusy(true); setErr(null); setMsg(null); setValidator(null);
+    setBusy(true); setDErr(null); setMsg(null); setErr(null); setValidator(null); setSavedOk(false);
     try {
       const r: CardioParsed = await cardioParse(text.trim(), sport);
       if (r.ok && r.structure) {
         if (r.sport) setSport(normSport(r.sport));
         const { w, mid, c } = loadStructure(r.structure, r.sport ? normSport(r.sport) : sport);
         setWarmup(w); setMain(mid); setCool(c); setName(r.name || "Custom session"); setShowDescribe(false);
-      } else setErr(r.error || "Kai couldn't turn that into a workout — try rephrasing.");
-    } catch { setErr("Something went wrong creating that."); } finally { setBusy(false); }
+      } else setDErr(r.error || "Kai couldn't turn that into a workout — try rephrasing.");
+    } catch { setDErr("Something went wrong creating that."); } finally { setBusy(false); }
   }
 
   // ---- save / prescribe ----
   const structure = buildStructure(sport, warmup, main, cool);
-  const totals = clientTotals(structure);
+  const est = estimateTotals(structure);
   const hasBlocks = structure.blocks.length > 0;
+  const paceOpts = genPaceOptions(sport);
 
   async function doSave() {
     if (!hasBlocks || busy) return;
-    setBusy(true); setMsg(null); setErr(null); setValidator(null);
+    setBusy(true); setMsg(null); setErr(null); setValidator(null); setSavedOk(false);
     try {
       const r = await cardioSave({ name: name.trim() || "Custom session", sport, structure });
-      if (r.ok) { setMsg(intent === "routine" ? "Routine saved." : "Saved to your workouts."); if (r.validator) setValidator(r.validator); }
+      if (r.ok) { setSavedOk(true); setMsg("Saved — find it in Saved routines below. Add it to your calendar, or tap Back to finish."); if (r.validator) setValidator(r.validator); }
       else setErr(r.error || "Couldn't save.");
     } catch { setErr("Couldn't save."); } finally { setBusy(false); }
   }
@@ -242,12 +271,22 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           {st.targets.map((tg, ti) => (
             <div key={ti} style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap", paddingLeft: 2 }}>
-              <select value={tg.metric} onChange={(e) => onPatch({ targets: st.targets.map((x, i) => (i === ti ? { ...x, metric: e.target.value as Metric } : x)) })} style={sel}>
+              <select value={tg.metric} onChange={(e) => onPatch({ targets: st.targets.map((x, i) => (i === ti ? { ...x, metric: e.target.value as Metric, low: "", high: "" } : x)) })} style={sel}>
                 {METRICS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
               </select>
-              <input value={tg.low} placeholder={tg.metric === "pace" ? "mm:ss" : "min"} onChange={(e) => onPatch({ targets: st.targets.map((x, i) => (i === ti ? { ...x, low: e.target.value } : x)) })} style={{ ...mini, width: 56 }} />
-              <span className="subtle tiny">–</span>
-              <input value={tg.high} placeholder={tg.metric === "pace" ? "mm:ss" : "max"} onChange={(e) => onPatch({ targets: st.targets.map((x, i) => (i === ti ? { ...x, high: e.target.value } : x)) })} style={{ ...mini, width: 56 }} />
+              {tg.metric === "pace" ? (
+                <>
+                  <select value={tg.low} onChange={(e) => onPatch({ targets: st.targets.map((x, i) => (i === ti ? { ...x, low: e.target.value } : x)) })} style={{ ...sel, width: 70 }}><option value="">—</option>{paceOpts.map((p) => <option key={p} value={p}>{p}</option>)}</select>
+                  <span className="subtle tiny">–</span>
+                  <select value={tg.high} onChange={(e) => onPatch({ targets: st.targets.map((x, i) => (i === ti ? { ...x, high: e.target.value } : x)) })} style={{ ...sel, width: 70 }}><option value="">—</option>{paceOpts.map((p) => <option key={p} value={p}>{p}</option>)}</select>
+                </>
+              ) : (
+                <>
+                  <input value={tg.low} placeholder="min" onChange={(e) => onPatch({ targets: st.targets.map((x, i) => (i === ti ? { ...x, low: e.target.value } : x)) })} style={{ ...mini, width: 56 }} />
+                  <span className="subtle tiny">–</span>
+                  <input value={tg.high} placeholder="max" onChange={(e) => onPatch({ targets: st.targets.map((x, i) => (i === ti ? { ...x, high: e.target.value } : x)) })} style={{ ...mini, width: 56 }} />
+                </>
+              )}
               <span className="subtle tiny">{metricUnit(tg.metric, sport)}</span>
               <button onClick={() => onPatch({ targets: st.targets.filter((_, i) => i !== ti) })} title="Remove target" style={{ background: "none", border: "none", color: "#6b7080", cursor: "pointer", fontSize: 13 }}>×</button>
             </div>
@@ -260,7 +299,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
     );
   };
 
-  const totalsLine = (fmtDist(totals.d) && fmtDur(totals.t)) ? `${fmtDist(totals.d)} · ${fmtDur(totals.t)}` : (fmtDist(totals.d) || fmtDur(totals.t) || "empty");
+  const totalsLine = !hasBlocks ? "empty" : `Est. ${fmtDist(est.d) || "0 m"}${est.secs ? ` · ~${fmtMin(est.secs)}${est.complete ? "" : "+"}` : ""}`;
 
   return (
     <div className="card" style={{ marginBottom: 12 }}>
@@ -289,15 +328,10 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
               <button onClick={doParse} disabled={busy || !text.trim()} style={pill(ACCENT)}>{busy ? "Reading…" : "Build with Kai"}</button>
               <button onClick={() => setShowDescribe(false)} className="trn-sub">Cancel</button>
             </div>
+            {dErr ? <div className="subtle tiny" style={{ marginTop: 8, color: "#ff8a8a" }}>{dErr}</div> : null}
           </div>
         )}
       </div>
-
-      {err ? <div className="subtle tiny" style={{ marginTop: 10, color: "#ff8a8a" }}>{err}</div> : null}
-      {msg ? <div className="subtle tiny" style={{ marginTop: 10, color: "#79e0a8" }}>{msg}</div> : null}
-      {validator && validator.valid === false && validator.errors && validator.errors.length ? (
-        <div className="subtle tiny" style={{ marginTop: 6, color: "#f0a35e" }}>Saved with auto-fixes: {validator.errors.join("; ")}</div>
-      ) : null}
 
       {/* WARMUP */}
       <Section title="Warmup">
@@ -341,8 +375,16 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
         <span className="subtle tiny tnum" style={{ marginRight: "auto" }}>{totalsLine}</span>
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ background: "rgba(255,255,255,0.05)", color: "inherit", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "7px 9px", fontSize: 12, fontFamily: "inherit" }} />
         <button onClick={doPrescribe} disabled={busy || !hasBlocks} style={pill("rgba(121,224,168,0.9)")}>Add to calendar</button>
-        <button onClick={doSave} disabled={busy || !hasBlocks} className="trn-sub">{intent === "routine" ? "Save routine" : "Save workout"}</button>
+        <button onClick={doSave} disabled={busy || !hasBlocks} className="trn-sub" style={savedOk ? { color: "#79e0a8" } : undefined}>{savedOk ? "Saved ✓" : intent === "routine" ? "Save routine" : "Save workout"}</button>
       </div>
+      {msg ? <div className="subtle tiny" style={{ marginTop: 8, color: "#79e0a8" }}>{msg}</div> : null}
+      {err ? <div className="subtle tiny" style={{ marginTop: 8, color: "#ff8a8a" }}>{err}</div> : null}
+      {validator && validator.valid === false && validator.errors && validator.errors.length ? (
+        <div className="subtle tiny" style={{ marginTop: 6, color: "#f0a35e" }}>Saved with auto-fixes: {validator.errors.join("; ")}</div>
+      ) : null}
+      {savedOk && onExit ? (
+        <div style={{ marginTop: 8 }}><button onClick={onExit} style={pill(ACCENT)}>Done</button></div>
+      ) : null}
       <div style={{ marginTop: 8 }}>
         <button disabled title="Garmin push is coming soon" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 11px", borderRadius: 9, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.03)", color: "#6b7080", fontSize: 12, fontWeight: 600, cursor: "not-allowed" }}>
           Push to Garmin
