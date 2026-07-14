@@ -57,6 +57,9 @@ function DetailOverlay({ title, onClose }: { title: string; onClose: () => void 
 }
 
 const REX_KEY = "hos_ex_recents";
+// name -> tracking_type, warmed from picker results + loaded sessions so a newly-added
+// exercise renders the right inputs (reps / timed / distance) instantly, with no flip.
+const TT_CACHE = new Map<string, string>();
 const TYPE_OPTS: { v: string; label: string }[] = [
   { v: "strength", label: "Strength" },
   { v: "mobility", label: "Mobility" },
@@ -96,7 +99,7 @@ function ExercisePicker({ onPick, onPickMany, placeholder }: { onPick: (e: { nam
     if (!open) return;
     const t = setTimeout(() => {
       wkExercises(q, { type: fType || undefined, equipment: fEquip || undefined, muscle: fMuscle || undefined })
-        .then((r) => { if (!alive) return; setOpts(r.exercises || []); if (r.facets) setFacets(r.facets); })
+        .then((r) => { if (!alive) return; setOpts(r.exercises || []); for (const e of r.exercises || []) { if (e.tracking_type) TT_CACHE.set(e.name, e.tracking_type); } if (r.facets) setFacets(r.facets); })
         .catch(() => {});
     }, 220);
     return () => { alive = false; clearTimeout(t); };
@@ -386,7 +389,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
     const sid = bundle.session.id;
     const maxIdx = (bundle.sets || []).reduce((mx, x) => Math.max(mx, x.exercise_index ?? 0), -1);
     const id = tmpId();
-    const row: WkSet = { id, session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null, exercise_index: maxIdx + 1, set_number: 1, set_type: "normal", weight_kg: null, reps: null, rpe: null, rir: null, target_reps: null, target_weight_kg: null, completed: false, tracking_type: e.tracking_type || "weight_reps" };
+    const row: WkSet = { id, session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null, exercise_index: maxIdx + 1, set_number: 1, set_type: "normal", weight_kg: null, reps: null, rpe: null, rir: null, target_reps: null, target_weight_kg: null, completed: false, tracking_type: e.tracking_type || TT_CACHE.get(e.name) || "weight_reps" };
     patchSets((s) => [...s, row]);
     setInputs((m) => ({ ...m, [id]: emptyInput() }));
     try { await wkAddExercise({ session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null }); await reloadActive(); }
@@ -402,7 +405,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
     for (const e of picks) {
       maxIdx += 1;
       const id = tmpId(); temps.push(id);
-      rows.push({ id, session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null, exercise_index: maxIdx, set_number: 1, set_type: "normal", weight_kg: null, reps: null, rpe: null, rir: null, target_reps: null, target_weight_kg: null, completed: false, tracking_type: e.tracking_type || "weight_reps" });
+      rows.push({ id, session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null, exercise_index: maxIdx, set_number: 1, set_type: "normal", weight_kg: null, reps: null, rpe: null, rir: null, target_reps: null, target_weight_kg: null, completed: false, tracking_type: e.tracking_type || TT_CACHE.get(e.name) || "weight_reps" });
     }
     patchSets((s) => [...s, ...rows]);
     setInputs((m) => { const cp = { ...m }; for (const id of temps) cp[id] = emptyInput(); return cp; });
@@ -480,14 +483,27 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
     return Array.from(map.entries()).sort((a, b) => a[0] - b[0]).map(([idx, ss]) => ({ idx, name: ss[0].exercise_name, muscle: ss[0].muscle_group, tt: ss[0].tracking_type || "weight_reps", ssg: ss[0].superset_group ?? null, sets: ss.sort((a, b) => a.set_number - b.set_number) }));
   }, [bundle]);
 
+  useEffect(() => { for (const s of bundle?.sets || []) { if (s.tracking_type) TT_CACHE.set(s.exercise_name, s.tracking_type); } }, [bundle]);
+  // Reorder a single exercise, or the whole superset block it belongs to, as one unit.
   function moveGroup(from: number, to: number) {
     if (from === to || to < 0 || to >= groups.length) return;
+    const ssgs = groups.map((g) => g.ssg);
     const order = groups.map((g) => g.idx);
-    const [m] = order.splice(from, 1); order.splice(to, 0, m);
-    const pos: Record<number, number> = {}; order.forEach((oi, np) => { pos[oi] = np; });
+    let bStart = from, bEnd = from;
+    const dssg = ssgs[from];
+    if (dssg != null) { while (bStart > 0 && ssgs[bStart - 1] === dssg) bStart--; while (bEnd < ssgs.length - 1 && ssgs[bEnd + 1] === dssg) bEnd++; }
+    if (to >= bStart && to <= bEnd) return;
+    const block = order.slice(bStart, bEnd + 1);
+    const rest = [...order.slice(0, bStart), ...order.slice(bEnd + 1)];
+    const targetIdx = order[to];
+    let at = rest.indexOf(targetIdx);
+    if (at < 0) return;
+    if (to > bEnd) at += 1;
+    const newOrder = [...rest.slice(0, at), ...block, ...rest.slice(at)];
+    const pos: Record<number, number> = {}; newOrder.forEach((oi, np) => { pos[oi] = np; });
     patchSets((sets) => sets.map((x) => ({ ...x, exercise_index: pos[x.exercise_index ?? 0] ?? (x.exercise_index ?? 0) })));
     const sid = bundle?.session?.id;
-    if (sid) wkReorder(sid, order).catch(() => { if (editSessionId) loadEditSession(); else reloadActive(); });
+    if (sid) wkReorder(sid, newOrder).catch(() => { if (editSessionId) loadEditSession(); else reloadActive(); });
   }
   async function commitGroups(assign: Map<number, number | null>, newOrder: number[]) {
     const sid = bundle?.session?.id; if (!sid) return;
@@ -993,7 +1009,23 @@ function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExi
   }
   function upd(i: number, patch: Partial<WkRoutineItem>) { setItems((xs) => xs.map((x, j) => (j === i ? { ...x, ...patch } : x))); }
   function remove(i: number) { setItems((xs) => xs.filter((_, j) => j !== i)); }
-  function move(from: number, to: number) { setItems((xs) => { if (to < 0 || to >= xs.length || from === to) return xs; const a = xs.slice(); const [m] = a.splice(from, 1); a.splice(to, 0, m); return a; }); }
+  function move(from: number, to: number) {
+    setItems((xs) => {
+      if (to < 0 || to >= xs.length || from === to) return xs;
+      const ssgs = xs.map((x) => x.superset_group ?? null);
+      let bStart = from, bEnd = from;
+      const dssg = ssgs[from];
+      if (dssg != null) { while (bStart > 0 && ssgs[bStart - 1] === dssg) bStart--; while (bEnd < ssgs.length - 1 && ssgs[bEnd + 1] === dssg) bEnd++; }
+      if (to >= bStart && to <= bEnd) return xs;
+      const block = xs.slice(bStart, bEnd + 1);
+      const rest = [...xs.slice(0, bStart), ...xs.slice(bEnd + 1)];
+      const target = xs[to];
+      let at = rest.indexOf(target);
+      if (at < 0) return xs;
+      if (to > bEnd) at += 1;
+      return [...rest.slice(0, at), ...block, ...rest.slice(at)];
+    });
+  }
   async function save() {
     if (!name.trim()) return;
     setSaving(true);
@@ -1018,7 +1050,35 @@ function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExi
   const field: React.CSSProperties = { background: "rgba(255,255,255,0.05)", color: "inherit", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "8px 10px", fontSize: 13, fontFamily: "inherit" };
   const SS_COLORS = ["#a274ff", "#79e0a8", "#5f9dff", "#ffb454", "#ff6f9e", "#4fd1c5"];
   const ssColor = (v: number | null | undefined) => (v == null ? null : SS_COLORS[((v % SS_COLORS.length) + SS_COLORS.length) % SS_COLORS.length]);
-  function applySS(indices: number[], group: number | null) { setItems((xs) => xs.map((x, j) => (indices.includes(j) ? { ...x, superset_group: group } : x))); }
+  function bGroupTogether(anchorI: number, pickIs: number[]) {
+    setItems((its) => {
+      const involved = new Set([anchorI, ...pickIs].filter((i) => i >= 0 && i < its.length));
+      const existing = new Set<number>();
+      its.forEach((x, i) => { const g = x.superset_group; if (involved.has(i) && g != null) existing.add(g); });
+      let mx = -1; for (const x of its) { const g = x.superset_group; if (g != null && g > mx) mx = g; }
+      const target = existing.size ? Math.min(...Array.from(existing)) : mx + 1;
+      const memberIdx = new Set<number>(involved);
+      its.forEach((x, i) => { const g = x.superset_group; if (g != null && existing.has(g)) memberIdx.add(i); });
+      if (memberIdx.size < 2) return its.map((x, i) => (memberIdx.has(i) ? { ...x, superset_group: null } : x));
+      const assigned = its.map((x, i) => (memberIdx.has(i) ? { ...x, superset_group: target } : x));
+      const firstPos = assigned.findIndex((_, i) => memberIdx.has(i));
+      const members = assigned.filter((_, i) => memberIdx.has(i));
+      const rest = assigned.filter((_, i) => !memberIdx.has(i));
+      let before = 0; for (let i = 0; i < firstPos; i++) if (!memberIdx.has(i)) before++;
+      return [...rest.slice(0, before), ...members, ...rest.slice(before)];
+    });
+  }
+  function bUngroup(i: number) {
+    setItems((its) => {
+      const grp = its[i]?.superset_group ?? null;
+      let next = its.map((x, j) => (j === i ? { ...x, superset_group: null } : x));
+      if (grp != null) {
+        const remaining = next.map((x, j) => (x.superset_group === grp ? j : -1)).filter((j) => j >= 0);
+        if (remaining.length === 1) { const only = remaining[0]; next = next.map((x, j) => (j === only ? { ...x, superset_group: null } : x)); }
+      }
+      return next;
+    });
+  }
 
   return (
     <div className="card" style={{ padding: 14 }}>
@@ -1054,7 +1114,7 @@ function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExi
                   <div onClick={() => setExMenu(null)} style={{ position: "fixed", inset: 0, zIndex: 420 }} />
                   <div style={{ position: "absolute", top: 28, right: 0, zIndex: 421, minWidth: 168, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: 6, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
                     <button onClick={() => { setExMenu(null); setSsPick(items.map((x, j) => (x.superset_group != null && x.superset_group === it.superset_group && j !== i ? j : -1)).filter((j) => j >= 0)); setSsFor(i); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "#e6e9f2", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Add to superset</button>
-                    {it.superset_group != null ? <button onClick={() => { setExMenu(null); applySS([i], null); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "#ff8a8a", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Remove from superset</button> : null}
+                    {it.superset_group != null ? <button onClick={() => { setExMenu(null); bUngroup(i); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "#ff8a8a", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Remove from superset</button> : null}
                   </div>
                 </>) : null}
               </div>
@@ -1101,7 +1161,7 @@ function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExi
               </div>
               <div style={{ padding: 12, borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", gap: 8 }}>
                 <button onClick={() => { setSsFor(null); setSsPick([]); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.05)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Cancel</button>
-                <button disabled={ssPick.length === 0} onClick={() => { applySS([ssFor, ...ssPick], grp); setSsFor(null); setSsPick([]); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "none", background: ssPick.length ? col : "rgba(255,255,255,0.12)", color: ssPick.length ? "#04110a" : "#8a90a6", fontWeight: 800, fontSize: 13, cursor: ssPick.length ? "pointer" : "default" }}>{existing != null ? "Update superset" : "Create superset"}</button>
+                <button disabled={ssPick.length === 0} onClick={() => { bGroupTogether(ssFor, ssPick); setSsFor(null); setSsPick([]); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "none", background: ssPick.length ? col : "rgba(255,255,255,0.12)", color: ssPick.length ? "#04110a" : "#8a90a6", fontWeight: 800, fontSize: 13, cursor: ssPick.length ? "pointer" : "default" }}>{existing != null ? "Update superset" : "Create superset"}</button>
               </div>
             </div>
           </div>
