@@ -92,6 +92,20 @@ export function useApi<T>(route: string) {
   return { data, error };
 }
 
+// ---- load-model (Phase 4: fitness / fatigue / form + thresholds) ----
+export type TrnLoadPoint = { date: string; tss: number; ctl: number; atl: number; tsb: number };
+export type TrnThreshold = { sport: string; metric: string; value: number; source: string; valid_from: string };
+export type TrnLoadResp = { ok: boolean; load: TrnLoadPoint[]; thresholds: TrnThreshold[] };
+export async function trainingLoad(days = 120): Promise<TrnLoadResp> {
+  const res = await authedFetch(`/functions/v1/load-model`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ op: "read", days }),
+  });
+  if (!res.ok) throw new Error(`Couldn't load training load (${res.status})`);
+  return res.json();
+}
+
 // ---- health-coach (legacy basic Q&A — superseded by the Kai coach below) ----
 export async function coachAsk(
   question: string,
