@@ -489,10 +489,56 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
     const sid = bundle?.session?.id;
     if (sid) wkReorder(sid, order).catch(() => { if (editSessionId) loadEditSession(); else reloadActive(); });
   }
-  async function applySuperset(indexes: number[], group: number | null) {
+  async function commitGroups(assign: Map<number, number | null>, newOrder: number[]) {
     const sid = bundle?.session?.id; if (!sid) return;
-    patchSets((sets) => sets.map((x) => (indexes.includes(x.exercise_index ?? 0) ? { ...x, superset_group: group } : x)));
-    try { await wkSetSuperset(sid, indexes, group); } catch { if (editSessionId) loadEditSession(); else reloadActive(); }
+    const pos: Record<number, number> = {}; newOrder.forEach((oi, i) => { pos[oi] = i; });
+    const curOrder = groups.map((g) => g.idx);
+    const reordered = newOrder.length === curOrder.length && newOrder.some((oi, i) => oi !== curOrder[i]);
+    patchSets((sets) => sets.map((x) => {
+      const oi = x.exercise_index ?? 0;
+      const g = assign.has(oi) ? (assign.get(oi) ?? null) : (x.superset_group ?? null);
+      return { ...x, superset_group: g, exercise_index: reordered ? (pos[oi] ?? oi) : oi };
+    }));
+    try {
+      const byVal = new Map<number | null, number[]>();
+      for (const [oi, g] of assign) { const arr = byVal.get(g) || []; arr.push(oi); byVal.set(g, arr); }
+      for (const [g, idxs] of byVal) { if (idxs.length) await wkSetSuperset(sid, idxs, g); }
+      if (reordered) await wkReorder(sid, newOrder);
+    } catch { if (editSessionId) loadEditSession(); else reloadActive(); }
+  }
+  // Group exercises into one superset: merge into any existing group among them (reuse its colour),
+  // snap all members physically adjacent, and clear any singleton left behind.
+  function groupTogether(anchorIdx: number, pickIdxs: number[]) {
+    const gmap = new Map<number, number | null>();
+    for (const g of groups) gmap.set(g.idx, g.ssg);
+    const involved = Array.from(new Set([anchorIdx, ...pickIdxs]));
+    const existingGroups = new Set<number>();
+    for (const i of involved) { const g = gmap.get(i); if (g != null) existingGroups.add(g); }
+    let target: number;
+    if (existingGroups.size > 0) target = Math.min(...Array.from(existingGroups));
+    else { let mx = -1; for (const g of gmap.values()) if (g != null && g > mx) mx = g; target = mx + 1; }
+    const members = new Set<number>(involved);
+    if (existingGroups.size) for (const g of groups) if (g.ssg != null && existingGroups.has(g.ssg)) members.add(g.idx);
+    const assign = new Map<number, number | null>();
+    if (members.size < 2) { for (const idx of members) if (gmap.get(idx) != null) assign.set(idx, null); }
+    else { for (const idx of members) if (gmap.get(idx) !== target) assign.set(idx, target); }
+    const order = groups.map((g) => g.idx);
+    const memberList = order.filter((i) => members.has(i));
+    const newOrder: number[] = []; let inserted = false;
+    for (const i of order) { if (members.has(i)) { if (!inserted) { newOrder.push(...memberList); inserted = true; } } else newOrder.push(i); }
+    commitGroups(assign, newOrder);
+  }
+  // Pull one exercise out of its superset; if that leaves a lone member, clear it too.
+  function ungroup(idx: number) {
+    const assign = new Map<number, number | null>();
+    assign.set(idx, null);
+    const self = groups.find((g) => g.idx === idx);
+    const grp = self?.ssg ?? null;
+    if (grp != null) {
+      const remaining = groups.filter((g) => g.ssg === grp && g.idx !== idx).map((g) => g.idx);
+      if (remaining.length === 1) assign.set(remaining[0], null);
+    }
+    commitGroups(assign, groups.map((g) => g.idx));
   }
 
   if (editSessionId && (loading || !bundle?.session)) {
@@ -620,7 +666,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
                       <div onClick={() => setExMenu(null)} style={{ position: "fixed", inset: 0, zIndex: 420 }} />
                       <div style={{ position: "absolute", top: 28, right: 0, zIndex: 421, minWidth: 168, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: 6, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
                         <button onClick={() => { setExMenu(null); setSsPick(groups.filter((x) => x.ssg != null && x.ssg === g.ssg && x.idx !== g.idx).map((x) => x.idx)); setSsFor(g.idx); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "#e6e9f2", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Add to superset</button>
-                        {g.ssg != null ? <button onClick={() => { setExMenu(null); applySuperset([g.idx], null); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "#ff8a8a", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Remove from superset</button> : null}
+                        {g.ssg != null ? <button onClick={() => { setExMenu(null); ungroup(g.idx); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "#ff8a8a", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Remove from superset</button> : null}
                       </div>
                     </>) : null}
                   </div>
@@ -795,7 +841,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
                 </div>
                 <div style={{ padding: 12, borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", gap: 8 }}>
                   <button onClick={() => { setSsFor(null); setSsPick([]); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.05)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Cancel</button>
-                  <button disabled={ssPick.length === 0} onClick={() => { applySuperset([ssFor, ...ssPick], grp); setSsFor(null); setSsPick([]); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "none", background: ssPick.length ? col : "rgba(255,255,255,0.12)", color: ssPick.length ? "#04110a" : "#8a90a6", fontWeight: 800, fontSize: 13, cursor: ssPick.length ? "pointer" : "default" }}>{existing != null ? "Update superset" : "Create superset"}</button>
+                  <button disabled={ssPick.length === 0} onClick={() => { groupTogether(ssFor, ssPick); setSsFor(null); setSsPick([]); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "none", background: ssPick.length ? col : "rgba(255,255,255,0.12)", color: ssPick.length ? "#04110a" : "#8a90a6", fontWeight: 800, fontSize: 13, cursor: ssPick.length ? "pointer" : "default" }}>{existing != null ? "Update superset" : "Create superset"}</button>
                 </div>
               </div>
             </div>
