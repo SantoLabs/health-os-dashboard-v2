@@ -1,20 +1,25 @@
 "use client";
 
+import { useState } from "react";
 import { useTrain, type TrnOverview } from "../lib/api";
 import WorkoutLogger from "./WorkoutLogger";
 import CardioBuilder from "./CardioBuilder";
 
 export default function WorkoutsTab() {
   const { data: ov, error } = useTrain<TrnOverview>("overview");
+  // Phase 3.0 — type-first entry: one surface at a time. Logger owns strength family; cardio forks out.
+  const [surface, setSurface] = useState<"logger" | "cardio">("logger");
+  const [cardioIntent, setCardioIntent] = useState<"workout" | "routine">("workout");
+  const [cardioStart, setCardioStart] = useState<"describe" | "build">("build");
+
+  if (surface === "cardio") {
+    return <CardioBuilder onExit={() => setSurface("logger")} intent={cardioIntent} startMode={cardioStart} />;
+  }
 
   return (
     <div>
-      {/* Live logger: resume / start-from-plan / start-from-routine / empty, live set logging,
-          celebration + PRs, and the routine builder. Owns the execution surface (Phase 3). */}
-      <WorkoutLogger />
-
-      {/* Cardio session builder (6c): create structured, editable interval workouts to save or add to calendar. */}
-      <CardioBuilder />
+      {/* Live logger owns strength/mobility/recovery entry + execution; forks to cardio via onOpenCardio. */}
+      <WorkoutLogger onOpenCardio={(intent, start) => { setCardioIntent(intent); setCardioStart(start); setSurface("cardio"); }} />
 
       {/* Quick stats (real, from overview) */}
       {error ? (
