@@ -38,9 +38,23 @@ type MeasKind = "distance" | "time" | "lap";
 type Role = "work" | "recovery" | "steady" | "rest";
 type UITarget = { metric: Metric; low: string; high: string };
 type UIStep = { uid: string; role: Role; meas: MeasKind; dist: string; distUnit: "m" | "km"; time: string; targets: UITarget[]; label: string };
-type UILoop = { uid: string; loop: true; repeat: number; label: string; steps: UIStep[] };
+type UILoop = { uid: string; loop: true; repeat: number; label: string; steps: MainItem[] };
 type MainItem = UIStep | UILoop;
 const isLoop = (it: MainItem): it is UILoop => (it as UILoop).loop === true;
+
+// ---------- main-set tree helpers (one level of nesting) ----------
+function patchStep(items: MainItem[], id: string, patch: Partial<UIStep>): MainItem[] {
+  return items.map((n): MainItem => isLoop(n) ? { ...n, steps: patchStep(n.steps, id, patch) } : (n.uid === id ? { ...n, ...patch } : n));
+}
+function patchLoop(items: MainItem[], id: string, patch: Partial<UILoop>): MainItem[] {
+  return items.map((n): MainItem => isLoop(n) ? (n.uid === id ? { ...n, ...patch } : { ...n, steps: patchLoop(n.steps, id, patch) }) : n);
+}
+function removeNode(items: MainItem[], id: string): MainItem[] {
+  return items.filter((n) => n.uid !== id).map((n): MainItem => isLoop(n) ? { ...n, steps: removeNode(n.steps, id) } : n);
+}
+function addToLoop(items: MainItem[], id: string, node: MainItem): MainItem[] {
+  return items.map((n): MainItem => isLoop(n) ? (n.uid === id ? { ...n, steps: [...n.steps, node] } : { ...n, steps: addToLoop(n.steps, id, node) }) : n);
+}
 
 function blankStep(role: Role = "work", meas: MeasKind = "distance"): UIStep {
   return { uid: uid(), role, meas, dist: "", distUnit: "m", time: "", targets: [], label: "" };
@@ -64,19 +78,19 @@ function stepToUnified(st: UIStep, kind: CardioStep["kind"], sport: Sport, inclu
   if (st.label.trim()) out.label = st.label.trim();
   return out;
 }
+function itemToUnified(it: MainItem, sport: Sport): CardioStepOrLoop {
+  if (isLoop(it)) {
+    const steps = it.steps.map((s) => itemToUnified(s, sport));
+    const loop: CardioStepOrLoop = { block_type: "loop", repeat: Math.max(1, Math.round(it.repeat || 1)), steps };
+    if (it.label.trim()) (loop as { label?: string }).label = it.label.trim();
+    return loop;
+  }
+  return stepToUnified(it, it.role === "rest" ? "rest" : "segment", sport, true);
+}
 function buildStructure(sport: Sport, warmup: UIStep[], main: MainItem[], cool: UIStep[]): CardioStructure {
   const blocks: CardioStepOrLoop[] = [];
   for (const s of warmup) blocks.push(stepToUnified(s, "warmup", sport, false));
-  for (const it of main) {
-    if (isLoop(it)) {
-      const steps = it.steps.map((s) => stepToUnified(s, s.role === "rest" ? "rest" : "segment", sport, true));
-      const loop: CardioStepOrLoop = { block_type: "loop", repeat: Math.max(1, Math.round(it.repeat || 1)), steps };
-      if (it.label.trim()) (loop as { label?: string }).label = it.label.trim();
-      blocks.push(loop);
-    } else {
-      blocks.push(stepToUnified(it, it.role === "rest" ? "rest" : "segment", sport, true));
-    }
-  }
+  for (const it of main) blocks.push(itemToUnified(it, sport));
   for (const s of cool) blocks.push(stepToUnified(s, "cooldown", sport, false));
   return { schema_version: 1, blocks };
 }
@@ -104,11 +118,13 @@ function loadStructure(struct: CardioStructure | undefined, sport: Sport) {
   while (i < blks.length && isStep(blks[i]) && (blks[i] as CardioStep).kind === "warmup") { w.push(stepFromUnified(blks[i] as CardioStep, sport)); i++; }
   let j = blks.length - 1; const tail: UIStep[] = [];
   while (j >= i && isStep(blks[j]) && (blks[j] as CardioStep).kind === "cooldown") { tail.unshift(stepFromUnified(blks[j] as CardioStep, sport)); j--; }
-  for (let k = i; k <= j; k++) {
-    const b = blks[k];
-    if (!isStep(b)) { const lp = b as { repeat?: number; label?: string; steps?: CardioStep[] }; mid.push({ uid: uid(), loop: true, repeat: lp.repeat || 1, label: lp.label || "", steps: (lp.steps || []).filter((s) => (s as CardioStep).block_type === "step").map((s) => stepFromUnified(s as CardioStep, sport)) }); }
-    else mid.push(stepFromUnified(b as CardioStep, sport));
-  }
+  const isStepU = (b: CardioStepOrLoop): b is CardioStep => (b as CardioStep).block_type === "step";
+  const itemFromUnified = (b: CardioStepOrLoop): MainItem => {
+    if (isStepU(b)) return stepFromUnified(b, sport);
+    const lp = b as { repeat?: number; label?: string; steps?: CardioStepOrLoop[] };
+    return { uid: uid(), loop: true, repeat: lp.repeat || 1, label: lp.label || "", steps: (lp.steps || []).map(itemFromUnified) };
+  };
+  for (let k = i; k <= j; k++) mid.push(itemFromUnified(blks[k]));
   return { w, mid, c: tail.length ? tail : c };
 }
 function paceMid(t?: CardioTarget): number | null {
@@ -172,10 +188,6 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
   // ---- array helpers ----
   const patchArr = (setter: React.Dispatch<React.SetStateAction<UIStep[]>>, u: string, patch: Partial<UIStep>) =>
     setter((arr) => arr.map((s) => (s.uid === u ? { ...s, ...patch } : s)));
-  const patchMain = (u: string, patch: Partial<UIStep>) =>
-    setMain((arr) => arr.map((it) => (!isLoop(it) && it.uid === u ? { ...it, ...patch } : it)));
-  const patchLoopStep = (lu: string, su: string, patch: Partial<UIStep>) =>
-    setMain((arr) => arr.map((it) => (isLoop(it) && it.uid === lu ? { ...it, steps: it.steps.map((s) => (s.uid === su ? { ...s, ...patch } : s)) } : it)));
 
   // ---- describe ----
   async function doParse() {
@@ -299,6 +311,29 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
     );
   };
 
+  const renderItem = (n: MainItem, depth: number): React.ReactNode => {
+    if (!isLoop(n)) return stepRow(n, true, (p) => setMain((m) => patchStep(m, n.uid, p)), () => setMain((m) => removeNode(m, n.uid)));
+    const nested = depth > 0;
+    return (
+      <div key={n.uid} style={{ padding: 8, borderRadius: 10, background: nested ? "rgba(162,116,255,0.09)" : "rgba(162,116,255,0.05)", border: "1px solid rgba(162,116,255,0.22)", marginLeft: nested ? 6 : 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+          <span className="subtle tiny">repeat</span>
+          <input type="number" min={1} value={n.repeat} onChange={(e) => setMain((m) => patchLoop(m, n.uid, { repeat: Math.max(1, Math.round(num(e.target.value) || 1)) }))} style={{ ...mini, width: 46, color: "#a274ff", fontWeight: 800 }} />
+          <span className="subtle tiny">×</span>
+          <input value={n.label} placeholder={nested ? "sub-set label" : "set label (optional)"} onChange={(e) => setMain((m) => patchLoop(m, n.uid, { label: e.target.value }))} style={{ ...sel, flex: 1, minWidth: 60 }} />
+          <button onClick={() => setMain((m) => removeNode(m, n.uid))} title="Remove set" style={{ background: "none", border: "none", color: "#6b7080", cursor: "pointer", fontSize: 15 }}>×</button>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          {n.steps.map((s) => renderItem(s, depth + 1))}
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+          <button onClick={() => setMain((m) => addToLoop(m, n.uid, blankStep("work", "distance")))} style={{ ...dashBtn("rgba(162,116,255,0.4)"), fontSize: 11, padding: "3px 8px" }}>+ step in set</button>
+          {depth < 1 ? <button onClick={() => setMain((m) => addToLoop(m, n.uid, { uid: uid(), loop: true, repeat: 4, label: "", steps: [blankStep("work", "distance")] }))} style={{ ...dashBtn("rgba(162,116,255,0.4)"), fontSize: 11, padding: "3px 8px" }}>+ nested set</button> : null}
+        </div>
+      </div>
+    );
+  };
+
   const totalsLine = !hasBlocks ? "empty" : `Est. ${fmtDist(est.d) || "0 m"}${est.secs ? ` · ~${fmtMin(est.secs)}${est.complete ? "" : "+"}` : ""}`;
 
   return (
@@ -341,23 +376,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
 
       {/* MAIN */}
       <Section title="Main set">
-        {main.map((it) => isLoop(it) ? (
-          <div key={it.uid} style={{ padding: 8, borderRadius: 10, background: "rgba(162,116,255,0.05)", border: "1px solid rgba(162,116,255,0.22)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-              <span className="subtle tiny">repeat</span>
-              <input type="number" min={1} value={it.repeat} onChange={(e) => setMain((arr) => arr.map((x) => (x.uid === it.uid && isLoop(x) ? { ...x, repeat: Math.max(1, Math.round(num(e.target.value) || 1)) } : x)))} style={{ ...mini, width: 46, color: "#a274ff", fontWeight: 800 }} />
-              <span className="subtle tiny">×</span>
-              <input value={it.label} placeholder="set label (optional)" onChange={(e) => setMain((arr) => arr.map((x) => (x.uid === it.uid && isLoop(x) ? { ...x, label: e.target.value } : x)))} style={{ ...sel, flex: 1, minWidth: 60 }} />
-              <button onClick={() => setMain((arr) => arr.filter((x) => x.uid !== it.uid))} title="Remove set" style={{ background: "none", border: "none", color: "#6b7080", cursor: "pointer", fontSize: 15 }}>×</button>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-              {it.steps.map((s) => stepRow(s, true, (p) => patchLoopStep(it.uid, s.uid, p), () => setMain((arr) => arr.map((x) => (x.uid === it.uid && isLoop(x) ? { ...x, steps: x.steps.filter((y) => y.uid !== s.uid) } : x)))))}
-            </div>
-            <button onClick={() => setMain((arr) => arr.map((x) => (x.uid === it.uid && isLoop(x) ? { ...x, steps: [...x.steps, blankStep("work", "distance")] } : x)))} style={{ ...dashBtn("rgba(162,116,255,0.4)"), marginTop: 6, fontSize: 11, padding: "3px 8px" }}>+ step in set</button>
-          </div>
-        ) : (
-          stepRow(it, true, (p) => patchMain(it.uid, p), () => setMain((a) => a.filter((x) => x.uid !== it.uid)))
-        ))}
+        {main.map((it) => renderItem(it, 0))}
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={() => setMain((a) => [...a, blankStep("work", "distance")])} style={dashBtn("rgba(255,255,255,0.18)")}>+ step</button>
           <button onClick={() => setMain((a) => [...a, { uid: uid(), loop: true, repeat: 5, label: "", steps: [blankStep("work", "distance"), blankStep("recovery", "time")] }])} style={dashBtn("rgba(162,116,255,0.5)")}>+ interval set</button>
