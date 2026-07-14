@@ -38,17 +38,28 @@ type MeasKind = "distance" | "time" | "lap";
 type Role = "work" | "recovery" | "steady" | "rest" | "transition";
 type UITarget = { metric: Metric; low: string; high: string };
 type UIProg = { metric: Metric; step: string };
-type UIReminder = { uid: string; type: "fuel" | "hydrate"; everyMin: string; note: string };
-type UIStep = { uid: string; role: Role; reps: number; sport?: Sport | null; prog?: UIProg | null; meas: MeasKind; dist: string; distUnit: "m" | "km"; time: string; targets: UITarget[]; label: string };
+type UIReminder = { uid: string; type: "fuel" | "hydrate"; sport: "all" | Sport; everyMin: string; note: string };
+type UIStep = { uid: string; role: Role; reps: number; sport: Sport; prog?: UIProg | null; meas: MeasKind; dist: string; distUnit: "m" | "km"; time: string; targets: UITarget[]; label: string };
 type UILoop = { uid: string; loop: true; repeat: number; label: string; prog?: UIProg | null; steps: MainItem[] };
 type MainItem = UIStep | UILoop;
 const isLoop = (it: MainItem): it is UILoop => (it as UILoop).loop === true;
-function detectBrick(items: MainItem[], top: Sport): boolean {
-  for (const it of items) {
-    if (isLoop(it)) { if (detectBrick(it.steps, top)) return true; }
-    else if (it.role === "transition" || (it.sport && it.sport !== top)) return true;
-  }
-  return false;
+
+function collectSports(warmup: UIStep[], main: MainItem[], cool: UIStep[]): Sport[] {
+  const out: Sport[] = [];
+  const push = (s: UIStep) => { if (s.role !== "transition") out.push(s.sport); };
+  warmup.forEach(push);
+  const walk = (items: MainItem[]) => items.forEach((it) => (isLoop(it) ? walk(it.steps) : push(it)));
+  walk(main);
+  cool.forEach(push);
+  return out;
+}
+function dominantSport(sports: Sport[], fallback: Sport): Sport {
+  if (!sports.length) return fallback;
+  const c: Record<string, number> = {};
+  for (const s of sports) c[s] = (c[s] || 0) + 1;
+  let best: Sport = fallback, n = -1;
+  for (const [k, v] of Object.entries(c)) if (v > n) { n = v; best = k as Sport; }
+  return best;
 }
 
 // ---------- main-set tree helpers (one level of nesting) ----------
@@ -65,8 +76,8 @@ function addToLoop(items: MainItem[], id: string, node: MainItem): MainItem[] {
   return items.map((n): MainItem => isLoop(n) ? (n.uid === id ? { ...n, steps: [...n.steps, node] } : { ...n, steps: addToLoop(n.steps, id, node) }) : n);
 }
 
-function blankStep(role: Role = "work", meas: MeasKind = "distance"): UIStep {
-  return { uid: uid(), role, reps: 1, meas, dist: "", distUnit: "m", time: "", targets: [], label: "" };
+function blankStep(role: Role = "work", meas: MeasKind = "distance", sport: Sport = "run"): UIStep {
+  return { uid: uid(), role, reps: 1, sport, meas, dist: "", distUnit: "m", time: "", targets: [], label: "" };
 }
 
 // ---------- (de)serialize UI <-> unified ----------
@@ -99,9 +110,9 @@ function progFromUnified(pr: any): UIProg | undefined {
   if (!["pace", "hr", "power", "cadence", "rpe"].includes(metric)) return undefined;
   return { metric: metric as Metric, step: pr.step != null ? String(pr.step) : "" };
 }
-function itemToUnified(it: MainItem, sport: Sport): CardioStepOrLoop {
+function itemToUnified(it: MainItem): CardioStepOrLoop {
   if (isLoop(it)) {
-    const steps = it.steps.map((s) => itemToUnified(s, sport));
+    const steps = it.steps.map((s) => itemToUnified(s));
     const loop: CardioLoop = { block_type: "loop", repeat: Math.max(1, Math.round(it.repeat || 1)), steps };
     if (it.label.trim()) loop.label = it.label.trim();
     const pr = progToUnified(it.prog);
@@ -109,7 +120,7 @@ function itemToUnified(it: MainItem, sport: Sport): CardioStepOrLoop {
     return loop;
   }
   const kind = it.role === "rest" ? "rest" : it.role === "transition" ? "transition" : "segment";
-  const uStep = stepToUnified(it, kind, it.sport || sport, true);
+  const uStep = stepToUnified(it, kind, it.sport, true);
   if (it.reps > 1 && it.role !== "transition") {
     const loop: CardioLoop = { block_type: "loop", repeat: it.reps, steps: [uStep] };
     const pr = progToUnified(it.prog);
@@ -123,18 +134,25 @@ function remindersToUnified(rs: UIReminder[]): CardioReminder[] {
     const mins = num(r.everyMin);
     const o: CardioReminder = { type: r.type };
     if (mins != null && mins > 0) o.every_s = Math.round(mins * 60);
+    if (r.sport !== "all") o.sport = r.sport;
     if (r.note.trim()) o.note = r.note.trim();
     return o;
   }).filter((o) => o.every_s != null);
 }
 function remindersFromUnified(rs?: CardioReminder[] | null): UIReminder[] {
-  return (rs || []).map((r) => ({ uid: uid(), type: (r.type === "hydrate" ? "hydrate" : "fuel") as "fuel" | "hydrate", everyMin: r.every_s ? String(Math.round(r.every_s / 60)) : "", note: r.note || "" })).filter((r) => r.everyMin);
+  return (rs || []).map((r) => ({
+    uid: uid(),
+    type: (r.type === "hydrate" ? "hydrate" : "fuel") as "fuel" | "hydrate",
+    sport: (["run", "bike", "swim"].includes(String(r.sport)) ? (r.sport as Sport) : "all") as "all" | Sport,
+    everyMin: r.every_s ? String(Math.round(r.every_s / 60)) : "",
+    note: r.note || "",
+  })).filter((r) => r.everyMin);
 }
-function buildStructure(sport: Sport, warmup: UIStep[], main: MainItem[], cool: UIStep[], reminders: UIReminder[]): CardioStructure {
+function buildStructure(warmup: UIStep[], main: MainItem[], cool: UIStep[], reminders: UIReminder[]): CardioStructure {
   const blocks: CardioStepOrLoop[] = [];
-  for (const s of warmup) blocks.push(stepToUnified(s, "warmup", sport, false));
-  for (const it of main) blocks.push(itemToUnified(it, sport));
-  for (const s of cool) blocks.push(stepToUnified(s, "cooldown", sport, false));
+  for (const s of warmup) blocks.push(stepToUnified(s, "warmup", s.sport, false));
+  for (const it of main) blocks.push(itemToUnified(it));
+  for (const s of cool) blocks.push(stepToUnified(s, "cooldown", s.sport, false));
   const out: CardioStructure = { schema_version: 1, blocks };
   const rem = remindersToUnified(reminders);
   if (rem.length) out.reminders = rem;
@@ -149,7 +167,7 @@ function stepFromUnified(b: CardioStep, sport: Sport): UIStep {
     uid: uid(),
     role: b.kind === "rest" ? "rest" : b.kind === "transition" ? "transition" : ((b.role as Role) || "work"),
     reps: 1,
-    sport: b.sport ? normSport(b.sport) : undefined,
+    sport: normSport(b.sport || sport),
     meas,
     dist: m.type === "distance" ? String(km ? +(meters / 1000).toFixed(2) : meters) : "",
     distUnit: km ? "km" : "m",
@@ -219,7 +237,7 @@ function genPaceOptions(sp: Sport): string[] {
 
 // ---------- component ----------
 export default function CardioBuilder({ sportHint = "running", onExit, intent = "workout", startMode = "build" }: { sportHint?: string; onExit?: () => void; intent?: "workout" | "routine"; startMode?: "describe" | "build" }) {
-  const [sport, setSport] = useState<Sport>(normSport(sportHint));
+  const [seedSport, setSeedSport] = useState<Sport>(normSport(sportHint));
   const [name, setName] = useState("");
   const [date, setDate] = useState(cdToday());
   const [busy, setBusy] = useState(false);
@@ -231,9 +249,8 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
   const [text, setText] = useState("");
   const [showDescribe, setShowDescribe] = useState(startMode === "describe");
   const [warmup, setWarmup] = useState<UIStep[]>([]);
-  const [main, setMain] = useState<MainItem[]>(startMode === "describe" ? [] : [blankStep("work", "distance")]);
+  const [main, setMain] = useState<MainItem[]>(startMode === "describe" ? [] : [blankStep("work", "distance", normSport(sportHint))]);
   const [cool, setCool] = useState<UIStep[]>([]);
-  const [brick, setBrick] = useState(false);
   const [reminders, setReminders] = useState<UIReminder[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [routines, setRoutines] = useState<CardioRoutine[]>([]);
@@ -249,20 +266,22 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
     if (!text.trim() || busy) return;
     setBusy(true); setDErr(null); setMsg(null); setErr(null); setValidator(null); setSavedOk(false);
     try {
-      const r: CardioParsed = await cardioParse(text.trim(), sport);
+      const r: CardioParsed = await cardioParse(text.trim(), seedSport);
       if (r.ok && r.structure) {
-        if (r.sport) setSport(normSport(r.sport));
-        const { w, mid, c, rem } = loadStructure(r.structure, r.sport ? normSport(r.sport) : sport);
-        const sp2 = r.sport ? normSport(r.sport) : sport; setWarmup(w); setMain(mid); setCool(c); setReminders(rem); setBrick(detectBrick(mid, sp2)); setEditingId(null); setName(r.name || "Custom session"); setShowDescribe(false);
+        const sp2 = r.sport ? normSport(r.sport) : seedSport;
+        const { w, mid, c, rem } = loadStructure(r.structure, sp2);
+        setSeedSport(sp2); setWarmup(w); setMain(mid); setCool(c); setReminders(rem); setEditingId(null); setName(r.name || "Custom session"); setShowDescribe(false);
       } else setDErr(r.error || "Kai couldn't turn that into a workout — try rephrasing.");
     } catch { setDErr("Something went wrong creating that."); } finally { setBusy(false); }
   }
 
-  // ---- save / prescribe ----
-  const structure = buildStructure(sport, warmup, main, cool, reminders);
+  // ---- derived ----
+  const structure = buildStructure(warmup, main, cool, reminders);
   const est = estimateTotals(structure);
   const hasBlocks = structure.blocks.length > 0;
-  const paceOpts = genPaceOptions(sport);
+  const allSports = collectSports(warmup, main, cool);
+  const workoutSport = dominantSport(allSports, seedSport);
+  const multisport = new Set(allSports).size > 1;
 
   async function doSave(asCopy?: boolean) {
     if (!hasBlocks || busy) return;
@@ -270,7 +289,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
     try {
       const updating = !asCopy && !!editingId;
       const nm = (name.trim() || "Custom session") + (asCopy ? " (copy)" : "");
-      const r = await cardioSave({ id: updating ? editingId as string : undefined, name: nm, sport, structure });
+      const r = await cardioSave({ id: updating ? editingId as string : undefined, name: nm, sport: workoutSport, structure });
       if (r.ok) {
         setSavedOk(true);
         if (r.id) setEditingId(r.id);
@@ -280,14 +299,14 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
     } catch { setErr("Couldn't save."); } finally { setBusy(false); }
   }
   function startNew() {
-    setWarmup([]); setMain([blankStep("work", "distance")]); setCool([]); setReminders([]);
-    setBrick(false); setEditingId(null); setName(""); setSavedOk(false); setValidator(null); setMsg(null); setErr(null); setShowDescribe(false);
+    setWarmup([]); setMain([blankStep("work", "distance", seedSport)]); setCool([]); setReminders([]);
+    setEditingId(null); setName(""); setSavedOk(false); setValidator(null); setMsg(null); setErr(null); setShowDescribe(false);
   }
   async function doPrescribe() {
     if (!hasBlocks || busy) return;
     setBusy(true); setMsg(null); setErr(null); setValidator(null);
     try {
-      const r = await cardioPrescribe({ sport, date, structure, name: name.trim() });
+      const r = await cardioPrescribe({ sport: workoutSport, date, structure, name: name.trim() });
       if (r.ok) setMsg(`Added to your calendar on ${date} — it'll auto-complete when the activity uploads.`);
       else setErr(r.error || "Couldn't add.");
     } catch { setErr("Couldn't add."); } finally { setBusy(false); }
@@ -298,7 +317,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
   }
   async function loadRoutine(rt: CardioRoutine) {
     if (busy) return; setBusy(true); setErr(null); setMsg(null);
-    try { const sp = normSport(rt.sport || sport); setSport(sp); const { w, mid, c, rem } = loadStructure(rt.structure, sp); setWarmup(w); setMain(mid); setCool(c); setReminders(rem); setBrick(detectBrick(mid, sp)); setEditingId(rt.id); setName(rt.name); setShowDescribe(false); }
+    try { const sp = normSport(rt.sport || seedSport); setSeedSport(sp); const { w, mid, c, rem } = loadStructure(rt.structure, sp); setWarmup(w); setMain(mid); setCool(c); setReminders(rem); setEditingId(rt.id); setName(rt.name); setShowDescribe(false); }
     finally { setBusy(false); }
   }
   async function delRoutine(rt: CardioRoutine) {
@@ -314,6 +333,11 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
   const ACCENT = "linear-gradient(135deg,#5f7dff,#a274ff)";
   const roleBg = (r?: Role) => (r === "work" ? "rgba(255,138,138,0.13)" : r === "recovery" || r === "rest" ? "rgba(121,224,168,0.11)" : "rgba(255,255,255,0.05)");
   const dashBtn = (c: string): React.CSSProperties => ({ background: "none", border: `1px dashed ${c}`, color: c, cursor: "pointer", fontSize: 12, borderRadius: 8, padding: "5px 10px", fontWeight: 600 });
+  const sportSel = (st: UIStep, onPatch: (p: Partial<UIStep>) => void) => (
+    <select value={st.sport} onChange={(e) => { const nsp = e.target.value as Sport; onPatch({ sport: nsp, targets: st.targets.map((t) => (t.metric === "pace" ? { ...t, low: "", high: "" } : t)) }); setSeedSport(nsp); }} title="segment sport" style={{ ...sel, fontWeight: 700, color: "#9db0e0" }}>
+      {SPORTS.map((sp) => <option key={sp.id} value={sp.id}>{sp.label}</option>)}
+    </select>
+  );
 
   // ---- ladder (per-loop progression) ----
   const ladderRow = (prog: UIProg | null | undefined, onSet: (p: UIProg | null) => void) => {
@@ -347,6 +371,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
     }
     const restLike = isMain && st.role === "rest";
     const measKind: MeasKind = restLike ? "time" : st.meas;
+    const rowPace = genPaceOptions(st.sport);
     return (
       <div key={st.uid} style={{ padding: "7px 8px", borderRadius: 8, background: roleBg(isMain ? st.role : undefined), display: "flex", flexDirection: "column", gap: 6 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
@@ -355,11 +380,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
               <option value="work">work</option><option value="recovery">recovery</option><option value="steady">steady</option><option value="rest">rest</option>
             </select>
           ) : null}
-          {brick && isMain ? (
-            <select value={st.sport || sport} onChange={(e) => onPatch({ sport: e.target.value as Sport })} title="segment sport" style={{ ...sel, fontWeight: 700, color: "#9db0e0" }}>
-              {SPORTS.map((sp) => <option key={sp.id} value={sp.id}>{sp.label}</option>)}
-            </select>
-          ) : null}
+          {sportSel(st, onPatch)}
           {!restLike ? (
             <select value={measKind} onChange={(e) => onPatch({ meas: e.target.value as MeasKind })} style={sel}>
               <option value="distance">distance</option><option value="time">time</option><option value="lap">lap</option>
@@ -387,9 +408,9 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
               </select>
               {tg.metric === "pace" ? (
                 <>
-                  <select value={tg.low} onChange={(e) => onPatch({ targets: st.targets.map((x, i) => (i === ti ? { ...x, low: e.target.value } : x)) })} style={{ ...sel, width: 70 }}><option value="">—</option>{paceOpts.map((p) => <option key={p} value={p}>{p}</option>)}</select>
+                  <select value={tg.low} onChange={(e) => onPatch({ targets: st.targets.map((x, i) => (i === ti ? { ...x, low: e.target.value } : x)) })} style={{ ...sel, width: 70 }}><option value="">—</option>{rowPace.map((p) => <option key={p} value={p}>{p}</option>)}</select>
                   <span className="subtle tiny">–</span>
-                  <select value={tg.high} onChange={(e) => onPatch({ targets: st.targets.map((x, i) => (i === ti ? { ...x, high: e.target.value } : x)) })} style={{ ...sel, width: 70 }}><option value="">—</option>{paceOpts.map((p) => <option key={p} value={p}>{p}</option>)}</select>
+                  <select value={tg.high} onChange={(e) => onPatch({ targets: st.targets.map((x, i) => (i === ti ? { ...x, high: e.target.value } : x)) })} style={{ ...sel, width: 70 }}><option value="">—</option>{rowPace.map((p) => <option key={p} value={p}>{p}</option>)}</select>
                 </>
               ) : (
                 <>
@@ -398,7 +419,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
                   <input value={tg.high} placeholder="max" onChange={(e) => onPatch({ targets: st.targets.map((x, i) => (i === ti ? { ...x, high: e.target.value } : x)) })} style={{ ...mini, width: 56 }} />
                 </>
               )}
-              <span className="subtle tiny">{metricUnit(tg.metric, sport)}</span>
+              <span className="subtle tiny">{metricUnit(tg.metric, st.sport)}</span>
               <button onClick={() => onPatch({ targets: st.targets.filter((_, i) => i !== ti) })} title="Remove target" style={{ background: "none", border: "none", color: "#6b7080", cursor: "pointer", fontSize: 13 }}>×</button>
             </div>
           ))}
@@ -427,12 +448,12 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
           {n.steps.map((s) => renderItem(s, depth + 1))}
         </div>
         <div style={{ marginTop: 6 }}>{ladderRow(n.prog, (p) => setMain((m) => patchLoop(m, n.uid, { prog: p })))}</div>
-        <button onClick={() => setMain((m) => addToLoop(m, n.uid, blankStep("work", "distance")))} style={{ ...dashBtn("rgba(162,116,255,0.4)"), marginTop: 6, fontSize: 11, padding: "3px 8px" }}>+ step in set</button>
+        <button onClick={() => setMain((m) => addToLoop(m, n.uid, blankStep("work", "distance", seedSport)))} style={{ ...dashBtn("rgba(162,116,255,0.4)"), marginTop: 6, fontSize: 11, padding: "3px 8px" }}>+ step in set</button>
       </div>
     );
   };
 
-  const totalsLine = !hasBlocks ? "empty" : `Est. ${fmtDist(est.d) || "0 m"}${est.secs ? ` · ~${fmtMin(est.secs)}${est.complete ? "" : "+"}` : ""}`;
+  const totalsLine = !hasBlocks ? "empty" : `Est. ${fmtDist(est.d) || "0 m"}${est.secs ? ` · ~${fmtMin(est.secs)}${est.complete ? "" : "+"}` : ""}${multisport ? " · brick" : ""}`;
 
   return (
     <div className="card" style={{ marginBottom: 12 }}>
@@ -442,13 +463,9 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
         <button className="trn-sub" onClick={() => { if (onExit) onExit(); }}>‹ Back</button>
       </div>
 
-      {/* sport + name */}
-      <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
-        {SPORTS.map((s) => (
-          <button key={s.id} onClick={() => setSport(s.id)} style={{ flex: 1, padding: "8px 0", borderRadius: 9, border: "1px solid rgba(255,255,255,0.12)", cursor: "pointer", fontWeight: 700, fontSize: 12, color: "#fff", background: sport === s.id ? ACCENT : "rgba(255,255,255,0.05)" }}>{s.label}</button>
-        ))}
-      </div>
-      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Workout name" style={{ ...field, fontWeight: 700, marginTop: 8 }} />
+      {/* name */}
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Workout name" style={{ ...field, fontWeight: 700, marginTop: 10 }} />
+      <div className="subtle tiny" style={{ marginTop: 6 }}>Pick each segment’s sport below — mix them for a brick.</div>
 
       {/* describe (collapsible) */}
       <div style={{ marginTop: 8 }}>
@@ -469,34 +486,38 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
       {/* WARMUP */}
       <Section title="Warmup">
         {warmup.map((s) => stepRow(s, false, (p) => patchArr(setWarmup, s.uid, p), () => setWarmup((a) => a.filter((x) => x.uid !== s.uid))))}
-        <button onClick={() => setWarmup((a) => [...a, blankStep("steady", "time")])} style={dashBtn("rgba(255,255,255,0.18)")}>+ warmup step</button>
+        <button onClick={() => setWarmup((a) => [...a, blankStep("steady", "time", seedSport)])} style={dashBtn("rgba(255,255,255,0.18)")}>+ warmup step</button>
       </Section>
 
       {/* MAIN */}
       <Section title="Main set">
-        {brick ? <div className="subtle tiny" style={{ marginBottom: 2, color: "#9db0e0" }}>Brick mode: set each segment’s sport; transitions sit between them.</div> : null}
         {main.map((it) => renderItem(it, 0))}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button onClick={() => setMain((a) => [...a, blankStep("work", "distance")])} style={dashBtn("rgba(255,255,255,0.18)")}>+ step</button>
-          <button onClick={() => setMain((a) => [...a, { uid: uid(), loop: true, repeat: 5, label: "", steps: [blankStep("work", "distance"), blankStep("recovery", "time")] }])} style={dashBtn("rgba(162,116,255,0.5)")}>+ interval set</button>
-          <button onClick={() => { setMain((a) => [...a, blankStep("transition", "time")]); setBrick(true); }} style={dashBtn("rgba(120,140,200,0.55)")}>+ transition</button>
+          <button onClick={() => setMain((a) => [...a, blankStep("work", "distance", seedSport)])} style={dashBtn("rgba(255,255,255,0.18)")}>+ step</button>
+          <button onClick={() => setMain((a) => [...a, { uid: uid(), loop: true, repeat: 5, label: "", steps: [blankStep("work", "distance", seedSport), blankStep("recovery", "time", seedSport)] }])} style={dashBtn("rgba(162,116,255,0.5)")}>+ interval set</button>
+          <button onClick={() => setMain((a) => [...a, blankStep("transition", "time", seedSport)])} style={dashBtn("rgba(120,140,200,0.55)")}>+ transition</button>
         </div>
       </Section>
 
       {/* COOLDOWN */}
       <Section title="Cooldown">
         {cool.map((s) => stepRow(s, false, (p) => patchArr(setCool, s.uid, p), () => setCool((a) => a.filter((x) => x.uid !== s.uid))))}
-        <button onClick={() => setCool((a) => [...a, blankStep("steady", "time")])} style={dashBtn("rgba(255,255,255,0.18)")}>+ cooldown step</button>
+        <button onClick={() => setCool((a) => [...a, blankStep("steady", "time", seedSport)])} style={dashBtn("rgba(255,255,255,0.18)")}>+ cooldown step</button>
       </Section>
 
       {/* REMINDERS */}
       <Section title="Fueling & hydration">
-        <div className="subtle tiny" style={{ marginBottom: 2 }}>In-app cues during the session — not sent to Garmin.</div>
+        <div className="subtle tiny" style={{ marginBottom: 2 }}>In-app cues during the session — not sent to Garmin.{multisport ? " Scope each to a sport." : ""}</div>
         {reminders.map((r) => (
           <div key={r.uid} style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap", padding: "6px 8px", borderRadius: 8, background: "rgba(240,180,80,0.08)", border: "1px solid rgba(240,180,80,0.18)" }}>
             <select value={r.type} onChange={(e) => setReminders((a) => a.map((x) => (x.uid === r.uid ? { ...x, type: e.target.value as "fuel" | "hydrate" } : x)))} style={sel}>
               <option value="fuel">Fuel</option><option value="hydrate">Hydrate</option>
             </select>
+            {multisport ? (
+              <select value={r.sport} onChange={(e) => setReminders((a) => a.map((x) => (x.uid === r.uid ? { ...x, sport: e.target.value as ("all" | Sport) } : x)))} title="applies to" style={{ ...sel, color: "#9db0e0" }}>
+                <option value="all">All</option><option value="run">Run</option><option value="bike">Bike</option><option value="swim">Swim</option>
+              </select>
+            ) : null}
             <span className="subtle tiny">every</span>
             <input type="number" min={1} value={r.everyMin} placeholder="20" onChange={(e) => setReminders((a) => a.map((x) => (x.uid === r.uid ? { ...x, everyMin: e.target.value } : x)))} style={{ ...mini, width: 46 }} />
             <span className="subtle tiny">min</span>
@@ -505,8 +526,8 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
           </div>
         ))}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button onClick={() => setReminders((a) => [...a, { uid: uid(), type: "fuel", everyMin: "20", note: "" }])} style={dashBtn("rgba(240,180,80,0.5)")}>+ fuel reminder</button>
-          <button onClick={() => setReminders((a) => [...a, { uid: uid(), type: "hydrate", everyMin: "15", note: "" }])} style={dashBtn("rgba(120,180,240,0.5)")}>+ hydrate reminder</button>
+          <button onClick={() => setReminders((a) => [...a, { uid: uid(), type: "fuel", sport: "all", everyMin: "20", note: "" }])} style={dashBtn("rgba(240,180,80,0.5)")}>+ fuel reminder</button>
+          <button onClick={() => setReminders((a) => [...a, { uid: uid(), type: "hydrate", sport: "all", everyMin: "15", note: "" }])} style={dashBtn("rgba(120,180,240,0.5)")}>+ hydrate reminder</button>
         </div>
       </Section>
 
