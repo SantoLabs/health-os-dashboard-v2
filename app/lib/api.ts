@@ -636,6 +636,28 @@ export function cardioSave(body: { id?: string; name: string; sport?: string; st
 export function cardioDelete(id: string) { return cardPost<{ ok: boolean }>("delete", { id }); }
 export function cardioPrescribe(body: { sport?: string; date?: string; routine_id?: string; structure?: CardioStructure; name?: string; duration_min?: number; distance_m?: number }) { return cardPost<{ ok: boolean; plan_id?: string; session_type?: string; date?: string; planned_duration?: number | null; distance_m?: number | null; error?: string }>("prescribe", body); }
 
+// ---- coach-compose (Phase 4 · U2a: Kai composes ONE structured, threshold-aware session) ----
+export type ComposeTarget = { metric: string; low: number | null; high: number | null; zone: number | null; unit: string };
+export type ComposeMeasure = { type: string; seconds?: number; meters?: number };
+export type ComposeStep = { block_type: "step"; kind: string; sport: string; section: string; measure: ComposeMeasure; targets: ComposeTarget[]; notes?: string | null };
+export type ComposeLoop = { block_type: "loop"; repeat: number; section: string; steps: ComposeStep[] };
+export type ComposeBlock = ComposeStep | ComposeLoop;
+export type ComposeWorkout = { schema_version: 1; id: string; name: string; type: string; sport: string; source: string; notes: string | null; blocks: ComposeBlock[]; reminders: unknown[] };
+export type ComposeValidator = { valid: boolean | null; errors: string[]; warnings: string[]; repairs: string[] };
+export type ComposeResp = { ok: boolean; draft_id?: string; workout?: ComposeWorkout; why?: string; validator?: ComposeValidator; thresholds_used?: Record<string, number | null>; error?: string };
+export type ComposeDraft = { id: string; request_text: string; workout: ComposeWorkout; why: string; validator: ComposeValidator; status: string; created_at: string };
+
+async function composePost<T>(body: unknown): Promise<T> {
+  const res = await authedFetch(`/functions/v1/coach-compose`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!res.ok) { let m = `Kai couldn't build that (${res.status})`; try { const j = await res.json(); if (j?.error) m = String(j.error); } catch { /* */ } throw new Error(m); }
+  return res.json();
+}
+export function composeWorkout(text: string) { return composePost<ComposeResp>({ op: "compose", text }); }
+export function composeGetDraft() { return composePost<{ ok: boolean; draft: ComposeDraft | null }>({ op: "get_draft" }); }
+export function composeCommit(id: string, session_date: string) { return composePost<{ ok: boolean; plan_id?: string; error?: string }>({ op: "commit", id, session_date }); }
+export function composeSaveRoutine(id: string) { return composePost<{ ok: boolean; workout_id?: string; error?: string }>({ op: "save_routine", id }); }
+export function composeDiscard(id: string) { return composePost<{ ok: boolean }>({ op: "discard", id }); }
+
 // ---- recovery (Slice C: body map + mobility) ----
 export type RecMuscle = { muscle_group: string; last_trained: string | null; days_ago: number | null; vol_14d: number; sets_14d: number; freshness: number; load_pct: number };
 export type RecMobility = { name: string; primary_muscle: string | null; secondary_muscles: string | null; body_region: string | null; type: string | null; default_prescription: string | null };
