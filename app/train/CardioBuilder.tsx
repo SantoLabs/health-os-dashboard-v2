@@ -67,7 +67,7 @@ function stepTypeToKindRole(t: StepType): { kind: CardioStep["kind"]; role: NonN
   if (t === "other") return { kind: "segment", role: "steady" };
   return { kind: "segment", role: "work" };
 }
-function kindRoleToStepType(kind: string, role: string | undefined, label: string | undefined): StepType {
+function kindRoleToStepType(kind: string, role: string | null | undefined, label: string | null | undefined): StepType {
   if (kind === "warmup") return "warmup";
   if (kind === "cooldown") return "cooldown";
   if (kind === "rest") return "rest";
@@ -354,7 +354,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
 
   // ---------- STEP DETAIL VIEW ----------
   const editStep = editUid ? findStep(editUid) : null;
-  if (view === "step" && editStep) {
+  if (view === "step" && editStep && editUid) {
     const st = editStep;
     const paceOpts = genPaceOptions(sport);
     const set = (patch: Partial<UIStep>) => mapStep(editUid, (s) => ({ ...s, ...patch }));
