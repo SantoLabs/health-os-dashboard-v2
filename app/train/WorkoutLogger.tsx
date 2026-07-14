@@ -196,7 +196,6 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
   const [restLen, setRestLen] = useState<number>(REST_DEFAULT_S);
   const [restMap, setRestMap] = useState<Record<string, number>>({});
   const [buildId, setBuildId] = useState<string | null>(null);
-  const [entryCardio, setEntryCardio] = useState(false); // home: cardio sub-fork (describe/build)
   const [newRoutinePick, setNewRoutinePick] = useState(false); // home: new-routine domain chooser
   const [menuOpen, setMenuOpen] = useState(false);
   const [restPickerOpen, setRestPickerOpen] = useState(false);
@@ -898,23 +897,12 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
                   ))}
                 </div>
               ) : null}
-              {!entryCardio ? (
-                <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
-                  <button onClick={() => startFrom({ title: "Quick workout" })} disabled={busy} className="trn-sub" style={{ flex: 1, padding: 11 }}>+ Strength</button>
-                  {onOpenCardio ? (
-                    <button onClick={() => setEntryCardio(true)} disabled={busy} className="trn-sub" style={{ flex: 1, padding: 11 }}>+ Cardio</button>
-                  ) : null}
-                </div>
-              ) : (
-                <div style={{ marginTop: 10 }}>
-                  <div className="subtle tiny" style={{ marginBottom: 6 }}>New cardio workout</div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={() => { setEntryCardio(false); onOpenCardio?.("workout", "describe"); }} className="trn-sub" style={{ flex: 1, padding: 11 }}>Describe it · Kai</button>
-                    <button onClick={() => { setEntryCardio(false); onOpenCardio?.("workout", "build"); }} style={{ ...btn(ACCENT), flex: 1, padding: 11 }}>Build it</button>
-                  </div>
-                  <button onClick={() => setEntryCardio(false)} className="subtle tiny" style={{ marginTop: 8, background: "none", border: "none", color: "inherit", cursor: "pointer", opacity: 0.7 }}>‹ back</button>
-                </div>
-              )}
+              <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+                <button onClick={() => startFrom({ title: "Quick workout" })} disabled={busy} className="trn-sub" style={{ flex: 1, padding: 11 }}>+ Strength</button>
+                {onOpenCardio ? (
+                  <button onClick={() => onOpenCardio("workout", "build")} disabled={busy} className="trn-sub" style={{ flex: 1, padding: 11 }}>+ Cardio</button>
+                ) : null}
+              </div>
               <div className="subtle tiny" style={{ marginTop: 8, opacity: 0.75 }}>Scheduled cardio (swim, run, ride) still auto-logs from your watch — building here is for structured sessions and routines.</div>
             </div>
           )}
