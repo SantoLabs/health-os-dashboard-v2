@@ -37,7 +37,7 @@ function targetNumToIn(metric: Metric, val?: number | null): string { if (val ==
 type MeasKind = "distance" | "time" | "lap";
 type Role = "work" | "recovery" | "steady" | "rest";
 type UITarget = { metric: Metric; low: string; high: string };
-type UIStep = { uid: string; role: Role; meas: MeasKind; dist: string; distUnit: "m" | "km"; time: string; targets: UITarget[]; label: string };
+type UIStep = { uid: string; role: Role; reps: number; meas: MeasKind; dist: string; distUnit: "m" | "km"; time: string; targets: UITarget[]; label: string };
 type UILoop = { uid: string; loop: true; repeat: number; label: string; steps: MainItem[] };
 type MainItem = UIStep | UILoop;
 const isLoop = (it: MainItem): it is UILoop => (it as UILoop).loop === true;
@@ -57,7 +57,7 @@ function addToLoop(items: MainItem[], id: string, node: MainItem): MainItem[] {
 }
 
 function blankStep(role: Role = "work", meas: MeasKind = "distance"): UIStep {
-  return { uid: uid(), role, meas, dist: "", distUnit: "m", time: "", targets: [], label: "" };
+  return { uid: uid(), role, reps: 1, meas, dist: "", distUnit: "m", time: "", targets: [], label: "" };
 }
 
 // ---------- (de)serialize UI <-> unified ----------
@@ -85,7 +85,9 @@ function itemToUnified(it: MainItem, sport: Sport): CardioStepOrLoop {
     if (it.label.trim()) (loop as { label?: string }).label = it.label.trim();
     return loop;
   }
-  return stepToUnified(it, it.role === "rest" ? "rest" : "segment", sport, true);
+  const uStep = stepToUnified(it, it.role === "rest" ? "rest" : "segment", sport, true);
+  if (it.reps > 1) return { block_type: "loop", repeat: it.reps, steps: [uStep] };
+  return uStep;
 }
 function buildStructure(sport: Sport, warmup: UIStep[], main: MainItem[], cool: UIStep[]): CardioStructure {
   const blocks: CardioStepOrLoop[] = [];
@@ -102,6 +104,7 @@ function stepFromUnified(b: CardioStep, sport: Sport): UIStep {
   return {
     uid: uid(),
     role: b.kind === "rest" ? "rest" : ((b.role as Role) || "work"),
+    reps: 1,
     meas,
     dist: m.type === "distance" ? String(km ? +(meters / 1000).toFixed(2) : meters) : "",
     distUnit: km ? "km" : "m",
@@ -122,7 +125,10 @@ function loadStructure(struct: CardioStructure | undefined, sport: Sport) {
   const itemFromUnified = (b: CardioStepOrLoop): MainItem => {
     if (isStepU(b)) return stepFromUnified(b, sport);
     const lp = b as { repeat?: number; label?: string; steps?: CardioStepOrLoop[] };
-    return { uid: uid(), loop: true, repeat: lp.repeat || 1, label: lp.label || "", steps: (lp.steps || []).map(itemFromUnified) };
+    const inner = (lp.steps || []).map(itemFromUnified);
+    const rep = Math.max(1, Math.round(lp.repeat || 1));
+    if (inner.length === 1 && !isLoop(inner[0]) && !(lp.label && lp.label.trim())) return { ...(inner[0] as UIStep), reps: rep };
+    return { uid: uid(), loop: true, repeat: rep, label: lp.label || "", steps: inner };
   };
   for (let k = i; k <= j; k++) mid.push(itemFromUnified(blks[k]));
   return { w, mid, c: tail.length ? tail : c };
@@ -277,7 +283,8 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
             <><input value={st.time} placeholder="mm:ss" onChange={(e) => onPatch({ time: e.target.value })} style={{ ...mini, width: 64 }} /><span className="subtle tiny">mm:ss</span></>
           ) : null}
           {measKind === "lap" ? <span className="subtle tiny">until lap pressed</span> : null}
-          <button onClick={onRemove} title="Remove step" style={{ marginLeft: "auto", background: "none", border: "none", color: "#6b7080", cursor: "pointer", fontSize: 15 }}>×</button>
+          {isMain ? (<span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 3 }}><span className="subtle tiny">×</span><input type="number" min={1} value={st.reps} onChange={(e) => onPatch({ reps: Math.max(1, Math.round(num(e.target.value) || 1)) })} title="repeat this step" style={{ ...mini, width: 40, color: st.reps > 1 ? "#a274ff" : "inherit", fontWeight: st.reps > 1 ? 800 : 400 }} /></span>) : null}
+          <button onClick={onRemove} title="Remove step" style={{ marginLeft: isMain ? 4 : "auto", background: "none", border: "none", color: "#6b7080", cursor: "pointer", fontSize: 15 }}>×</button>
         </div>
         {/* targets */}
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -326,10 +333,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
         <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
           {n.steps.map((s) => renderItem(s, depth + 1))}
         </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-          <button onClick={() => setMain((m) => addToLoop(m, n.uid, blankStep("work", "distance")))} style={{ ...dashBtn("rgba(162,116,255,0.4)"), fontSize: 11, padding: "3px 8px" }}>+ step in set</button>
-          {depth < 1 ? <button onClick={() => setMain((m) => addToLoop(m, n.uid, { uid: uid(), loop: true, repeat: 4, label: "", steps: [blankStep("work", "distance")] }))} style={{ ...dashBtn("rgba(162,116,255,0.4)"), fontSize: 11, padding: "3px 8px" }}>+ nested set</button> : null}
-        </div>
+        <button onClick={() => setMain((m) => addToLoop(m, n.uid, blankStep("work", "distance")))} style={{ ...dashBtn("rgba(162,116,255,0.4)"), marginTop: 6, fontSize: 11, padding: "3px 8px" }}>+ step in set</button>
       </div>
     );
   };
