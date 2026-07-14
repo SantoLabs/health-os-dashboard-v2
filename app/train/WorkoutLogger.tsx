@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   wkActive, wkStart, wkAddSet, wkCompleteSet, wkEditSet, wkDeleteSet, wkAddExercise, wkFinish, wkDiscard,
-  wkRoutines, wkRoutine, wkSaveRoutine, wkSaveAsRoutine, wkDeleteRoutine, wkParseRoutine, wkExercises, planWeek, fmtVolume, wkRename, cardioList, cardioPrescribe, recoveryGet, wkSession, wkRecompute, wkReorder, wkSetSuperset,
+  wkRoutines, wkRoutine, wkSaveRoutine, wkSaveAsRoutine, wkUpdateRoutineFromSession, wkDuplicateRoutine, wkDeleteRoutine, wkParseRoutine, wkExercises, planWeek, fmtVolume, wkRename, cardioList, cardioPrescribe, recoveryGet, wkSession, wkRecompute, wkReorder, wkSetSuperset,
 } from "../lib/api";
 import type { WkBundle, WkSession, WkSet, WkFinish, WkRoutineSummary, WkRoutineItem, WkExercise, WkFacets, WkPrevSet, CardioRoutine } from "../lib/api";
 import ExerciseDetail from "./ExerciseDetail";
@@ -66,19 +66,19 @@ const TYPE_OPTS: { v: string; label: string }[] = [
   { v: "recovery_rehab", label: "Recovery / rehab" },
   { v: "cardio", label: "Cardio" },
 ];
-function loadRecents(): { name: string; muscle_group: string }[] {
+function loadRecents(): { name: string; muscle_group: string; tracking_type?: string | null }[] {
   try { const a = JSON.parse(localStorage.getItem(REX_KEY) || "[]"); return Array.isArray(a) ? a.slice(0, 20) : []; } catch { return []; }
 }
-function pushRecents(items: { name: string; muscle_group: string }[]) {
+function pushRecents(items: { name: string; muscle_group: string; tracking_type?: string | null }[]) {
   try {
     const seen = new Set<string>();
-    const merged: { name: string; muscle_group: string }[] = [];
-    for (const it of [...items, ...loadRecents()]) { const k = (it.name || "").toLowerCase(); if (!it.name || seen.has(k)) continue; seen.add(k); merged.push({ name: it.name, muscle_group: it.muscle_group || "" }); }
+    const merged: { name: string; muscle_group: string; tracking_type?: string | null }[] = [];
+    for (const it of [...items, ...loadRecents()]) { const k = (it.name || "").toLowerCase(); if (!it.name || seen.has(k)) continue; seen.add(k); merged.push({ name: it.name, muscle_group: it.muscle_group || "", tracking_type: it.tracking_type ?? null }); }
     localStorage.setItem(REX_KEY, JSON.stringify(merged.slice(0, 20)));
   } catch { /* ignore */ }
 }
 
-function ExercisePicker({ onPick, onPickMany, placeholder }: { onPick: (e: { name: string; muscle_group: string }) => void; onPickMany?: (list: { name: string; muscle_group: string }[]) => void; placeholder?: string }) {
+function ExercisePicker({ onPick, onPickMany, placeholder }: { onPick: (e: { name: string; muscle_group: string; tracking_type?: string | null }) => void; onPickMany?: (list: { name: string; muscle_group: string; tracking_type?: string | null }[]) => void; placeholder?: string }) {
   const [q, setQ] = useState("");
   const [opts, setOpts] = useState<WkExercise[]>([]);
   const [facets, setFacets] = useState<WkFacets | null>(null);
@@ -87,7 +87,7 @@ function ExercisePicker({ onPick, onPickMany, placeholder }: { onPick: (e: { nam
   const [fEquip, setFEquip] = useState<string | null>(null);
   const [fMuscle, setFMuscle] = useState<string | null>(null);
   const [sheet, setSheet] = useState<null | "type" | "equipment" | "muscle">(null);
-  const [sel, setSel] = useState<{ name: string; muscle_group: string }[]>([]);
+  const [sel, setSel] = useState<{ name: string; muscle_group: string; tracking_type?: string | null }[]>([]);
   const [recents, setRecents] = useState<{ name: string; muscle_group: string }[]>([]);
   const filtered = !!(q.trim() || fType || fEquip || fMuscle);
   useEffect(() => { if (open) setRecents(loadRecents()); }, [open]);
@@ -103,8 +103,8 @@ function ExercisePicker({ onPick, onPickMany, placeholder }: { onPick: (e: { nam
   }, [q, open, fType, fEquip, fMuscle]);
   const reset = () => { setQ(""); setOpen(false); setFType(null); setFEquip(null); setFMuscle(null); setSheet(null); setSel([]); };
   const isSel = (name: string) => sel.some((x) => x.name === name);
-  const toggleSel = (e: { name: string; muscle_group: string }) => setSel((s) => (s.some((x) => x.name === e.name) ? s.filter((x) => x.name !== e.name) : [...s, { name: e.name, muscle_group: e.muscle_group || "" }]));
-  const commit = (chosen: { name: string; muscle_group: string }[]) => {
+  const toggleSel = (e: { name: string; muscle_group: string; tracking_type?: string | null }) => setSel((s) => (s.some((x) => x.name === e.name) ? s.filter((x) => x.name !== e.name) : [...s, { name: e.name, muscle_group: e.muscle_group || "", tracking_type: e.tracking_type ?? null }]));
+  const commit = (chosen: { name: string; muscle_group: string; tracking_type?: string | null }[]) => {
     if (chosen.length === 0) return;
     pushRecents(chosen);
     if (onPickMany && chosen.length > 1) onPickMany(chosen);
@@ -121,7 +121,7 @@ function ExercisePicker({ onPick, onPickMany, placeholder }: { onPick: (e: { nam
     else if (sheet === "muscle") setFMuscle((p) => (p === v ? null : v));
     setSheet(null);
   };
-  const listItems = filtered ? opts.map((o) => ({ name: o.name, muscle_group: o.muscle_group })) : recents;
+  const listItems = filtered ? opts.map((o) => ({ name: o.name, muscle_group: o.muscle_group, tracking_type: o.tracking_type ?? null })) : recents;
   return (
     <div style={{ position: "relative" }}>
       <div style={{ display: "flex", gap: 6 }}>
@@ -195,8 +195,13 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
   const [liveTimer, setLiveTimer] = useState<{ id: string; startedAt: number } | null>(null);
   const [editSecs, setEditSecs] = useState<string | null>(null);
   const [finishConfirm, setFinishConfirm] = useState<{ type: "empty" | "partial"; n: number } | null>(null);
-  const [finishOutcome, setFinishOutcome] = useState<"done" | "partial" | "failed">("done");
-  const [savedRoutine, setSavedRoutine] = useState<"idle" | "saving" | "done" | "error">("idle");
+  const [routinePrompt, setRoutinePrompt] = useState<{ kind: "save" | "update" } | null>(null);
+  const [routineName, setRoutineName] = useState("");
+  const [promptOriginId, setPromptOriginId] = useState<string | null>(null);
+  const [promptBusy, setPromptBusy] = useState(false);
+  const [routineMenu, setRoutineMenu] = useState<string | null>(null);
+  const [dupPrompt, setDupPrompt] = useState<{ id: string; name: string } | null>(null);
+  const [delConfirm, setDelConfirm] = useState<string | null>(null);
   const [, force] = useState(0);
   const [dragG, setDragG] = useState<number | null>(null);
   const [overG, setOverG] = useState<number | null>(null);
@@ -376,18 +381,18 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
     patchSets((list) => list.filter((x) => x.id !== s.id));
     try { await wkDeleteSet(s.id); } catch { setBundle((b) => (b ? { ...b, sets: snap } : b)); }
   }
-  async function addExercise(e: { name: string; muscle_group: string }) {
+  async function addExercise(e: { name: string; muscle_group: string; tracking_type?: string | null }) {
     if (!bundle?.session) return;
     const sid = bundle.session.id;
     const maxIdx = (bundle.sets || []).reduce((mx, x) => Math.max(mx, x.exercise_index ?? 0), -1);
     const id = tmpId();
-    const row: WkSet = { id, session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null, exercise_index: maxIdx + 1, set_number: 1, set_type: "normal", weight_kg: null, reps: null, rpe: null, rir: null, target_reps: null, target_weight_kg: null, completed: false };
+    const row: WkSet = { id, session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null, exercise_index: maxIdx + 1, set_number: 1, set_type: "normal", weight_kg: null, reps: null, rpe: null, rir: null, target_reps: null, target_weight_kg: null, completed: false, tracking_type: e.tracking_type || "weight_reps" };
     patchSets((s) => [...s, row]);
     setInputs((m) => ({ ...m, [id]: emptyInput() }));
     try { await wkAddExercise({ session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null }); await reloadActive(); }
     catch { patchSets((s) => s.filter((x) => x.id !== id)); }
   }
-  async function addExercises(picks: { name: string; muscle_group: string }[]) {
+  async function addExercises(picks: { name: string; muscle_group: string; tracking_type?: string | null }[]) {
     if (!bundle?.session || picks.length === 0) return;
     if (picks.length === 1) return addExercise(picks[0]);
     const sid = bundle.session.id;
@@ -397,22 +402,57 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
     for (const e of picks) {
       maxIdx += 1;
       const id = tmpId(); temps.push(id);
-      rows.push({ id, session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null, exercise_index: maxIdx, set_number: 1, set_type: "normal", weight_kg: null, reps: null, rpe: null, rir: null, target_reps: null, target_weight_kg: null, completed: false });
+      rows.push({ id, session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null, exercise_index: maxIdx, set_number: 1, set_type: "normal", weight_kg: null, reps: null, rpe: null, rir: null, target_reps: null, target_weight_kg: null, completed: false, tracking_type: e.tracking_type || "weight_reps" });
     }
     patchSets((s) => [...s, ...rows]);
     setInputs((m) => { const cp = { ...m }; for (const id of temps) cp[id] = emptyInput(); return cp; });
     try { for (const e of picks) await wkAddExercise({ session_id: sid, exercise_name: e.name, muscle_group: e.muscle_group || null }); await reloadActive(); }
     catch { const ids = new Set(temps); patchSets((s) => s.filter((x) => !ids.has(x.id))); }
   }
-  async function doFinish(rpe: number | null, outcome: "done" | "partial" | "failed") {
-    if (!bundle?.session) return;
-    setBusy(true);
-    try { const r = await wkFinish({ session_id: bundle.session.id, session_rpe: rpe, outcome }); setSavedRoutine("idle"); setCelebrate(r); setFinishing(false); setView("celebrate"); setFinishOutcome("done"); } finally { setBusy(false); }
+  function sessionExerciseNames(sets: WkSet[]): string[] {
+    const m = new Map<number, string>();
+    for (const s of sets) { const k = s.exercise_index ?? 0; if (!m.has(k)) m.set(k, s.exercise_name); }
+    return Array.from(m.entries()).sort((a, b) => a[0] - b[0]).map(([, n]) => n);
   }
-  async function saveSessionAsRoutine() {
-    if (!celebrate?.session_id) return;
-    setSavedRoutine("saving");
-    try { const r = await wkSaveAsRoutine(celebrate.session_id, celebrate.title || undefined); setSavedRoutine(r.ok ? "done" : "error"); } catch { setSavedRoutine("error"); }
+  async function doFinish(rpe: number | null) {
+    if (!bundle?.session) return;
+    const sess = bundle.session; const sets = bundle.sets || [];
+    setBusy(true);
+    try {
+      const r = await wkFinish({ session_id: sess.id, session_rpe: rpe });
+      setCelebrate(r); setFinishing(false); setView("celebrate"); setPromptBusy(false);
+      const origin = sess.origin_routine_id || null;
+      if (!origin) { setPromptOriginId(null); setRoutineName((r.title || sess.title || "My routine").slice(0, 60)); setRoutinePrompt({ kind: "save" }); }
+      else {
+        try {
+          const rt = await wkRoutine(origin);
+          const rnames = (rt.items || []).map((it) => it.exercise_name);
+          const cur = sessionExerciseNames(sets);
+          const changed = cur.length !== rnames.length || cur.some((n, i) => n !== rnames[i]);
+          if (changed) { setPromptOriginId(origin); setRoutineName(rt.routine?.name || r.title || "Routine"); setRoutinePrompt({ kind: "update" }); }
+        } catch { /* ignore */ }
+      }
+    } finally { setBusy(false); }
+  }
+  async function doSaveRoutine() {
+    if (!celebrate?.session_id || !routineName.trim()) return;
+    setPromptBusy(true);
+    try { await wkSaveAsRoutine(celebrate.session_id, routineName.trim()); setRoutinePrompt(null); } finally { setPromptBusy(false); }
+  }
+  async function doUpdateRoutine() {
+    if (!celebrate?.session_id || !promptOriginId) return;
+    setPromptBusy(true);
+    try { await wkUpdateRoutineFromSession(celebrate.session_id, promptOriginId); setRoutinePrompt(null); } finally { setPromptBusy(false); }
+  }
+  async function doDuplicateRoutine() {
+    if (!dupPrompt) return;
+    setBusy(true);
+    try { await wkDuplicateRoutine(dupPrompt.id, dupPrompt.name.trim() || undefined); setDupPrompt(null); await loadHome(); } finally { setBusy(false); }
+  }
+  async function doDeleteRoutine() {
+    if (!delConfirm) return;
+    setBusy(true);
+    try { await wkDeleteRoutine(delConfirm); setDelConfirm(null); await loadHome(); } finally { setBusy(false); }
   }
   async function doDone() {
     if (!editSessionId) return;
@@ -485,10 +525,29 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
             ))}
           </div>
         ) : <div className="subtle tiny" style={{ marginTop: 12 }}>No PRs this time — consistency is what compounds. Logged and counted.</div>}
-        <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-          <button onClick={saveSessionAsRoutine} disabled={savedRoutine === "saving" || savedRoutine === "done"} style={{ flex: 1, padding: 12, borderRadius: 10, border: "1px solid rgba(255,255,255,0.18)", background: savedRoutine === "done" ? "rgba(121,224,168,0.14)" : "rgba(255,255,255,0.05)", color: savedRoutine === "done" ? "#79e0a8" : "#fff", fontWeight: 700, fontSize: 13, cursor: savedRoutine === "saving" || savedRoutine === "done" ? "default" : "pointer" }}>{savedRoutine === "done" ? "Saved as routine ✓" : savedRoutine === "saving" ? "Saving…" : savedRoutine === "error" ? "Try again" : "Save as routine"}</button>
-          <button onClick={() => { setCelebrate(null); setView("home"); loadHome(); }} style={{ ...btn(ACCENT), flex: 1, padding: 12 }}>Done</button>
-        </div>
+        <button onClick={() => { setCelebrate(null); setRoutinePrompt(null); setView("home"); loadHome(); }} style={{ ...btn(ACCENT), width: "100%", marginTop: 14, padding: 12 }}>Done</button>
+        {routinePrompt ? (
+          <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+            <div style={{ width: "100%", maxWidth: 360, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: 18 }}>
+              {routinePrompt.kind === "update" ? (
+                <>
+                  <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>You changed this routine</div>
+                  <div className="subtle tiny" style={{ marginBottom: 14 }}>Update &quot;{routineName}&quot; with today&apos;s exercises, or keep it as is?</div>
+                  <button disabled={promptBusy} onClick={doUpdateRoutine} style={{ ...btn(ACCENT), width: "100%", padding: 11, marginBottom: 8 }}>{promptBusy ? "Updating…" : "Update routine"}</button>
+                  <button disabled={promptBusy} onClick={() => setRoutinePrompt({ kind: "save" })} className="trn-sub" style={{ width: "100%", padding: 11, marginBottom: 8 }}>Save as new routine</button>
+                  <button disabled={promptBusy} onClick={() => setRoutinePrompt(null)} className="trn-sub" style={{ width: "100%", padding: 11 }}>Keep as is</button>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 10 }}>Save as routine?</div>
+                  <input autoFocus value={routineName} onChange={(e) => setRoutineName(e.target.value)} placeholder="Routine name" style={{ width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,0.05)", color: "inherit", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 8, padding: "9px 11px", fontSize: 14, fontFamily: "inherit", marginBottom: 12 }} />
+                  <button disabled={promptBusy || !routineName.trim()} onClick={doSaveRoutine} style={{ ...btn(ACCENT), width: "100%", padding: 11, marginBottom: 8, opacity: routineName.trim() ? 1 : 0.5 }}>{promptBusy ? "Saving…" : "Save routine"}</button>
+                  <button disabled={promptBusy} onClick={() => setRoutinePrompt(null)} className="trn-sub" style={{ width: "100%", padding: 11 }}>Not now</button>
+                </>
+              )}
+            </div>
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -651,17 +710,12 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
         {finishing ? (
           <div onClick={() => !busy && setFinishing(false)} style={{ position: "fixed", inset: 0, zIndex: 430, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
             <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 340, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: 18 }}>
-              <div className="tiny" style={{ fontWeight: 700, marginBottom: 8 }}>How did it go?</div>
-              <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-                {([["done", "Done", "rgba(121,224,168,0.9)"], ["partial", "Partial", "rgba(255,180,84,0.9)"], ["failed", "Failed", "rgba(255,111,94,0.9)"]] as const).map(([v, label, c]) => (
-                  <button key={v} className="trn-sub" onClick={() => setFinishOutcome(v)} style={{ flex: 1, ...(finishOutcome === v ? { background: c, color: "#04110a", border: "none", fontWeight: 800 } : {}) }}>{label}</button>
-                ))}
-              </div>
-              <div className="tiny" style={{ fontWeight: 700, marginBottom: 10 }}>How hard was that? (session RPE)</div>
+              <div className="tiny" style={{ fontWeight: 700, marginBottom: 3 }}>How hard did the session feel?</div>
+              <div className="subtle tiny" style={{ marginBottom: 12 }}>1 = very easy · 10 = all-out</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {[6, 7, 8, 9, 10].map((r) => (<button key={r} className="trn-sub" disabled={busy} onClick={() => doFinish(r, finishOutcome)}>{r}</button>))}
-                <button className="trn-sub" disabled={busy} onClick={() => doFinish(null, finishOutcome)}>Skip</button>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((r) => (<button key={r} className="trn-sub" disabled={busy} onClick={() => doFinish(r)} style={{ minWidth: 32, flex: "0 0 auto" }}>{r}</button>))}
               </div>
+              <button className="trn-sub" style={{ marginTop: 12, width: "100%" }} disabled={busy} onClick={() => doFinish(null)}>Skip</button>
               <button className="trn-sub" style={{ marginTop: 10 }} onClick={() => setFinishing(false)}>Keep logging</button>
             </div>
           </div>
@@ -792,7 +846,19 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
                     {recoveryIds.has(r.id)
                     ? <span aria-hidden style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3, padding: "3px 7px", borderRadius: 6, background: "rgba(52,211,153,0.16)", color: "#7fe3b8" }}>RECOVERY</span>
                     : <span aria-hidden style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3, padding: "3px 7px", borderRadius: 6, background: "rgba(162,116,255,0.16)", color: "#c9b6ff" }}>LIFT</span>}
-                    <button aria-label="Edit routine" className="subtle" style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: 2, fontSize: 13, opacity: 0.7 }} onClick={(e) => { e.stopPropagation(); setBuildId(r.id); setView("build"); }}>✎</button>
+                    <div style={{ position: "relative" }} onClick={(e) => e.stopPropagation()}>
+                      <button aria-label="Routine options" className="subtle" style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: 2, fontSize: 16, lineHeight: 1, opacity: 0.7 }} onClick={(e) => { e.stopPropagation(); setRoutineMenu(routineMenu === r.id ? null : r.id); }}>⋯</button>
+                      {routineMenu === r.id ? (
+                        <>
+                          <div onClick={(e) => { e.stopPropagation(); setRoutineMenu(null); }} style={{ position: "fixed", inset: 0, zIndex: 420 }} />
+                          <div style={{ position: "absolute", top: 24, right: 0, zIndex: 421, minWidth: 150, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: 6, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
+                            <button onClick={(e) => { e.stopPropagation(); setRoutineMenu(null); setBuildId(r.id); setView("build"); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "#e6e9f2", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Edit</button>
+                            <button onClick={(e) => { e.stopPropagation(); setRoutineMenu(null); setDupPrompt({ id: r.id, name: `${r.name} (copy)` }); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "#e6e9f2", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Duplicate</button>
+                            <button onClick={(e) => { e.stopPropagation(); setRoutineMenu(null); setDelConfirm(r.id); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "#ff8a8a", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Delete</button>
+                          </div>
+                        </>
+                      ) : null}
+                    </div>
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div>
@@ -821,6 +887,29 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
               <span className="subtle tiny">New routine</span>
             </button>
           </div>
+          {dupPrompt ? (
+            <div onClick={() => setDupPrompt(null)} style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+              <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 360, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: 18 }}>
+                <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 10 }}>Duplicate routine</div>
+                <input autoFocus value={dupPrompt.name} onChange={(e) => setDupPrompt((p) => (p ? { ...p, name: e.target.value } : p))} placeholder="New routine name" style={{ width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,0.05)", color: "inherit", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 8, padding: "9px 11px", fontSize: 14, fontFamily: "inherit", marginBottom: 12 }} />
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button disabled={busy} onClick={() => setDupPrompt(null)} className="trn-sub" style={{ flex: 1, padding: 11 }}>Cancel</button>
+                  <button disabled={busy || !dupPrompt.name.trim()} onClick={doDuplicateRoutine} style={{ ...btn(ACCENT), flex: 1, padding: 11, opacity: dupPrompt.name.trim() ? 1 : 0.5 }}>Duplicate</button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+          {delConfirm ? (
+            <div onClick={() => setDelConfirm(null)} style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+              <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 340, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: 16 }}>
+                <div className="tiny" style={{ color: "#ff8a8a", marginBottom: 12, fontWeight: 600 }}>Delete this routine? This can&apos;t be undone.</div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button disabled={busy} onClick={doDeleteRoutine} style={{ ...btn("rgba(255,111,94,0.9)"), flex: 1, padding: 10 }}>Delete</button>
+                  <button disabled={busy} onClick={() => setDelConfirm(null)} className="trn-sub" style={{ flex: 1 }}>Cancel</button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </>
       )}
     </div>
