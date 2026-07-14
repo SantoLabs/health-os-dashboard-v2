@@ -176,7 +176,7 @@ function ExercisePicker({ onPick, onPickMany, placeholder }: { onPick: (e: { nam
   );
 }
 
-export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessionId?: string; onExitEdit?: () => void } = {}) {
+export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio }: { editSessionId?: string; onExitEdit?: () => void; onOpenCardio?: (intent: "workout" | "routine", startMode: "describe" | "build") => void } = {}) {
   const [view, setView] = useState<View>(editSessionId ? "log" : "home");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -196,6 +196,8 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
   const [restLen, setRestLen] = useState<number>(REST_DEFAULT_S);
   const [restMap, setRestMap] = useState<Record<string, number>>({});
   const [buildId, setBuildId] = useState<string | null>(null);
+  const [entryCardio, setEntryCardio] = useState(false); // home: cardio sub-fork (describe/build)
+  const [newRoutinePick, setNewRoutinePick] = useState(false); // home: new-routine domain chooser
   const [menuOpen, setMenuOpen] = useState(false);
   const [restPickerOpen, setRestPickerOpen] = useState(false);
   const [liveTimer, setLiveTimer] = useState<{ id: string; startedAt: number } | null>(null);
@@ -896,8 +898,24 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
                   ))}
                 </div>
               ) : null}
-              <button onClick={() => startFrom({ title: "Quick workout" })} disabled={busy} className="trn-sub" style={{ marginTop: 10, width: "100%", padding: 11 }}>+ Empty workout</button>
-              <div className="subtle tiny" style={{ marginTop: 8, opacity: 0.75 }}>Cardio the coach scheduled (swim, run, ride) is detected automatically from your watch — no need to log it here.</div>
+              {!entryCardio ? (
+                <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+                  <button onClick={() => startFrom({ title: "Quick workout" })} disabled={busy} className="trn-sub" style={{ flex: 1, padding: 11 }}>+ Strength</button>
+                  {onOpenCardio ? (
+                    <button onClick={() => setEntryCardio(true)} disabled={busy} className="trn-sub" style={{ flex: 1, padding: 11 }}>+ Cardio</button>
+                  ) : null}
+                </div>
+              ) : (
+                <div style={{ marginTop: 10 }}>
+                  <div className="subtle tiny" style={{ marginBottom: 6 }}>New cardio workout</div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => { setEntryCardio(false); onOpenCardio?.("workout", "describe"); }} className="trn-sub" style={{ flex: 1, padding: 11 }}>Describe it · Kai</button>
+                    <button onClick={() => { setEntryCardio(false); onOpenCardio?.("workout", "build"); }} style={{ ...btn(ACCENT), flex: 1, padding: 11 }}>Build it</button>
+                  </div>
+                  <button onClick={() => setEntryCardio(false)} className="subtle tiny" style={{ marginTop: 8, background: "none", border: "none", color: "inherit", cursor: "pointer", opacity: 0.7 }}>‹ back</button>
+                </div>
+              )}
+              <div className="subtle tiny" style={{ marginTop: 8, opacity: 0.75 }}>Scheduled cardio (swim, run, ride) still auto-logs from your watch — building here is for structured sessions and routines.</div>
             </div>
           )}
 
@@ -948,11 +966,23 @@ export default function WorkoutLogger({ editSessionId, onExitEdit }: { editSessi
                 </div>
               );
             })}
-            <button onClick={() => { setBuildId(null); setView("build"); }} className="card" style={{ padding: 12, minHeight: 96, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, cursor: "pointer", border: "1px dashed rgba(255,255,255,0.18)", background: "transparent", color: "inherit" }}>
+            <button onClick={() => { if (onOpenCardio) { setNewRoutinePick(true); } else { setBuildId(null); setView("build"); } }} className="card" style={{ padding: 12, minHeight: 96, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, cursor: "pointer", border: "1px dashed rgba(255,255,255,0.18)", background: "transparent", color: "inherit" }}>
               <span style={{ fontSize: 22, lineHeight: 1, opacity: 0.8 }}>+</span>
               <span className="subtle tiny">New routine</span>
             </button>
           </div>
+          {newRoutinePick ? (
+            <div onClick={() => setNewRoutinePick(false)} style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+              <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 520, borderRadius: "16px 16px 0 0", padding: 18 }}>
+                <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 12 }}>New routine</div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => { setNewRoutinePick(false); setBuildId(null); setView("build"); }} className="trn-sub" style={{ flex: 1, padding: 13 }}>Strength</button>
+                  <button onClick={() => { setNewRoutinePick(false); onOpenCardio?.("routine", "build"); }} style={{ ...btn(ACCENT), flex: 1, padding: 13 }}>Cardio</button>
+                </div>
+                <button onClick={() => setNewRoutinePick(false)} className="subtle tiny" style={{ marginTop: 12, background: "none", border: "none", color: "inherit", cursor: "pointer", opacity: 0.7 }}>Cancel</button>
+              </div>
+            </div>
+          ) : null}
           {dupPrompt ? (
             <div onClick={() => setDupPrompt(null)} style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
               <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 360, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: 18 }}>
