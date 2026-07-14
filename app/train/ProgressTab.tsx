@@ -7,6 +7,7 @@ import KaiDailyCard from "../components/KaiDailyCard";
 import ExerciseDetail from "./ExerciseDetail";
 import { CardioActivityDetail } from "./CardioTab";
 import { useRouter } from "next/navigation";
+import FitnessTab from "./FitnessTab";
 
 /* Goals (Chunk 8) full CRUD, ported from /more/goals */
 type UGoal = { id: string; label: string; when_text?: string; target_date: string | null; goal_type: string; status: string; focus: string; deleted: boolean; created_at: string; updated_at: string; days_away: number | null; source?: string; completed_at?: string | null; early_days?: number | null };
@@ -808,16 +809,18 @@ function Summary() {
 }
 
 export default function ProgressTab() {
-  const [sub, setSub] = useState<"Summary" | "Goals" | "Records" | "Body">("Summary");
+  const [sub, setSub] = useState<"Summary" | "Fitness" | "Goals" | "Records" | "Body">("Summary");
   const { data: prs, error: e1 } = useTrain<TrnPrs>("prs");
   const { data: prog, error: e2 } = useTrain<TrnProgress>("progress");
   const error = e1 || e2;
 
   return (
     <div>
-      <SubPills items={["Summary", "Goals", "Records", "Body"] as const} value={sub} onChange={setSub} />
+      <SubPills items={["Summary", "Fitness", "Goals", "Records", "Body"] as const} value={sub} onChange={setSub} />
       {sub === "Summary" ? (
         <Summary />
+      ) : sub === "Fitness" ? (
+        <FitnessTab />
       ) : sub === "Goals" ? (
         <GoalsTab />
       ) : error ? (
