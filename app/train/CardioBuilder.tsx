@@ -973,6 +973,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
           <button onClick={() => moveItem(st.uid, -1)} title="Move up" style={ctrlBtn}>▲</button>
           <button onClick={() => moveItem(st.uid, 1)} title="Move down" style={ctrlBtn}>▼</button>
           <button onClick={() => dupItem(st.uid)} title="Duplicate" style={ctrlBtn}>⧉</button>
+          <button onClick={() => removeItem(st.uid)} title="Remove" style={{ ...ctrlBtn, fontSize: 15 }}>×</button>
         </div>
         <div style={{ display: "flex", alignItems: "center", paddingRight: 12, color: "#5c6070", fontSize: 18 }}>›</div>
       </div>
@@ -989,7 +990,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
     return (
       <div style={{ marginTop: 6, padding: "6px 8px", borderRadius: 8, background: "rgba(95,125,255,0.05)", border: "1px dashed rgba(95,125,255,0.25)" }}>
         <label style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: on ? "#9db0e0" : "#8a90a6", cursor: "pointer" }}>
-          <input type="checkbox" checked={on} onChange={(e) => { if (e.target.checked) { const d = dims[0]; patchProg(it.uid, { on: true, apply_to: d.apply_to, metric: d.metric, mode: "list", step: "", values: [] }); } else patchProg(it.uid, { on: false }); }} style={{ accentColor: "#5f9dff" }} />
+          <input type="checkbox" checked={on} onChange={(e) => { if (e.target.checked) { const d = dims[0]; patchProg(it.uid, { on: true, apply_to: d.apply_to, metric: d.metric, mode: "linear", step: "", values: [] }); } else patchProg(it.uid, { on: false }); }} style={{ accentColor: "#5f9dff" }} />
           Progression ladder
         </label>
         {on && p ? (() => {
@@ -1002,24 +1003,12 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
                 <select value={`${p.apply_to}|${p.metric}`} onChange={(e) => { const [a, m] = e.target.value.split("|"); patchProg(it.uid, { apply_to: a as ProgApply, metric: m, values: [], step: "" }); }} style={sel}>
                   {dims.map((d) => <option key={`${d.apply_to}|${d.metric}`} value={`${d.apply_to}|${d.metric}`}>{d.label}</option>)}
                 </select>
-                <select value={p.mode} onChange={(e) => patchProg(it.uid, { mode: e.target.value as "list" | "linear" })} style={sel}>
-                  <option value="list">by list</option><option value="linear">by step</option>
-                </select>
               </div>
-              {p.mode === "linear" ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span className="subtle tiny">each rep</span>
-                  <input value={p.step} onChange={(e) => patchProg(it.uid, { step: e.target.value })} placeholder={kind === "pace" || kind === "sec" ? "±m:ss" : "±"} style={{ ...mini, width: 74 }} />
-                  <span className="subtle tiny">{progUnit(kind, curSport)}</span>
-                </div>
-              ) : (
-                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                  {Array.from({ length: Math.max(1, it.reps) }, (_, i) => i).map((i) => (
-                    <input key={i} value={p.values[i] || ""} onChange={(e) => { const nv = p.values.slice(); nv[i] = e.target.value; patchProg(it.uid, { values: nv }); }} placeholder={`#${i + 1}`} style={{ ...mini, width: 56 }} />
-                  ))}
-                  <span className="subtle tiny">{progUnit(kind, curSport)}</span>
-                </div>
-              )}
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span className="subtle tiny">each rep</span>
+                <input value={p.step} onChange={(e) => patchProg(it.uid, { step: e.target.value })} placeholder={kind === "pace" || kind === "sec" ? "±m:ss" : "±"} style={{ ...mini, width: 74 }} />
+                <span className="subtle tiny">{progUnit(kind, curSport)}</span>
+              </div>
               <div className="subtle tiny" style={{ opacity: 0.85 }}>{ladderPreview(ladder, kind, curSport) || "set values to preview"}</div>
             </div>
           );
