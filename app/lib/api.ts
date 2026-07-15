@@ -690,6 +690,16 @@ export function getAdaptDraft() { return composePost<{ ok: boolean; draft: Adapt
 export function applyAdapt(id: string) { return composePost<{ ok: boolean; applied?: number; error?: string }>({ op: "apply_adapt", id }); }
 export function discardAdapt(id: string) { return composePost<{ ok: boolean }>({ op: "discard_adapt", id }); }
 
+// ---- coach-compose · U3: race / goal predictor (deterministic model -> Kai narrates + pacing) ----
+export type RaceGoal = { id: string; label: string; goal_type: string; event_type: string | null; target_date: string; status: string; race_spec: unknown };
+export type PredLeg = { sport: string; distance_m: number; predicted_s: number | null; low_s?: number; high_s?: number; basis?: string; pace?: number; pace_unit?: string };
+export type RacePrediction = { ok: boolean; label?: string; event_type?: string; target_date?: string; days_to_go?: number; legs?: PredLeg[]; transitions_s?: number; total_s?: number; total_low_s?: number; total_high_s?: number; target_s?: number | null; open_water?: boolean };
+export type PacingLeg = { sport: string; unit?: string; even?: number; first_half?: number; second_half?: number };
+export type RaceOutlookResp = { ok: boolean; prediction?: RacePrediction; pacing?: { legs: PacingLeg[]; note: string }; narrative?: string; trend?: string; error?: string };
+export function raceList() { return composePost<{ ok: boolean; races: RaceGoal[] }>({ op: "race_list" }); }
+export function raceOutlook(id: string) { return composePost<RaceOutlookResp>({ op: "race_outlook", id }); }
+
+
 
 
 // ---- recovery (Slice C: body map + mobility) ----
