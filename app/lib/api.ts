@@ -667,6 +667,30 @@ export function getWeekDraft() { return composePost<{ ok: boolean; draft: WeekDr
 export function commitWeek(id: string) { return composePost<{ ok: boolean; created?: number; skipped?: number; error?: string }>({ op: "commit_week", id }); }
 export function discardWeek(id: string) { return composePost<{ ok: boolean }>({ op: "discard_week", id }); }
 
+// ---- coach-compose · U2c: adaptation (deterministic detector -> Kai proposes -> guardrail -> apply) ----
+export type AdaptSignal = { kind: string; severity: "high" | "med" | "low"; detail: string };
+export type AdaptState = {
+  needs_attention: boolean; tsb: number | null; tsb_prev: number | null; tsb_delta: number | null;
+  missed: { date: string; focus: string; activity: string }[];
+  deviations: { date: string; focus: string; planned: number; actual: number; kind: string }[];
+  subjective: { avg_feeling: number | null; n: number };
+  signals: AdaptSignal[]; as_of: string;
+};
+export type AdaptChange = {
+  plan_id: string; action: "ease" | "shorten" | "move" | "rest";
+  from: { role?: string; duration_min?: number | null; date?: string; sport?: string; is_rest?: boolean };
+  to: { role?: string; duration_min?: number; date?: string };
+  reason: string;
+};
+export type AdaptProposeResp = { ok: boolean; no_change?: boolean; draft_id?: string; summary?: string; changes?: AdaptChange[]; guard_notes?: string[]; signals?: AdaptState; error?: string };
+export type AdaptDraft = { id: string; summary: string; changes: AdaptChange[]; signals: AdaptState; horizon_start: string; horizon_end: string; status: string; created_at: string };
+export function adaptState() { return composePost<{ ok: boolean; state: AdaptState | null }>({ op: "adapt_state" }); }
+export function adaptPropose() { return composePost<AdaptProposeResp>({ op: "adapt_propose" }); }
+export function getAdaptDraft() { return composePost<{ ok: boolean; draft: AdaptDraft | null }>({ op: "get_adapt_draft" }); }
+export function applyAdapt(id: string) { return composePost<{ ok: boolean; applied?: number; error?: string }>({ op: "apply_adapt", id }); }
+export function discardAdapt(id: string) { return composePost<{ ok: boolean }>({ op: "discard_adapt", id }); }
+
+
 
 // ---- recovery (Slice C: body map + mobility) ----
 export type RecMuscle = { muscle_group: string; last_trained: string | null; days_ago: number | null; vol_14d: number; sets_14d: number; freshness: number; load_pct: number };
