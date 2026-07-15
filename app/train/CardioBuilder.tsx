@@ -30,9 +30,11 @@ const sportIcon = (sp: Sport) => (sp === "run" ? "🏃" : sp === "bike" ? "🚴"
 type StepType = "warmup" | "active" | "walk" | "recover" | "rest" | "cooldown" | "other";
 type DurType = "time" | "distance" | "lap";
 type TargetType = "none" | "pace" | "cadence" | "hr" | "power" | "rpe";
+type Stroke = "" | "freestyle" | "backstroke" | "breaststroke" | "butterfly" | "im" | "choice" | "drill";
+type Equipment = "" | "kickboard" | "pull_buoy" | "paddles" | "fins" | "snorkel";
 type UITarget = { type: TargetType; lo: string; hi: string; speed?: boolean };
-type UIStep = { uid: string; stepType: StepType; durType: DurType; secs: number; dist: string; distUnit: "m" | "km"; target: UITarget; target2: UITarget };
-type UIRepeat = { uid: string; loop: true; reps: number; steps: (UIStep | UIRepeat)[] };
+type UIStep = { uid: string; stepType: StepType; durType: DurType; secs: number; dist: string; distUnit: "m" | "km"; target: UITarget; target2: UITarget; stroke: Stroke; equipment: Equipment; drill: string };
+type UIRepeat = { uid: string; loop: true; reps: number; steps: (UIStep | UIRepeat)[]; skipLast: boolean };
 type UIItem = UIStep | UIRepeat;
 const isRepeat = (it: UIItem): it is UIRepeat => (it as UIRepeat).loop === true;
 function walkMapStep(items: UIItem[], u: string, fn: (s: UIStep) => UIStep): UIItem[] {
@@ -65,6 +67,9 @@ const TARGET_TYPES: { id: TargetType; label: string }[] = [
 ];
 const metricUnit = (t: TargetType, sp: Sport) => (t === "pace" ? paceUnit(sp) : t === "cadence" ? (sp === "bike" ? "rpm" : "spm") : t === "hr" ? "bpm" : t === "power" ? "W" : t === "rpe" ? "/10" : "");
 const targetMetricName: Record<Exclude<TargetType, "none">, CardioTarget["metric"]> = { pace: "pace", cadence: "cadence", hr: "hr", power: "power", rpe: "rpe" };
+const STROKE_OPTS: { id: Stroke; label: string }[] = [ { id: "", label: "—" }, { id: "freestyle", label: "Freestyle" }, { id: "backstroke", label: "Backstroke" }, { id: "breaststroke", label: "Breaststroke" }, { id: "butterfly", label: "Butterfly" }, { id: "im", label: "IM" }, { id: "choice", label: "Choice" }, { id: "drill", label: "Drill" } ];
+const EQUIP_OPTS: { id: Equipment; label: string }[] = [ { id: "", label: "None" }, { id: "kickboard", label: "Kickboard" }, { id: "pull_buoy", label: "Pull buoy" }, { id: "paddles", label: "Paddles" }, { id: "fins", label: "Fins" }, { id: "snorkel", label: "Snorkel" } ];
+const POOL_OPTS: { label: string; m: number; unit: "m" | "yd" }[] = [ { label: "25 m", m: 25, unit: "m" }, { label: "50 m", m: 50, unit: "m" }, { label: "25 yd", m: 22.86, unit: "yd" } ];
 
 const PACE_RANGE: Record<Sport, [number, number]> = { run: [150, 540], bike: [60, 240], swim: [45, 210] };
 function genPaceOptions(sp: Sport): string[] { const [lo, hi] = PACE_RANGE[sp]; const out: string[] = []; for (let x = lo; x <= hi; x += 5) out.push(secToMMSS(x)); return out; }
@@ -85,10 +90,15 @@ function describeTarget(t: UITarget, sport: Sport): string {
   if (t.type === "rpe") return `RPE ${t.lo || "?"}–${t.hi || "?"}`;
   return `${t.lo || "?"}–${t.hi || "?"} ${metricUnit(t.type, sport)}`;
 }
+function readPool(struct: CardioStructure | undefined): { m: number; unit: "m" | "yd" } {
+  const anyS = struct as unknown as { pool_length_m?: number; pool_unit?: string };
+  if (anyS?.pool_length_m && isFinite(Number(anyS.pool_length_m))) return { m: Number(anyS.pool_length_m), unit: anyS.pool_unit === "yd" ? "yd" : "m" };
+  return { m: 25, unit: "m" };
+}
 
 function blankStep(stepType: StepType = "active"): UIStep {
   const durType: DurType = stepType === "active" ? "distance" : "time";
-  return { uid: uid(), stepType, durType, secs: stepType === "warmup" || stepType === "cooldown" ? 600 : 120, dist: "", distUnit: "m", target: { type: "none", lo: "", hi: "", speed: false }, target2: { type: "none", lo: "", hi: "", speed: false } };
+  return { uid: uid(), stepType, durType, secs: stepType === "warmup" || stepType === "cooldown" ? 600 : 120, dist: "", distUnit: "m", target: { type: "none", lo: "", hi: "", speed: false }, target2: { type: "none", lo: "", hi: "", speed: false }, stroke: "", equipment: "", drill: "" };
 }
 
 // ---------- serialize UI <-> unified ----------
@@ -130,10 +140,19 @@ function stepToUnified(st: UIStep, sport: Sport): CardioStep {
   if (targets.length) out.targets = targets.slice(0, 4);
   if (st.stepType === "walk") out.label = "Walk";
   else if (st.stepType === "other") out.label = "Other";
+  if (sport === "swim") {
+    if (st.stroke) (out as unknown as { stroke?: string }).stroke = st.stroke;
+    if (st.equipment) (out as unknown as { equipment?: string }).equipment = st.equipment;
+    if (st.stroke === "drill" && st.drill.trim()) out.notes = st.drill.trim().slice(0, 120);
+  }
   return out;
 }
 function itemToUnified(it: UIItem, sport: Sport): CardioStepOrLoop {
-  if (isRepeat(it)) return { block_type: "loop", repeat: Math.max(1, Math.round(it.reps || 1)), steps: it.steps.map((s) => itemToUnified(s, sport)) };
+  if (isRepeat(it)) {
+    const loop: Record<string, unknown> = { block_type: "loop", repeat: Math.max(1, Math.round(it.reps || 1)), steps: it.steps.map((s) => itemToUnified(s, sport)) };
+    if (it.skipLast) loop.skip_last_recovery = true;
+    return loop as unknown as CardioStepOrLoop;
+  }
   return stepToUnified(it, sport);
 }
 function remindersToUnified(rs: UIReminder[]): CardioReminder[] {
@@ -146,11 +165,12 @@ function remindersToUnified(rs: UIReminder[]): CardioReminder[] {
     return o;
   }).filter((o) => o.every_s != null);
 }
-function buildStructure(items: UIItem[], sport: Sport, reminders: UIReminder[]): CardioStructure {
+function buildStructure(items: UIItem[], sport: Sport, reminders: UIReminder[], pool?: { m: number; unit: "m" | "yd" }): CardioStructure {
   const blocks = items.map((it) => itemToUnified(it, sport));
   const out: CardioStructure = { schema_version: 1, blocks };
   const rem = remindersToUnified(reminders);
   if (rem.length) out.reminders = rem;
+  if (sport === "swim" && pool) { const o = out as unknown as { pool_length_m?: number; pool_unit?: string }; o.pool_length_m = pool.m; o.pool_unit = pool.unit; }
   return out;
 }
 function stepFromUnified(b: CardioStep): UIStep {
@@ -158,6 +178,11 @@ function stepFromUnified(b: CardioStep): UIStep {
   const durType: DurType = m.type === "distance" ? "distance" : m.type === "lap" ? "lap" : "time";
   const meters = m.type === "distance" ? m.meters : 0;
   const km = meters >= 1000;
+  const anyB = b as unknown as { stroke?: string; equipment?: string; sport?: string };
+  const isSwim = String(anyB.sport || "") === "swim";
+  const stroke: Stroke = isSwim && STROKE_OPTS.some((o) => o.id === anyB.stroke) ? (anyB.stroke as Stroke) : "";
+  const equipment: Equipment = isSwim && EQUIP_OPTS.some((o) => o.id === anyB.equipment) ? (anyB.equipment as Equipment) : "";
+  const drill = stroke === "drill" ? String(b.notes || "").slice(0, 120) : "";
   return {
     uid: uid(),
     stepType: kindRoleToStepType(b.kind, b.role, b.label),
@@ -167,6 +192,7 @@ function stepFromUnified(b: CardioStep): UIStep {
     distUnit: km ? "km" : "m",
     target: uiTargetFromUnified((b.targets || [])[0]),
     target2: uiTargetFromUnified((b.targets || [])[1]),
+    stroke, equipment, drill,
   };
 }
 function remindersFromUnified(rs?: CardioReminder[] | null): UIReminder[] {
@@ -175,11 +201,11 @@ function remindersFromUnified(rs?: CardioReminder[] | null): UIReminder[] {
 function isStepBlock(b: CardioStepOrLoop): b is CardioStep { return (b as CardioStep).block_type === "step"; }
 function blockToItem(b: CardioStepOrLoop): UIItem {
   if (isStepBlock(b)) return stepFromUnified(b);
-  const lp = b as { repeat?: number; steps?: CardioStepOrLoop[] };
+  const lp = b as { repeat?: number; steps?: CardioStepOrLoop[]; skip_last_recovery?: boolean };
   const rep = Math.max(1, Math.round(lp.repeat || 1));
   const inner = (lp.steps || []).map(blockToItem);
   if (inner.length === 1 && rep === 1 && !isRepeat(inner[0])) return inner[0];
-  return { uid: uid(), loop: true, reps: rep, steps: inner.length ? inner : [blankStep("active")] };
+  return { uid: uid(), loop: true, reps: rep, steps: inner.length ? inner : [blankStep("active")], skipLast: lp.skip_last_recovery === true };
 }
 function loadStructure(struct: CardioStructure | undefined): { items: UIItem[]; rem: UIReminder[] } {
   const blks = (struct?.blocks || []) as CardioStepOrLoop[];
@@ -224,7 +250,7 @@ type Leg = { uid: string; sport: Sport; items: UIItem[] };
 function transitionStep(toSport: Sport): CardioStep {
   return { block_type: "step", kind: "transition", sport: toSport, role: "transition", measure: { type: "time", seconds: 60 }, label: "Transition" };
 }
-function buildMultiStructure(legs: Leg[], transitions: boolean, reminders: UIReminder[]): CardioStructure {
+function buildMultiStructure(legs: Leg[], transitions: boolean, reminders: UIReminder[], pool?: { m: number; unit: "m" | "yd" }): CardioStructure {
   const blocks: CardioStepOrLoop[] = [];
   legs.forEach((leg, i) => {
     if (i > 0 && transitions) blocks.push(transitionStep(leg.sport));
@@ -233,6 +259,7 @@ function buildMultiStructure(legs: Leg[], transitions: boolean, reminders: UIRem
   const out: CardioStructure = { schema_version: 1, blocks };
   const rem = remindersToUnified(reminders);
   if (rem.length) out.reminders = rem;
+  if (pool && legs.some((l) => l.sport === "swim")) { const o = out as unknown as { pool_length_m?: number; pool_unit?: string }; o.pool_length_m = pool.m; o.pool_unit = pool.unit; }
   return out;
 }
 function firstStepSport(b: CardioStepOrLoop): Sport {
@@ -337,6 +364,8 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
   const [wheelUid, setWheelUid] = useState<string | null>(null);
   const [routines, setRoutines] = useState<CardioRoutine[]>([]);
   const [typicalPace, setTypicalPace] = useState<Partial<Record<Sport, number>>>({});
+  const [poolM, setPoolM] = useState(25);
+  const [poolUnit, setPoolUnit] = useState<"m" | "yd">("m");
 
   useEffect(() => { cardioList().then((r) => setRoutines(r.routines || [])).catch(() => {}); }, [msg]);
 
@@ -403,13 +432,13 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
       if (r.ok && r.structure) {
         const { items: its, rem } = loadStructure(r.structure);
         setCurItems(() => (its.length ? its : [blankStep("active")]));
-        if (mode === "single") { setReminders(rem); setEditingId(null); if (r.name) setName(r.name); }
+        if (mode === "single") { setReminders(rem); setEditingId(null); if (r.name) setName(r.name); const p = readPool(r.structure); setPoolM(p.m); setPoolUnit(p.unit); }
         setShowDescribe(false);
       } else setDErr(r.error || "Kai couldn't turn that into a workout — try rephrasing.");
     } catch { setDErr("Something went wrong creating that."); } finally { setBusy(false); }
   }
 
-  const structure = mode === "multi" ? buildMultiStructure(legs, transitions, reminders) : buildStructure(items, sport, reminders);
+  const structure = mode === "multi" ? buildMultiStructure(legs, transitions, reminders, { m: poolM, unit: poolUnit }) : buildStructure(items, sport, reminders, { m: poolM, unit: poolUnit });
   const est = mode === "multi" ? multiTotals(legs, transitions, typicalPace) : estimateTotals(items, sport, typicalPace[sport]);
   const curEst = estimateTotals(curItems, curSport, typicalPace[curSport]);
   const hasBlocks = mode === "multi" ? legs.some((l) => l.items.length > 0) : items.length > 0;
@@ -453,10 +482,10 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
       if (isMultiStructure(rt.structure) || rt.sport === "multisport") {
         const { legs: lg, transitions: tr } = splitToLegs(rt.structure);
         setMode("multi"); setLegs(lg); setTransitions(tr); setActiveLegUid(null); setAddLegOpen(false);
-        setReminders(remindersFromUnified(rt.structure && rt.structure.reminders)); setEditingId(rt.id); setName(rt.name); setShowDescribe(false); setView("overview");
+        setReminders(remindersFromUnified(rt.structure && rt.structure.reminders)); setEditingId(rt.id); setName(rt.name); { const p = readPool(rt.structure); setPoolM(p.m); setPoolUnit(p.unit); } setShowDescribe(false); setView("overview");
       } else {
         const sp = normSport(rt.sport || sport); setMode("single"); setSport(sp);
-        const { items: its, rem } = loadStructure(rt.structure); setItems(its.length ? its : [blankStep("active")]); setReminders(rem); setEditingId(rt.id); setName(rt.name); setShowDescribe(false); setView("build");
+        const { items: its, rem } = loadStructure(rt.structure); setItems(its.length ? its : [blankStep("active")]); setReminders(rem); setEditingId(rt.id); setName(rt.name); { const p = readPool(rt.structure); setPoolM(p.m); setPoolUnit(p.unit); } setShowDescribe(false); setView("build");
       }
     } finally { setBusy(false); }
   }
@@ -475,6 +504,14 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
   const rowLabel: React.CSSProperties = { fontSize: 13, color: "#8a90a6", fontWeight: 600 };
 
   // ---- shared render blocks ----
+  const poolRow = () => (
+    <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 12 }}>
+      <span style={rowLabel}>Pool length</span>
+      <select value={`${poolM}|${poolUnit}`} onChange={(e) => { const [pm, pu] = e.target.value.split("|"); setPoolM(Number(pm)); setPoolUnit(pu === "yd" ? "yd" : "m"); }} style={{ ...sel, minWidth: 110 }}>
+        {POOL_OPTS.map((o) => <option key={o.label} value={`${o.m}|${o.unit}`}>{o.label}</option>)}
+      </select>
+    </label>
+  );
   const describeBlock = () => (
     <div style={{ marginTop: 8 }}>
       {!showDescribe ? (
@@ -667,6 +704,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
           </button>
         </div>
 
+        {legs.some((l) => l.sport === "swim") ? poolRow() : null}
         {remindersBlock()}
         {actionsBlock()}
       </div>
@@ -734,6 +772,24 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
             {STEP_TYPES.map((t) => <option key={t} value={t}>{stepTypeLabel(t, curSport)}</option>)}
           </select>
         </label>
+        {curSport === "swim" ? (
+          <>
+            <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
+              <span style={rowLabel}>Stroke</span>
+              <select value={st.stroke} onChange={(e) => set({ stroke: e.target.value as Stroke })} style={{ ...sel, minWidth: 140 }}>{STROKE_OPTS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</select>
+            </label>
+            <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
+              <span style={rowLabel}>Equipment</span>
+              <select value={st.equipment} onChange={(e) => set({ equipment: e.target.value as Equipment })} style={{ ...sel, minWidth: 140 }}>{EQUIP_OPTS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</select>
+            </label>
+            {st.stroke === "drill" ? (
+              <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, gap: 8 }}>
+                <span style={rowLabel}>Drill name</span>
+                <input value={st.drill} onChange={(e) => set({ drill: e.target.value })} placeholder="e.g. catch-up" style={{ ...field, flex: 1, maxWidth: 180 }} />
+              </label>
+            ) : null}
+          </>
+        ) : null}
 
         <div className="eyebrow" style={{ marginTop: 16 }}>Duration</div>
         <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
@@ -749,6 +805,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
           </label>
         ) : null}
         {st.durType === "distance" ? (
+          <>
           <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, gap: 8 }}>
             <span style={rowLabel}>Distance</span>
             <span style={{ display: "inline-flex", gap: 6 }}>
@@ -756,6 +813,8 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
               <select value={st.distUnit} onChange={(e) => set({ distUnit: e.target.value as "m" | "km" })} style={sel}><option value="m">m</option><option value="km">km</option></select>
             </span>
           </label>
+          {curSport === "swim" && st.dist ? (() => { const meters = st.distUnit === "km" ? (num(st.dist) || 0) * 1000 : (num(st.dist) || 0); const laps = meters / poolM; const whole = Math.abs(laps - Math.round(laps)) < 0.02; return meters > 0 ? <div className="subtle tiny" style={{ marginTop: 6, textAlign: "right", opacity: 0.8 }}>{whole ? `= ${Math.round(laps)} laps` : `≈ ${laps.toFixed(1)} laps`}</div> : null; })() : null}
+          </>
         ) : null}
         {st.durType === "lap" ? <div className="subtle tiny" style={{ marginTop: 10 }}>Ends when you press the lap button.</div> : null}
 
@@ -799,7 +858,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
         <div style={{ width: 4, background: stepAccent[st.stepType], flex: "0 0 auto" }} />
         <div style={{ flex: 1, padding: "10px 12px", minWidth: 0 }}>
           <div style={{ fontSize: 13.5, fontWeight: 700 }}>{stepTypeLabel(st.stepType, curSport)}</div>
-          <div className="subtle tiny tnum" style={{ marginTop: 2 }}>{dur}{tgt ? ` · ${tgt}` : ""}</div>
+          <div className="subtle tiny tnum" style={{ marginTop: 2 }}>{dur}{tgt ? ` · ${tgt}` : ""}{st.stroke ? ` · ${STROKE_OPTS.find((o) => o.id === st.stroke)?.label}` : ""}{st.equipment ? ` · ${EQUIP_OPTS.find((o) => o.id === st.equipment)?.label}` : ""}</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", paddingRight: 12, color: "#5c6070", fontSize: 18 }}>›</div>
       </div>
@@ -813,12 +872,13 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
           <select value={it.reps} onChange={(e) => patchRepeat(it.uid, { reps: Math.max(1, Math.round(Number(e.target.value) || 1)) })} style={{ ...sel, width: 62, color: "#a274ff", fontWeight: 800 }}>{Array.from({ length: Math.max(20, it.reps) }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}</select>
           <span style={{ fontSize: 13, fontWeight: 700, color: "#a274ff" }}>Times{depth > 0 ? " · nested" : ""}</span>
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, color: "#8a90a6", cursor: "pointer", marginLeft: 8 }}><input type="checkbox" checked={it.skipLast} onChange={(e) => patchRepeat(it.uid, { skipLast: e.target.checked })} style={{ accentColor: "#a274ff" }} /> skip last recovery</label>
           <button onClick={() => removeItem(it.uid)} title="Remove repeat" style={{ marginLeft: "auto", background: "none", border: "none", color: "#6b7080", cursor: "pointer", fontSize: 16 }}>×</button>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{it.steps.map((child) => renderNode(child, depth + 1))}</div>
         <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
           <button onClick={() => addToRepeat(it.uid, blankStep("active"))} style={{ ...dashBtn("rgba(162,116,255,0.4)"), fontSize: 11, padding: "5px 10px" }}>+ step</button>
-          {depth < 1 ? <button onClick={() => addToRepeat(it.uid, { uid: uid(), loop: true, reps: 4, steps: [blankStep("active")] })} style={{ ...dashBtn("rgba(162,116,255,0.4)"), fontSize: 11, padding: "5px 10px" }}>+ nested repeat</button> : null}
+          {depth < 1 ? <button onClick={() => addToRepeat(it.uid, { uid: uid(), loop: true, reps: 4, steps: [blankStep("active")], skipLast: false })} style={{ ...dashBtn("rgba(162,116,255,0.4)"), fontSize: 11, padding: "5px 10px" }}>+ nested repeat</button> : null}
         </div>
       </div>
     );
@@ -845,6 +905,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
       </div>
       {curEst.secs ? (!curEst.complete ? <div className="subtle tiny" style={{ marginTop: 4, opacity: 0.8 }}>+ set a pace target on distance steps to estimate their time</div> : curEst.estimated ? <div className="subtle tiny" style={{ marginTop: 4, opacity: 0.8 }}>~ time estimated from your recent {curSport} pace</div> : null) : null}
 
+      {!inLeg && curSport === "swim" ? poolRow() : null}
       {!inLeg ? <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Workout name" style={{ ...field, fontWeight: 700, marginTop: 12 }} /> : null}
 
       {describeBlock()}
@@ -858,7 +919,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
       {/* add step / repeat */}
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
         <button onClick={() => setCurItems((a) => [...a, blankStep("active")])} style={{ ...pill("rgba(95,125,255,0.9)"), flex: 1, padding: 11 }}>+ Add Step</button>
-        <button onClick={() => setCurItems((a) => [...a, { uid: uid(), loop: true, reps: 6, steps: [blankStep("active"), blankStep("recover")] }])} style={{ ...pill("rgba(162,116,255,0.9)"), flex: 1, padding: 11 }}>⟳ Add Repeat</button>
+        <button onClick={() => setCurItems((a) => [...a, { uid: uid(), loop: true, reps: 6, steps: [blankStep("active"), blankStep("recover")], skipLast: false }])} style={{ ...pill("rgba(162,116,255,0.9)"), flex: 1, padding: 11 }}>⟳ Add Repeat</button>
       </div>
 
       {inLeg ? (
