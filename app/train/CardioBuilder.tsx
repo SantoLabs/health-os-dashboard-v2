@@ -29,9 +29,9 @@ const sportIcon = (sp: Sport) => (sp === "run" ? "🏃" : sp === "bike" ? "🚴"
 
 type StepType = "warmup" | "active" | "walk" | "recover" | "rest" | "cooldown" | "other";
 type DurType = "time" | "distance" | "lap";
-type TargetType = "none" | "pace" | "cadence" | "hr" | "power";
-type UITarget = { type: TargetType; lo: string; hi: string };
-type UIStep = { uid: string; stepType: StepType; durType: DurType; secs: number; dist: string; distUnit: "m" | "km"; target: UITarget };
+type TargetType = "none" | "pace" | "cadence" | "hr" | "power" | "rpe";
+type UITarget = { type: TargetType; lo: string; hi: string; speed?: boolean };
+type UIStep = { uid: string; stepType: StepType; durType: DurType; secs: number; dist: string; distUnit: "m" | "km"; target: UITarget; target2: UITarget };
 type UIRepeat = { uid: string; loop: true; reps: number; steps: (UIStep | UIRepeat)[] };
 type UIItem = UIStep | UIRepeat;
 const isRepeat = (it: UIItem): it is UIRepeat => (it as UIRepeat).loop === true;
@@ -61,17 +61,34 @@ function stepTypeLabel(t: StepType, sport: Sport): string {
 const stepAccent: Record<StepType, string> = { warmup: "#ff6b6b", active: "#5f9dff", walk: "#4bd0c4", recover: "#8a90a6", rest: "#8a90a6", cooldown: "#5fd08a", other: "#b0b4c0" };
 
 const TARGET_TYPES: { id: TargetType; label: string }[] = [
-  { id: "none", label: "No Target" }, { id: "pace", label: "Pace" }, { id: "cadence", label: "Cadence" }, { id: "hr", label: "Custom Heart Rate" }, { id: "power", label: "Custom Power" },
+  { id: "none", label: "No Target" }, { id: "pace", label: "Pace" }, { id: "cadence", label: "Cadence" }, { id: "hr", label: "Custom Heart Rate" }, { id: "power", label: "Custom Power" }, { id: "rpe", label: "Effort (RPE)" },
 ];
-const metricUnit = (t: TargetType, sp: Sport) => (t === "pace" ? paceUnit(sp) : t === "cadence" ? (sp === "bike" ? "rpm" : "spm") : t === "hr" ? "bpm" : t === "power" ? "W" : "");
-const targetMetricName: Record<Exclude<TargetType, "none">, CardioTarget["metric"]> = { pace: "pace", cadence: "cadence", hr: "hr", power: "power" };
+const metricUnit = (t: TargetType, sp: Sport) => (t === "pace" ? paceUnit(sp) : t === "cadence" ? (sp === "bike" ? "rpm" : "spm") : t === "hr" ? "bpm" : t === "power" ? "W" : t === "rpe" ? "/10" : "");
+const targetMetricName: Record<Exclude<TargetType, "none">, CardioTarget["metric"]> = { pace: "pace", cadence: "cadence", hr: "hr", power: "power", rpe: "rpe" };
 
 const PACE_RANGE: Record<Sport, [number, number]> = { run: [150, 540], bike: [60, 240], swim: [45, 210] };
 function genPaceOptions(sp: Sport): string[] { const [lo, hi] = PACE_RANGE[sp]; const out: string[] = []; for (let x = lo; x <= hi; x += 5) out.push(secToMMSS(x)); return out; }
+function speedFromPace(mmss: string): string { const sec = mmssToSec(mmss); return sec && sec > 0 ? String(Math.round(3600 / sec)) : ""; }
+function paceFromSpeed(kmh: string): string { const k = num(kmh); return k && k > 0 ? secToMMSS(Math.round(3600 / k)) : ""; }
+function uiTargetFromUnified(tg?: CardioTarget): UITarget {
+  if (!tg) return { type: "none", lo: "", hi: "", speed: false };
+  const tt: TargetType = ["pace", "cadence", "hr", "power", "rpe"].includes(String(tg.metric)) ? (tg.metric as TargetType) : "none";
+  const back = (v?: number | null) => (v == null ? "" : tt === "pace" ? secToMMSS(v) : String(v));
+  return { type: tt, lo: back(tg.low), hi: back(tg.high), speed: false };
+}
+function describeTarget(t: UITarget, sport: Sport): string {
+  if (t.type === "none") return "";
+  if (t.type === "pace") {
+    if (sport === "bike" && t.speed) return `${speedFromPace(t.lo) || "?"}–${speedFromPace(t.hi) || "?"} km/h`;
+    return `${t.lo || "?"}–${t.hi || "?"}${paceUnit(sport)}`;
+  }
+  if (t.type === "rpe") return `RPE ${t.lo || "?"}–${t.hi || "?"}`;
+  return `${t.lo || "?"}–${t.hi || "?"} ${metricUnit(t.type, sport)}`;
+}
 
 function blankStep(stepType: StepType = "active"): UIStep {
   const durType: DurType = stepType === "active" ? "distance" : "time";
-  return { uid: uid(), stepType, durType, secs: stepType === "warmup" || stepType === "cooldown" ? 600 : 120, dist: "", distUnit: "m", target: { type: "none", lo: "", hi: "" } };
+  return { uid: uid(), stepType, durType, secs: stepType === "warmup" || stepType === "cooldown" ? 600 : 120, dist: "", distUnit: "m", target: { type: "none", lo: "", hi: "", speed: false }, target2: { type: "none", lo: "", hi: "", speed: false } };
 }
 
 // ---------- serialize UI <-> unified ----------
@@ -100,14 +117,17 @@ function stepToUnified(st: UIStep, sport: Sport): CardioStep {
   else if (st.durType === "distance") measure = { type: "distance", meters: Math.max(0, st.distUnit === "km" ? Math.round((num(st.dist) || 0) * 1000) : Math.round(num(st.dist) || 0)) };
   else measure = { type: "time", seconds: Math.max(0, st.secs || 0) };
   const out: CardioStep = { block_type: "step", kind, sport, role, measure };
-  if (st.target.type !== "none") {
-    const metric = targetMetricName[st.target.type];
-    const conv = (v: string) => (st.target.type === "pace" ? mmssToSec(v) : num(v));
-    const lo = conv(st.target.lo), hi = conv(st.target.hi);
+  const targets: CardioTarget[] = [];
+  for (const t of (st.target.type === "none" ? [] : [st.target, st.target2])) {
+    if (t.type === "none") continue;
+    const metric = targetMetricName[t.type];
+    const conv = (v: string) => (t.type === "pace" ? mmssToSec(v) : num(v));
+    const lo = conv(t.lo), hi = conv(t.hi);
     const tg: CardioTarget = { metric };
     if (lo != null) tg.low = lo; if (hi != null) tg.high = hi;
-    if (lo != null || hi != null) out.targets = [tg];
+    if (lo != null || hi != null) targets.push(tg);
   }
+  if (targets.length) out.targets = targets.slice(0, 4);
   if (st.stepType === "walk") out.label = "Walk";
   else if (st.stepType === "other") out.label = "Other";
   return out;
@@ -138,9 +158,6 @@ function stepFromUnified(b: CardioStep): UIStep {
   const durType: DurType = m.type === "distance" ? "distance" : m.type === "lap" ? "lap" : "time";
   const meters = m.type === "distance" ? m.meters : 0;
   const km = meters >= 1000;
-  const tg = (b.targets || [])[0];
-  const tt: TargetType = tg ? (["pace", "cadence", "hr", "power"].includes(String(tg.metric)) ? (tg.metric as TargetType) : "none") : "none";
-  const back = (v?: number | null) => (v == null ? "" : tt === "pace" ? secToMMSS(v) : String(v));
   return {
     uid: uid(),
     stepType: kindRoleToStepType(b.kind, b.role, b.label),
@@ -148,7 +165,8 @@ function stepFromUnified(b: CardioStep): UIStep {
     secs: m.type === "time" ? (m.seconds || 0) : 0,
     dist: m.type === "distance" ? String(km ? +(meters / 1000).toFixed(2) : meters) : "",
     distUnit: km ? "km" : "m",
-    target: { type: tt, lo: back(tg?.low), hi: back(tg?.high) },
+    target: uiTargetFromUnified((b.targets || [])[0]),
+    target2: uiTargetFromUnified((b.targets || [])[1]),
   };
 }
 function remindersFromUnified(rs?: CardioReminder[] | null): UIReminder[] {
@@ -171,10 +189,13 @@ function loadStructure(struct: CardioStructure | undefined): { items: UIItem[]; 
 
 // ---------- estimate ----------
 function paceOf(st: UIStep): number | null {
-  if (st.target.type !== "pace") return null;
-  const lo = mmssToSec(st.target.lo), hi = mmssToSec(st.target.hi);
-  if (lo != null && hi != null) return (lo + hi) / 2;
-  return lo != null ? lo : hi;
+  for (const t of [st.target, st.target2]) {
+    if (t.type !== "pace") continue;
+    const lo = mmssToSec(t.lo), hi = mmssToSec(t.hi);
+    if (lo != null && hi != null) return (lo + hi) / 2;
+    if (lo != null) return lo; if (hi != null) return hi;
+  }
+  return null;
 }
 function estimateTotals(items: UIItem[], sport: Sport, fallbackPace?: number): { secs: number; meters: number; complete: boolean; estimated: boolean } {
   let secs = 0, meters = 0, complete = true, estimated = false;
@@ -659,6 +680,46 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
     const paceOpts = genPaceOptions(curSport);
     const set = (patch: Partial<UIStep>) => mapStep(editUid, (s) => ({ ...s, ...patch }));
     const setTarget = (patch: Partial<UITarget>) => mapStep(editUid, (s) => ({ ...s, target: { ...s.target, ...patch } }));
+    const setTarget2 = (patch: Partial<UITarget>) => mapStep(editUid, (s) => ({ ...s, target2: { ...s.target2, ...patch } }));
+    const targetTypeSelect = (t: UITarget, setT: (p: Partial<UITarget>) => void) => (
+      <select value={t.type} onChange={(e) => setT({ type: e.target.value as TargetType, lo: "", hi: "", speed: e.target.value === "pace" && curSport === "bike" })} style={{ ...sel, minWidth: 150 }}>
+        {TARGET_TYPES.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+        <option value="__hrz" disabled>HR Zone (needs thresholds)</option>
+        <option value="__pwz" disabled>Power Zone (needs thresholds)</option>
+      </select>
+    );
+    const targetValueRow = (t: UITarget, setT: (p: Partial<UITarget>) => void) => {
+      if (t.type === "none") return null;
+      const bikeSpeed = t.type === "pace" && curSport === "bike" && !!t.speed;
+      return (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          {t.type === "pace" && !bikeSpeed ? (
+            <>
+              <select value={t.lo} onChange={(e) => setT({ lo: e.target.value })} style={{ ...sel, width: 84 }}><option value="">—</option>{paceOpts.map((p) => <option key={p} value={p}>{p}</option>)}</select>
+              <span className="subtle tiny">–</span>
+              <select value={t.hi} onChange={(e) => setT({ hi: e.target.value })} style={{ ...sel, width: 84 }}><option value="">—</option>{paceOpts.map((p) => <option key={p} value={p}>{p}</option>)}</select>
+              <span className="subtle tiny">{paceUnit(curSport)}</span>
+              {curSport === "bike" ? <button onClick={() => setT({ speed: true })} style={{ background: "none", border: "none", color: "#a274ff", cursor: "pointer", fontSize: 11 }}>km/h</button> : null}
+            </>
+          ) : bikeSpeed ? (
+            <>
+              <input type="number" min={1} value={speedFromPace(t.lo)} placeholder="min" onChange={(e) => setT({ lo: paceFromSpeed(e.target.value) })} style={{ ...mini, width: 64 }} />
+              <span className="subtle tiny">–</span>
+              <input type="number" min={1} value={speedFromPace(t.hi)} placeholder="max" onChange={(e) => setT({ hi: paceFromSpeed(e.target.value) })} style={{ ...mini, width: 64 }} />
+              <span className="subtle tiny">km/h</span>
+              <button onClick={() => setT({ speed: false })} style={{ background: "none", border: "none", color: "#a274ff", cursor: "pointer", fontSize: 11 }}>/km</button>
+            </>
+          ) : (
+            <>
+              <input type="number" min={t.type === "rpe" ? 1 : 0} max={t.type === "rpe" ? 10 : undefined} value={t.lo} placeholder={t.type === "rpe" ? "1" : "min"} onChange={(e) => setT({ lo: e.target.value })} style={{ ...mini, width: 68 }} />
+              <span className="subtle tiny">–</span>
+              <input type="number" min={t.type === "rpe" ? 1 : 0} max={t.type === "rpe" ? 10 : undefined} value={t.hi} placeholder={t.type === "rpe" ? "10" : "max"} onChange={(e) => setT({ hi: e.target.value })} style={{ ...mini, width: 68 }} />
+              <span className="subtle tiny">{metricUnit(t.type, curSport)}</span>
+            </>
+          )}
+        </div>
+      );
+    };
     return (
       <div className="card" style={{ marginBottom: 12 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
@@ -701,31 +762,26 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
         <div className="eyebrow" style={{ marginTop: 16 }}>Intensity target</div>
         <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
           <span style={rowLabel}>Target Type</span>
-          <select value={st.target.type} onChange={(e) => setTarget({ type: e.target.value as TargetType, lo: "", hi: "" })} style={{ ...sel, minWidth: 160 }}>
-            {TARGET_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-            <option value="__hrz" disabled>HR Zone (needs thresholds)</option>
-            <option value="__pwz" disabled>Power Zone (needs thresholds)</option>
-          </select>
+          {targetTypeSelect(st.target, setTarget)}
         </label>
+        {targetValueRow(st.target, setTarget)}
         {st.target.type !== "none" ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            {st.target.type === "pace" ? (
-              <>
-                <select value={st.target.lo} onChange={(e) => setTarget({ lo: e.target.value })} style={{ ...sel, width: 84 }}><option value="">—</option>{paceOpts.map((p) => <option key={p} value={p}>{p}</option>)}</select>
-                <span className="subtle tiny">–</span>
-                <select value={st.target.hi} onChange={(e) => setTarget({ hi: e.target.value })} style={{ ...sel, width: 84 }}><option value="">—</option>{paceOpts.map((p) => <option key={p} value={p}>{p}</option>)}</select>
-              </>
-            ) : (
-              <>
-                <input value={st.target.lo} placeholder="min" onChange={(e) => setTarget({ lo: e.target.value })} style={{ ...mini, width: 68 }} />
-                <span className="subtle tiny">–</span>
-                <input value={st.target.hi} placeholder="max" onChange={(e) => setTarget({ hi: e.target.value })} style={{ ...mini, width: 68 }} />
-              </>
-            )}
-            <span className="subtle tiny">{metricUnit(st.target.type, curSport)}</span>
-          </div>
+          st.target2.type === "none" ? (
+            <button onClick={() => setTarget2({ type: curSport === "bike" ? "cadence" : "hr", lo: "", hi: "" })} style={{ ...dashBtn("rgba(162,116,255,0.4)"), marginTop: 10, fontSize: 11 }}>+ Add a secondary target</button>
+          ) : (
+            <>
+              <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 12 }}>
+                <span style={rowLabel}>Secondary</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  {targetTypeSelect(st.target2, setTarget2)}
+                  <button onClick={() => setTarget2({ type: "none", lo: "", hi: "" })} title="Remove secondary" style={{ background: "none", border: "none", color: "#6b7080", cursor: "pointer", fontSize: 15 }}>×</button>
+                </span>
+              </label>
+              {targetValueRow(st.target2, setTarget2)}
+            </>
+          )
         ) : null}
-        <div className="subtle tiny" style={{ marginTop: 12, opacity: 0.7 }}>Zone targets unlock once your thresholds are computed.</div>
+        <div className="subtle tiny" style={{ marginTop: 12, opacity: 0.7 }}>Effort (RPE) works now. HR/Power zone targets unlock once your thresholds are computed.</div>
 
         {wheelUid === editUid ? <DurationWheel initial={st.secs || 0} onCancel={() => setWheelUid(null)} onOk={(secs) => { set({ secs }); setWheelUid(null); }} /> : null}
       </div>
@@ -736,7 +792,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
   const inLeg = mode === "multi";
 
   const stepRow = (st: UIStep, insideRepeat: boolean) => {
-    const tgt = st.target.type === "none" ? "" : st.target.type === "pace" ? `${st.target.lo || "?"}–${st.target.hi || "?"}${paceUnit(curSport)}` : `${TARGET_TYPES.find((t) => t.id === st.target.type)?.label}`;
+    const tgt = [describeTarget(st.target, curSport), st.target2.type !== "none" ? describeTarget(st.target2, curSport) : ""].filter(Boolean).join(" + ");
     const dur = st.durType === "lap" ? "Lap" : st.durType === "time" ? fmtDur(st.secs) : (st.dist ? `${st.dist} ${st.distUnit}` : "—");
     return (
       <div key={st.uid} onClick={() => { setEditUid(st.uid); setView("step"); }} style={{ display: "flex", alignItems: "stretch", gap: 0, borderRadius: 9, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)", cursor: "pointer", overflow: "hidden", marginLeft: insideRepeat ? 10 : 0 }}>
