@@ -5,6 +5,7 @@ import KaiDailyCard from "../components/KaiDailyCard";
 import ComposePanel from "./ComposePanel";
 import WeekPanel from "./WeekPanel";
 import AdaptPanel from "./AdaptPanel";
+import RaceOutlookPanel from "./RaceOutlookPanel";
 import { planPropose, planAccept, planDecline, planWeek } from "../lib/api";
 import type { TrnProposal, TrnProposeResp } from "../lib/api";
 
@@ -190,6 +191,7 @@ export default function CoachPanel() {
       <ComposePanel />
       <WeekPanel />
       <AdaptPanel />
+      <RaceOutlookPanel />
     </div>
   );
 }
