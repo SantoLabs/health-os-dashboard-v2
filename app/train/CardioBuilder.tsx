@@ -34,7 +34,9 @@ type Stroke = "" | "freestyle" | "backstroke" | "breaststroke" | "butterfly" | "
 type Equipment = "" | "kickboard" | "pull_buoy" | "paddles" | "fins" | "snorkel";
 type UITarget = { type: TargetType; lo: string; hi: string; speed?: boolean };
 type UIStep = { uid: string; stepType: StepType; durType: DurType; secs: number; dist: string; distUnit: "m" | "km"; target: UITarget; target2: UITarget; stroke: Stroke; equipment: Equipment; drill: string };
-type UIRepeat = { uid: string; loop: true; reps: number; steps: (UIStep | UIRepeat)[]; skipLast: boolean };
+type ProgApply = "measure" | "target";
+type UIProg = { on: boolean; apply_to: ProgApply; metric: string; mode: "list" | "linear"; step: string; values: string[] };
+type UIRepeat = { uid: string; loop: true; reps: number; steps: (UIStep | UIRepeat)[]; skipLast: boolean; prog?: UIProg };
 type UIItem = UIStep | UIRepeat;
 const isRepeat = (it: UIItem): it is UIRepeat => (it as UIRepeat).loop === true;
 function walkMapStep(items: UIItem[], u: string, fn: (s: UIStep) => UIStep): UIItem[] {
@@ -51,6 +53,81 @@ function walkPatchRepeat(items: UIItem[], u: string, patch: Partial<UIRepeat>): 
 }
 function walkAddToRepeat(items: UIItem[], repeatUid: string, node: UIItem): UIItem[] {
   return items.map((it) => !isRepeat(it) ? it : (it.uid === repeatUid ? { ...it, steps: [...it.steps, node] } : { ...it, steps: walkAddToRepeat(it.steps, repeatUid, node) }));
+}
+function cloneItem(it: UIItem): UIItem {
+  if (isRepeat(it)) return { ...it, uid: uid(), steps: it.steps.map(cloneItem), prog: it.prog ? { ...it.prog, values: [...it.prog.values] } : undefined };
+  return { ...it, uid: uid(), target: { ...it.target }, target2: { ...it.target2 } };
+}
+function walkMove(items: UIItem[], u: string, dir: -1 | 1): UIItem[] {
+  const idx = items.findIndex((it) => it.uid === u);
+  if (idx >= 0) { const j = idx + dir; if (j < 0 || j >= items.length) return items; const c = items.slice(); const [m] = c.splice(idx, 1); c.splice(j, 0, m); return c; }
+  return items.map((it) => isRepeat(it) ? { ...it, steps: walkMove(it.steps, u, dir) } : it);
+}
+function walkDuplicate(items: UIItem[], u: string): UIItem[] {
+  const idx = items.findIndex((it) => it.uid === u);
+  if (idx >= 0) { const c = items.slice(); c.splice(idx + 1, 0, cloneItem(items[idx])); return c; }
+  return items.map((it) => isRepeat(it) ? { ...it, steps: walkDuplicate(it.steps, u) } : it);
+}
+function walkPatchProg(items: UIItem[], u: string, patch: Partial<UIProg>): UIItem[] {
+  return items.map((it) => {
+    if (!isRepeat(it)) return it;
+    if (it.uid === u) { const base: UIProg = it.prog || { on: false, apply_to: "measure", metric: "distance", mode: "list", step: "", values: [] }; return { ...it, prog: { ...base, ...patch } }; }
+    return { ...it, steps: walkPatchProg(it.steps, u, patch) };
+  });
+}
+type ProgDim = { apply_to: ProgApply; metric: string; label: string };
+function progKind(apply_to: ProgApply, metric: string): "pace" | "sec" | "num" | "dist" {
+  if (apply_to === "measure") return metric === "distance" ? "dist" : "sec";
+  return metric === "pace" ? "pace" : "num";
+}
+function progParse(kind: string, v: string): number | null {
+  if (kind === "pace" || kind === "sec") return mmssToSec(v);
+  return num(v);
+}
+function progFmt(kind: string, n: number): string {
+  return (kind === "pace" || kind === "sec") ? secToMMSS(n) : String(n);
+}
+function progUnit(kind: string, sport: Sport): string {
+  if (kind === "dist") return "m";
+  if (kind === "sec") return "min:s";
+  if (kind === "pace") return sport === "swim" ? "/100m" : "/km";
+  return "";
+}
+function progDimsForStep(st: UIStep): ProgDim[] {
+  const dims: ProgDim[] = [];
+  if (st.durType === "distance") dims.push({ apply_to: "measure", metric: "distance", label: "Distance" });
+  else if (st.durType === "time") dims.push({ apply_to: "measure", metric: "time", label: "Time" });
+  for (const t of [st.target, st.target2]) {
+    if (t.type === "none") continue;
+    dims.push({ apply_to: "target", metric: targetMetricName[t.type], label: TARGET_TYPES.find((o) => o.id === t.type)?.label || String(t.type) });
+  }
+  return dims;
+}
+function progBase(st: UIStep, apply_to: ProgApply, metric: string): number {
+  if (apply_to === "measure") return metric === "distance" ? (st.distUnit === "km" ? (num(st.dist) || 0) * 1000 : (num(st.dist) || 0)) : (st.secs || 0);
+  const kind = metric === "pace" ? "pace" : "num";
+  for (const t of [st.target, st.target2]) {
+    if (t.type !== "none" && targetMetricName[t.type] === metric) { const lo = progParse(kind, t.lo); if (lo != null) return lo; const hi = progParse(kind, t.hi); if (hi != null) return hi; }
+  }
+  return 0;
+}
+function progLadder(prog: UIProg, reps: number, base: number): number[] {
+  const n = Math.max(1, reps); const kind = progKind(prog.apply_to, prog.metric); const out: number[] = [];
+  if (prog.mode === "list") {
+    const vals = prog.values.map((v) => progParse(kind, v)).filter((x): x is number => x != null);
+    for (let i = 0; i < n; i++) out.push(vals[i] != null ? vals[i] : (vals.length ? vals[vals.length - 1] : base));
+  } else {
+    const step = progParse(kind, prog.step) || 0;
+    for (let i = 0; i < n; i++) out.push(Math.max(0, base + i * step));
+  }
+  return out;
+}
+function firstStepOf(it: UIRepeat): UIStep | null { const s = it.steps[0]; return s && !isRepeat(s) ? s : null; }
+function ladderPreview(vals: number[], kind: string, sport: Sport): string {
+  if (!vals.length) return "";
+  const show = (n: number) => (kind === "pace" || kind === "sec") ? secToMMSS(n) : String(Math.round(n));
+  const parts = vals.length <= 6 ? vals.map(show) : [show(vals[0]), "…", show(vals[vals.length - 1])];
+  return `${parts.join(" → ")} ${progUnit(kind, sport)}`.trim();
 }
 
 type UIReminder = { uid: string; type: "fuel" | "hydrate"; everyMin: string; note: string; sport: "all" | Sport };
@@ -149,8 +226,15 @@ function stepToUnified(st: UIStep, sport: Sport): CardioStep {
 }
 function itemToUnified(it: UIItem, sport: Sport): CardioStepOrLoop {
   if (isRepeat(it)) {
-    const loop: Record<string, unknown> = { block_type: "loop", repeat: Math.max(1, Math.round(it.reps || 1)), steps: it.steps.map((s) => itemToUnified(s, sport)) };
+    const reps = Math.max(1, Math.round(it.reps || 1));
+    const loop: Record<string, unknown> = { block_type: "loop", repeat: reps, steps: it.steps.map((s) => itemToUnified(s, sport)) };
     if (it.skipLast) loop.skip_last_recovery = true;
+    if (it.prog && it.prog.on) {
+      const kind = progKind(it.prog.apply_to, it.prog.metric);
+      const pr: Record<string, unknown> = { mode: it.prog.mode, apply_to: it.prog.apply_to, metric: it.prog.metric };
+      if (it.prog.mode === "list") { const vals = it.prog.values.slice(0, reps).map((v) => progParse(kind, v)).filter((x): x is number => x != null); if (vals.length) { pr.values = vals; loop.progression = pr; } }
+      else { const step = progParse(kind, it.prog.step); if (step != null) { pr.step = step; loop.progression = pr; } }
+    }
     return loop as unknown as CardioStepOrLoop;
   }
   return stepToUnified(it, sport);
@@ -201,11 +285,17 @@ function remindersFromUnified(rs?: CardioReminder[] | null): UIReminder[] {
 function isStepBlock(b: CardioStepOrLoop): b is CardioStep { return (b as CardioStep).block_type === "step"; }
 function blockToItem(b: CardioStepOrLoop): UIItem {
   if (isStepBlock(b)) return stepFromUnified(b);
-  const lp = b as { repeat?: number; steps?: CardioStepOrLoop[]; skip_last_recovery?: boolean };
+  const lp = b as { repeat?: number; steps?: CardioStepOrLoop[]; skip_last_recovery?: boolean; progression?: { mode?: string; apply_to?: string; metric?: string; step?: number; values?: number[] } };
   const rep = Math.max(1, Math.round(lp.repeat || 1));
   const inner = (lp.steps || []).map(blockToItem);
   if (inner.length === 1 && rep === 1 && !isRepeat(inner[0])) return inner[0];
-  return { uid: uid(), loop: true, reps: rep, steps: inner.length ? inner : [blankStep("active")], skipLast: lp.skip_last_recovery === true };
+  let prog: UIProg | undefined;
+  const pgr = lp.progression;
+  if (pgr && (pgr.apply_to === "measure" || pgr.apply_to === "target") && pgr.metric) {
+    const apply_to = pgr.apply_to as ProgApply; const metric = String(pgr.metric); const kind = progKind(apply_to, metric);
+    prog = { on: true, apply_to, metric, mode: pgr.mode === "linear" ? "linear" : "list", step: pgr.step != null ? progFmt(kind, Number(pgr.step)) : "", values: Array.isArray(pgr.values) ? pgr.values.map((v) => progFmt(kind, Number(v))) : [] };
+  }
+  return { uid: uid(), loop: true, reps: rep, steps: inner.length ? inner : [blankStep("active")], skipLast: lp.skip_last_recovery === true, prog };
 }
 function loadStructure(struct: CardioStructure | undefined): { items: UIItem[]; rem: UIReminder[] } {
   const blks = (struct?.blocks || []) as CardioStepOrLoop[];
@@ -225,20 +315,28 @@ function paceOf(st: UIStep): number | null {
 }
 function estimateTotals(items: UIItem[], sport: Sport, fallbackPace?: number): { secs: number; meters: number; complete: boolean; estimated: boolean } {
   let secs = 0, meters = 0, complete = true, estimated = false;
-  const one = (st: UIStep, mult: number) => {
-    if (st.durType === "time") { secs += (st.secs || 0) * mult; }
-    else if (st.durType === "distance") {
-      const mtr = (st.distUnit === "km" ? (num(st.dist) || 0) * 1000 : (num(st.dist) || 0)) * mult;
-      meters += mtr;
-      let p = paceOf(st);
-      if ((p == null || p <= 0) && fallbackPace && fallbackPace > 0) { p = fallbackPace; estimated = true; }
-      if (p != null && p > 0) secs += (sport === "swim" ? mtr / 100 : mtr / 1000) * p; else complete = false;
-    } else complete = false;
+  const addDist = (mtr: number, st: UIStep) => {
+    meters += mtr;
+    let p = paceOf(st);
+    if ((p == null || p <= 0) && fallbackPace && fallbackPace > 0) { p = fallbackPace; estimated = true; }
+    if (p != null && p > 0) secs += (sport === "swim" ? mtr / 100 : mtr / 1000) * p; else complete = false;
   };
+  const one = (st: UIStep, mult: number) => {
+    if (st.durType === "time") secs += (st.secs || 0) * mult;
+    else if (st.durType === "distance") addDist((st.distUnit === "km" ? (num(st.dist) || 0) * 1000 : (num(st.dist) || 0)) * mult, st);
+    else complete = false;
+  };
+  const measProg = (it: UIRepeat) => !!(it.prog && it.prog.on && it.prog.apply_to === "measure" && firstStepOf(it));
   const walk = (nodes: UIItem[], mult: number) => {
     for (const it of nodes) {
-      if (isRepeat(it)) walk(it.steps, mult * Math.max(1, it.reps || 1));
-      else one(it, mult);
+      if (!isRepeat(it)) { one(it, mult); continue; }
+      const reps = Math.max(1, it.reps || 1);
+      if (measProg(it)) {
+        const first = firstStepOf(it) as UIStep;
+        const ladder = progLadder(it.prog as UIProg, reps, progBase(first, "measure", (it.prog as UIProg).metric));
+        ladder.forEach((val) => { if ((it.prog as UIProg).metric === "distance") addDist(val * mult, first); else secs += val * mult; });
+        it.steps.forEach((child, ci) => { if (ci === 0) return; if (isRepeat(child)) walk([child], mult * reps); else one(child, mult * reps); });
+      } else walk(it.steps, mult * reps);
     }
   };
   walk(items, 1);
@@ -411,6 +509,9 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
   const patchRepeat = (u: string, patch: Partial<UIRepeat>) => setCurItems((arr) => walkPatchRepeat(arr, u, patch));
   const addToRepeat = (repeatUid: string, node: UIItem) => setCurItems((arr) => walkAddToRepeat(arr, repeatUid, node));
   const findStep = (u: string): UIStep | null => walkFindStep(curItems, u);
+  const moveItem = (u: string, dir: -1 | 1) => setCurItems((arr) => walkMove(arr, u, dir));
+  const dupItem = (u: string) => setCurItems((arr) => walkDuplicate(arr, u));
+  const patchProg = (u: string, patch: Partial<UIProg>) => setCurItems((arr) => walkPatchProg(arr, u, patch));
 
   function pickSport(sp: Sport) {
     setMode("single"); setSport(sp);
@@ -422,6 +523,8 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
   function addLeg(sp: Sport) { setLegs((ls) => [...ls, { uid: uid(), sport: sp, items: [blankStep("active")] }]); setAddLegOpen(false); }
   function openLeg(u: string) { setActiveLegUid(u); setShowDescribe(false); setView("build"); }
   function removeLeg(u: string) { setLegs((ls) => ls.filter((l) => l.uid !== u)); }
+  function moveLeg(u: string, dir: -1 | 1) { setLegs((ls) => { const i = ls.findIndex((l) => l.uid === u); const j = i + dir; if (i < 0 || j < 0 || j >= ls.length) return ls; const c = ls.slice(); const [m] = c.splice(i, 1); c.splice(j, 0, m); return c; }); }
+  function dupLeg(u: string) { setLegs((ls) => { const i = ls.findIndex((l) => l.uid === u); if (i < 0) return ls; const src = ls[i]; const c = ls.slice(); c.splice(i + 1, 0, { uid: uid(), sport: src.sport, items: src.items.map(cloneItem) }); return c; }); }
   function setLegSport(u: string, sp: Sport) { setLegs((ls) => ls.map((l) => (l.uid === u ? { ...l, sport: sp } : l))); }
 
   async function doParse() {
@@ -502,6 +605,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
   const dashBtn = (c: string): React.CSSProperties => ({ background: "none", border: `1px dashed ${c}`, color: c, cursor: "pointer", fontSize: 12, borderRadius: 8, padding: "8px 12px", fontWeight: 600 });
   const ACCENT = "linear-gradient(135deg,#5f7dff,#a274ff)";
   const rowLabel: React.CSSProperties = { fontSize: 13, color: "#8a90a6", fontWeight: 600 };
+  const ctrlBtn: React.CSSProperties = { background: "none", border: "none", color: "#6b7080", cursor: "pointer", fontSize: 12, padding: "2px 3px", lineHeight: 1 };
 
   // ---- shared render blocks ----
   const poolRow = () => (
@@ -669,6 +773,11 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
                   <div style={{ flex: 1, padding: "10px 12px", minWidth: 0, cursor: "pointer" }} onClick={() => openLeg(leg.uid)}>
                     <div style={{ fontSize: 13.5, fontWeight: 700 }}>{sportIcon(leg.sport)} Leg {i + 1} · {sportName(leg.sport)}</div>
                     <div className="subtle tiny tnum" style={{ marginTop: 2 }}>{nSteps} {nSteps === 1 ? "block" : "blocks"}{lt.secs ? ` · ${lt.estimated && lt.complete ? "~" : ""}${fmtDur(lt.secs)}` : ""}{lt.meters ? ` · ${fmtDist(lt.meters)}` : ""}</div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 2, paddingLeft: 4 }}>
+                    <button onClick={() => moveLeg(leg.uid, -1)} title="Move up" style={ctrlBtn}>▲</button>
+                    <button onClick={() => moveLeg(leg.uid, 1)} title="Move down" style={ctrlBtn}>▼</button>
+                    <button onClick={() => dupLeg(leg.uid)} title="Duplicate leg" style={ctrlBtn}>⧉</button>
                   </div>
                   <select value={leg.sport} onChange={(e) => setLegSport(leg.uid, e.target.value as Sport)} style={{ ...sel, alignSelf: "center", marginRight: 6 }}>
                     <option value="run">Run</option><option value="bike">Bike</option><option value="swim">Swim</option>
@@ -860,7 +969,61 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
           <div style={{ fontSize: 13.5, fontWeight: 700 }}>{stepTypeLabel(st.stepType, curSport)}</div>
           <div className="subtle tiny tnum" style={{ marginTop: 2 }}>{dur}{tgt ? ` · ${tgt}` : ""}{st.stroke ? ` · ${STROKE_OPTS.find((o) => o.id === st.stroke)?.label}` : ""}{st.equipment ? ` · ${EQUIP_OPTS.find((o) => o.id === st.equipment)?.label}` : ""}</div>
         </div>
+        <div onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 1, paddingRight: 4 }}>
+          <button onClick={() => moveItem(st.uid, -1)} title="Move up" style={ctrlBtn}>▲</button>
+          <button onClick={() => moveItem(st.uid, 1)} title="Move down" style={ctrlBtn}>▼</button>
+          <button onClick={() => dupItem(st.uid)} title="Duplicate" style={ctrlBtn}>⧉</button>
+        </div>
         <div style={{ display: "flex", alignItems: "center", paddingRight: 12, color: "#5c6070", fontSize: 18 }}>›</div>
+      </div>
+    );
+  };
+
+  const progBlock = (it: UIRepeat) => {
+    const first = firstStepOf(it);
+    if (!first) return null;
+    const dims = progDimsForStep(first);
+    if (!dims.length) return null;
+    const p = it.prog;
+    const on = !!(p && p.on);
+    return (
+      <div style={{ marginTop: 6, padding: "6px 8px", borderRadius: 8, background: "rgba(95,125,255,0.05)", border: "1px dashed rgba(95,125,255,0.25)" }}>
+        <label style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: on ? "#9db0e0" : "#8a90a6", cursor: "pointer" }}>
+          <input type="checkbox" checked={on} onChange={(e) => { if (e.target.checked) { const d = dims[0]; patchProg(it.uid, { on: true, apply_to: d.apply_to, metric: d.metric, mode: "list", step: "", values: [] }); } else patchProg(it.uid, { on: false }); }} style={{ accentColor: "#5f9dff" }} />
+          Progression ladder
+        </label>
+        {on && p ? (() => {
+          const kind = progKind(p.apply_to, p.metric);
+          const ladder = progLadder(p, it.reps, progBase(first, p.apply_to, p.metric));
+          return (
+            <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <span className="subtle tiny">Change</span>
+                <select value={`${p.apply_to}|${p.metric}`} onChange={(e) => { const [a, m] = e.target.value.split("|"); patchProg(it.uid, { apply_to: a as ProgApply, metric: m, values: [], step: "" }); }} style={sel}>
+                  {dims.map((d) => <option key={`${d.apply_to}|${d.metric}`} value={`${d.apply_to}|${d.metric}`}>{d.label}</option>)}
+                </select>
+                <select value={p.mode} onChange={(e) => patchProg(it.uid, { mode: e.target.value as "list" | "linear" })} style={sel}>
+                  <option value="list">by list</option><option value="linear">by step</option>
+                </select>
+              </div>
+              {p.mode === "linear" ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span className="subtle tiny">each rep</span>
+                  <input value={p.step} onChange={(e) => patchProg(it.uid, { step: e.target.value })} placeholder={kind === "pace" || kind === "sec" ? "±m:ss" : "±"} style={{ ...mini, width: 74 }} />
+                  <span className="subtle tiny">{progUnit(kind, curSport)}</span>
+                </div>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  {Array.from({ length: Math.max(1, it.reps) }, (_, i) => i).map((i) => (
+                    <input key={i} value={p.values[i] || ""} onChange={(e) => { const nv = p.values.slice(); nv[i] = e.target.value; patchProg(it.uid, { values: nv }); }} placeholder={`#${i + 1}`} style={{ ...mini, width: 56 }} />
+                  ))}
+                  <span className="subtle tiny">{progUnit(kind, curSport)}</span>
+                </div>
+              )}
+              <div className="subtle tiny" style={{ opacity: 0.85 }}>{ladderPreview(ladder, kind, curSport) || "set values to preview"}</div>
+            </div>
+          );
+        })() : null}
       </div>
     );
   };
@@ -873,9 +1036,15 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
           <select value={it.reps} onChange={(e) => patchRepeat(it.uid, { reps: Math.max(1, Math.round(Number(e.target.value) || 1)) })} style={{ ...sel, width: 62, color: "#a274ff", fontWeight: 800 }}>{Array.from({ length: Math.max(20, it.reps) }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}</select>
           <span style={{ fontSize: 13, fontWeight: 700, color: "#a274ff" }}>Times{depth > 0 ? " · nested" : ""}</span>
           <label style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10.5, color: "#8a90a6", cursor: "pointer", marginLeft: 8 }}><input type="checkbox" checked={it.skipLast} onChange={(e) => patchRepeat(it.uid, { skipLast: e.target.checked })} style={{ accentColor: "#a274ff" }} /> skip last recovery</label>
-          <button onClick={() => removeItem(it.uid)} title="Remove repeat" style={{ marginLeft: "auto", background: "none", border: "none", color: "#6b7080", cursor: "pointer", fontSize: 16 }}>×</button>
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 1 }}>
+            <button onClick={() => moveItem(it.uid, -1)} title="Move up" style={ctrlBtn}>▲</button>
+            <button onClick={() => moveItem(it.uid, 1)} title="Move down" style={ctrlBtn}>▼</button>
+            <button onClick={() => dupItem(it.uid)} title="Duplicate" style={ctrlBtn}>⧉</button>
+            <button onClick={() => removeItem(it.uid)} title="Remove repeat" style={{ background: "none", border: "none", color: "#6b7080", cursor: "pointer", fontSize: 16 }}>×</button>
+          </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{it.steps.map((child) => renderNode(child, depth + 1))}</div>
+        {depth === 0 ? progBlock(it) : null}
         <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
           <button onClick={() => addToRepeat(it.uid, blankStep("active"))} style={{ ...dashBtn("rgba(162,116,255,0.4)"), fontSize: 11, padding: "5px 10px" }}>+ step</button>
           {depth < 1 ? <button onClick={() => addToRepeat(it.uid, { uid: uid(), loop: true, reps: 4, steps: [blankStep("active")], skipLast: false })} style={{ ...dashBtn("rgba(162,116,255,0.4)"), fontSize: 11, padding: "5px 10px" }}>+ nested repeat</button> : null}
