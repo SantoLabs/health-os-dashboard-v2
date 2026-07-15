@@ -470,9 +470,9 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
     return (
       <div key={it.uid} style={{ borderRadius: 10, border: "1px solid rgba(162,116,255,0.28)", background: "rgba(162,116,255,0.05)", padding: 8, marginLeft: depth > 0 ? 10 : 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-          <input type="number" min={1} value={it.reps} onChange={(e) => patchRepeat(it.uid, { reps: Math.max(1, Math.round(num(e.target.value) || 1)) })} style={{ ...mini, width: 52, color: "#a274ff", fontWeight: 800 }} />
+          <select value={it.reps} onChange={(e) => patchRepeat(it.uid, { reps: Math.max(1, Math.round(Number(e.target.value) || 1)) })} style={{ ...sel, width: 62, color: "#a274ff", fontWeight: 800 }}>{Array.from({ length: Math.max(20, it.reps) }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}</select>
           <span style={{ fontSize: 13, fontWeight: 700, color: "#a274ff" }}>Times{depth > 0 ? " \u00b7 nested" : ""}</span>
-          <button onClick={() => removeItem(it.uid)} title="Remove repeat" style={{ marginLeft: "auto", background: "none", border: "none", color: "#6b7080", cursor: "pointer", fontSize: 16 }}>\u00d7</button>
+          <button onClick={() => removeItem(it.uid)} title="Remove repeat" style={{ marginLeft: "auto", background: "none", border: "none", color: "#6b7080", cursor: "pointer", fontSize: 16 }}>×</button>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{it.steps.map((child) => renderNode(child, depth + 1))}</div>
         <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
