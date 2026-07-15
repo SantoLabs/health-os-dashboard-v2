@@ -106,6 +106,23 @@ export async function trainingLoad(days = 120): Promise<TrnLoadResp> {
   return res.json();
 }
 
+// ---- insights (Phase 5: pattern surfacing) ----
+export type TrnInsightBucket = { label: string; n: number; value: number; best: boolean };
+export type TrnInsight = {
+  id: string; sport: string; title: string; headline: string;
+  metric_label: string; unit: string;
+  buckets: TrnInsightBucket[];
+  stat: { n: number; r: number; effect: string };
+  confidence: "strong" | "moderate" | "weak" | "insufficient";
+  note: string; kai: string | null;
+};
+export type TrnInsightsResp = { ok: boolean; generated_at: string; insights: TrnInsight[] };
+export async function insights(): Promise<TrnInsightsResp> {
+  const res = await authedFetch(`/functions/v1/insights?api=list`);
+  if (!res.ok) throw new Error(`Couldn't load insights (${res.status})`);
+  return res.json();
+}
+
 // ---- health-coach (legacy basic Q&A — superseded by the Kai coach below) ----
 export async function coachAsk(
   question: string,
