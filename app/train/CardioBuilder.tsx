@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  cardioParse, cardioList, cardioSave, cardioPrescribe, cardioDelete,
+  cardioParse, cardioList, cardioSave, cardioPrescribe, cardioDelete, cardioActivities,
   type CardioParsed, type CardioRoutine, type CardioStructure, type CardioStepOrLoop,
   type CardioStep, type CardioMeasure, type CardioTarget, type CardioValidator, type CardioReminder,
 } from "../lib/api";
@@ -176,14 +176,15 @@ function paceOf(st: UIStep): number | null {
   if (lo != null && hi != null) return (lo + hi) / 2;
   return lo != null ? lo : hi;
 }
-function estimateTotals(items: UIItem[], sport: Sport): { secs: number; meters: number; complete: boolean } {
-  let secs = 0, meters = 0, complete = true;
+function estimateTotals(items: UIItem[], sport: Sport, fallbackPace?: number): { secs: number; meters: number; complete: boolean; estimated: boolean } {
+  let secs = 0, meters = 0, complete = true, estimated = false;
   const one = (st: UIStep, mult: number) => {
     if (st.durType === "time") { secs += (st.secs || 0) * mult; }
     else if (st.durType === "distance") {
       const mtr = (st.distUnit === "km" ? (num(st.dist) || 0) * 1000 : (num(st.dist) || 0)) * mult;
       meters += mtr;
-      const p = paceOf(st);
+      let p = paceOf(st);
+      if ((p == null || p <= 0) && fallbackPace && fallbackPace > 0) { p = fallbackPace; estimated = true; }
       if (p != null && p > 0) secs += (sport === "swim" ? mtr / 100 : mtr / 1000) * p; else complete = false;
     } else complete = false;
   };
@@ -194,7 +195,7 @@ function estimateTotals(items: UIItem[], sport: Sport): { secs: number; meters: 
     }
   };
   walk(items, 1);
-  return { secs: Math.round(secs), meters, complete };
+  return { secs: Math.round(secs), meters, complete, estimated };
 }
 
 // ---------- multisport ----------
@@ -240,11 +241,11 @@ function splitToLegs(struct: CardioStructure | undefined): { legs: Leg[]; transi
   if (cur) legs.push(cur);
   return { legs: legs.length ? legs : [{ uid: uid(), sport: "run", items: [blankStep("active")] }], transitions };
 }
-function multiTotals(legs: Leg[], transitions: boolean): { secs: number; meters: number; complete: boolean } {
-  let secs = 0, meters = 0, complete = true;
-  legs.forEach((leg) => { const t = estimateTotals(leg.items, leg.sport); secs += t.secs; meters += t.meters; if (!t.complete) complete = false; });
+function multiTotals(legs: Leg[], transitions: boolean, paceBy: Partial<Record<Sport, number>>): { secs: number; meters: number; complete: boolean; estimated: boolean } {
+  let secs = 0, meters = 0, complete = true, estimated = false;
+  legs.forEach((leg) => { const t = estimateTotals(leg.items, leg.sport, paceBy[leg.sport]); secs += t.secs; meters += t.meters; if (!t.complete) complete = false; if (t.estimated) estimated = true; });
   if (transitions && legs.length > 1) secs += (legs.length - 1) * 60;
-  return { secs, meters, complete };
+  return { secs, meters, complete, estimated };
 }
 
 // ---------- duration wheel picker ----------
@@ -314,8 +315,36 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
   const [showDescribe, setShowDescribe] = useState(false);
   const [wheelUid, setWheelUid] = useState<string | null>(null);
   const [routines, setRoutines] = useState<CardioRoutine[]>([]);
+  const [typicalPace, setTypicalPace] = useState<Partial<Record<Sport, number>>>({});
 
   useEffect(() => { cardioList().then((r) => setRoutines(r.routines || [])).catch(() => {}); }, [msg]);
+
+  // recent typical pace per sport (native units: s/km for run+bike, s/100m for swim) for realistic time estimates
+  useEffect(() => {
+    let alive = true;
+    cardioActivities().then((acts) => {
+      if (!alive) return;
+      const cutoff = Date.now() - 90 * 86400 * 1000;
+      const bySport: Record<Sport, number[]> = { run: [], bike: [], swim: [] };
+      const bounds: Record<Sport, [number, number]> = { run: [150, 720], bike: [50, 360], swim: [50, 300] };
+      for (const a of acts) {
+        const ss = (a.sport || "").toLowerCase();
+        const sp: Sport | null = ss.includes("swim") ? "swim" : (ss.includes("cyc") || ss.includes("bik") || ss.includes("rid")) ? "bike" : ss.includes("run") ? "run" : null;
+        if (!sp) continue;
+        if (a.date && new Date(a.date).getTime() < cutoff) continue;
+        const km = a.distance_km || 0, mins = a.duration_mins || 0;
+        if (km < 0.2 || mins < 1) continue;
+        const secs = mins * 60;
+        const pace = sp === "swim" ? secs / (km * 10) : secs / km;
+        if (pace >= bounds[sp][0] && pace <= bounds[sp][1]) bySport[sp].push(pace);
+      }
+      const med = (arr: number[]): number | undefined => { if (!arr.length) return undefined; const a2 = [...arr].sort((x, y) => x - y); const m = Math.floor(a2.length / 2); return a2.length % 2 ? a2[m] : (a2[m - 1] + a2[m]) / 2; };
+      const tp: Partial<Record<Sport, number>> = {};
+      (["run", "bike", "swim"] as Sport[]).forEach((sp) => { const v = med(bySport[sp]); if (v != null) tp[sp] = v; });
+      setTypicalPace(tp);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
 
   // ---- current editing context (single workout, or the active multisport leg) ----
   const activeLeg = mode === "multi" ? (legs.find((l) => l.uid === activeLegUid) || null) : null;
@@ -360,8 +389,8 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
   }
 
   const structure = mode === "multi" ? buildMultiStructure(legs, transitions, reminders) : buildStructure(items, sport, reminders);
-  const est = mode === "multi" ? multiTotals(legs, transitions) : estimateTotals(items, sport);
-  const curEst = estimateTotals(curItems, curSport);
+  const est = mode === "multi" ? multiTotals(legs, transitions, typicalPace) : estimateTotals(items, sport, typicalPace[sport]);
+  const curEst = estimateTotals(curItems, curSport, typicalPace[curSport]);
   const hasBlocks = mode === "multi" ? legs.some((l) => l.items.length > 0) : items.length > 0;
 
   async function doSave(asCopy?: boolean) {
@@ -558,16 +587,17 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
         </div>
 
         <div style={{ display: "flex", gap: 20, marginTop: 12 }}>
-          <div><div style={{ fontSize: 24, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{est.secs ? fmtDur(est.secs) : "—"}{est.secs && !est.complete ? "+" : ""}</div><div className="subtle tiny">Total Time</div></div>
+          <div><div style={{ fontSize: 24, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{est.secs ? `${est.estimated && est.complete ? "~" : ""}${fmtDur(est.secs)}` : "—"}{est.secs && !est.complete ? "+" : ""}</div><div className="subtle tiny">Total Time</div></div>
           <div><div style={{ fontSize: 24, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{est.meters ? fmtDist(est.meters) : "—"}</div><div className="subtle tiny">Est Distance</div></div>
         </div>
+        {est.secs ? (!est.complete ? <div className="subtle tiny" style={{ marginTop: 4, opacity: 0.8 }}>+ some legs need a pace target to time their distance steps</div> : est.estimated ? <div className="subtle tiny" style={{ marginTop: 4, opacity: 0.8 }}>~ time estimated from your recent pace</div> : null) : null}
 
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Workout name" style={{ ...field, fontWeight: 700, marginTop: 12 }} />
 
         <div className="eyebrow" style={{ marginTop: 14, marginBottom: 6 }}>Legs</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {legs.map((leg, i) => {
-            const lt = estimateTotals(leg.items, leg.sport);
+            const lt = estimateTotals(leg.items, leg.sport, typicalPace[leg.sport]);
             const nSteps = leg.items.length;
             return (
               <div key={leg.uid}>
@@ -580,7 +610,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
                   <div style={{ width: 4, background: stepAccent.active, flex: "0 0 auto" }} />
                   <div style={{ flex: 1, padding: "10px 12px", minWidth: 0, cursor: "pointer" }} onClick={() => openLeg(leg.uid)}>
                     <div style={{ fontSize: 13.5, fontWeight: 700 }}>{sportIcon(leg.sport)} Leg {i + 1} · {sportName(leg.sport)}</div>
-                    <div className="subtle tiny tnum" style={{ marginTop: 2 }}>{nSteps} {nSteps === 1 ? "block" : "blocks"}{lt.secs ? ` · ${fmtDur(lt.secs)}` : ""}{lt.meters ? ` · ${fmtDist(lt.meters)}` : ""}</div>
+                    <div className="subtle tiny tnum" style={{ marginTop: 2 }}>{nSteps} {nSteps === 1 ? "block" : "blocks"}{lt.secs ? ` · ${lt.estimated && lt.complete ? "~" : ""}${fmtDur(lt.secs)}` : ""}{lt.meters ? ` · ${fmtDist(lt.meters)}` : ""}</div>
                   </div>
                   <select value={leg.sport} onChange={(e) => setLegSport(leg.uid, e.target.value as Sport)} style={{ ...sel, alignSelf: "center", marginRight: 6 }}>
                     <option value="run">Run</option><option value="bike">Bike</option><option value="swim">Swim</option>
@@ -754,9 +784,10 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
 
       {/* totals */}
       <div style={{ display: "flex", gap: 20, marginTop: 12 }}>
-        <div><div style={{ fontSize: 24, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{curEst.secs ? fmtDur(curEst.secs) : "—"}{curEst.secs && !curEst.complete ? "+" : ""}</div><div className="subtle tiny">{inLeg ? "Leg Time" : "Total Time"}</div></div>
+        <div><div style={{ fontSize: 24, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{curEst.secs ? `${curEst.estimated && curEst.complete ? "~" : ""}${fmtDur(curEst.secs)}` : "—"}{curEst.secs && !curEst.complete ? "+" : ""}</div><div className="subtle tiny">{inLeg ? "Leg Time" : "Total Time"}</div></div>
         <div><div style={{ fontSize: 24, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{curEst.meters ? fmtDist(curEst.meters) : "—"}</div><div className="subtle tiny">Est Distance</div></div>
       </div>
+      {curEst.secs ? (!curEst.complete ? <div className="subtle tiny" style={{ marginTop: 4, opacity: 0.8 }}>+ set a pace target on distance steps to estimate their time</div> : curEst.estimated ? <div className="subtle tiny" style={{ marginTop: 4, opacity: 0.8 }}>~ time estimated from your recent {curSport} pace</div> : null) : null}
 
       {!inLeg ? <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Workout name" style={{ ...field, fontWeight: 700, marginTop: 12 }} /> : null}
 
