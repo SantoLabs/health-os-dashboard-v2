@@ -658,6 +658,16 @@ export function composeCommit(id: string, session_date: string) { return compose
 export function composeSaveRoutine(id: string) { return composePost<{ ok: boolean; workout_id?: string; error?: string }>({ op: "save_routine", id }); }
 export function composeDiscard(id: string) { return composePost<{ ok: boolean }>({ op: "discard", id }); }
 
+// ---- coach-compose · U2b: compose a WEEK (Kai designs shape -> guardrails -> per-slot composition) ----
+export type WeekDay = { day_offset: number; session_date: string; sport: string; role: string; duration_min: number | null; intent: string; rest: boolean; strength: boolean; workout: ComposeWorkout | null; validator: ComposeValidator | null };
+export type WeekResp = { ok: boolean; draft_id?: string; week_start?: string; week_why?: string; repairs?: string[]; days?: WeekDay[]; error?: string };
+export type WeekDraft = { id: string; request_text: string; week_start: string; week_why: string; days: WeekDay[]; repairs: string[]; status: string; created_at: string };
+export function composeWeek(text: string) { return composePost<WeekResp>({ op: "compose_week", text }); }
+export function getWeekDraft() { return composePost<{ ok: boolean; draft: WeekDraft | null }>({ op: "get_week_draft" }); }
+export function commitWeek(id: string) { return composePost<{ ok: boolean; created?: number; skipped?: number; error?: string }>({ op: "commit_week", id }); }
+export function discardWeek(id: string) { return composePost<{ ok: boolean }>({ op: "discard_week", id }); }
+
+
 // ---- recovery (Slice C: body map + mobility) ----
 export type RecMuscle = { muscle_group: string; last_trained: string | null; days_ago: number | null; vol_14d: number; sets_14d: number; freshness: number; load_pct: number };
 export type RecMobility = { name: string; primary_muscle: string | null; secondary_muscles: string | null; body_region: string | null; type: string | null; default_prescription: string | null };
