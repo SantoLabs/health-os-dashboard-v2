@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import KaiDailyCard from "../components/KaiDailyCard";
+import ComposePanel from "./ComposePanel";
 import { planPropose, planAccept, planDecline, planWeek } from "../lib/api";
 import type { TrnProposal, TrnProposeResp } from "../lib/api";
 
@@ -183,6 +184,8 @@ export default function CoachPanel() {
           </div>
         ) : null}
       </div>
+
+      <ComposePanel />
     </div>
   );
 }
