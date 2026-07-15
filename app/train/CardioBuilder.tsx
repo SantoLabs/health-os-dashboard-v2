@@ -30,9 +30,24 @@ type DurType = "time" | "distance" | "lap";
 type TargetType = "none" | "pace" | "cadence" | "hr" | "power";
 type UITarget = { type: TargetType; lo: string; hi: string };
 type UIStep = { uid: string; stepType: StepType; durType: DurType; secs: number; dist: string; distUnit: "m" | "km"; target: UITarget };
-type UIRepeat = { uid: string; loop: true; reps: number; steps: UIStep[] };
+type UIRepeat = { uid: string; loop: true; reps: number; steps: (UIStep | UIRepeat)[] };
 type UIItem = UIStep | UIRepeat;
 const isRepeat = (it: UIItem): it is UIRepeat => (it as UIRepeat).loop === true;
+function walkMapStep(items: UIItem[], u: string, fn: (s: UIStep) => UIStep): UIItem[] {
+  return items.map((it) => isRepeat(it) ? { ...it, steps: walkMapStep(it.steps, u, fn) } : (it.uid === u ? fn(it) : it));
+}
+function walkRemove(items: UIItem[], u: string): UIItem[] {
+  return items.filter((it) => it.uid !== u).map((it) => isRepeat(it) ? { ...it, steps: walkRemove(it.steps, u) } : it).filter((it) => !isRepeat(it) || it.steps.length > 0);
+}
+function walkFindStep(items: UIItem[], u: string): UIStep | null {
+  for (const it of items) { if (!isRepeat(it)) { if (it.uid === u) return it; } else { const f = walkFindStep(it.steps, u); if (f) return f; } } return null;
+}
+function walkPatchRepeat(items: UIItem[], u: string, patch: Partial<UIRepeat>): UIItem[] {
+  return items.map((it) => !isRepeat(it) ? it : (it.uid === u ? { ...it, ...patch } : { ...it, steps: walkPatchRepeat(it.steps, u, patch) }));
+}
+function walkAddToRepeat(items: UIItem[], repeatUid: string, node: UIItem): UIItem[] {
+  return items.map((it) => !isRepeat(it) ? it : (it.uid === repeatUid ? { ...it, steps: [...it.steps, node] } : { ...it, steps: walkAddToRepeat(it.steps, repeatUid, node) }));
+}
 
 type UIReminder = { uid: string; type: "fuel" | "hydrate"; everyMin: string; note: string };
 
@@ -96,7 +111,7 @@ function stepToUnified(st: UIStep, sport: Sport): CardioStep {
   return out;
 }
 function itemToUnified(it: UIItem, sport: Sport): CardioStepOrLoop {
-  if (isRepeat(it)) return { block_type: "loop", repeat: Math.max(1, Math.round(it.reps || 1)), steps: it.steps.map((s) => stepToUnified(s, sport)) };
+  if (isRepeat(it)) return { block_type: "loop", repeat: Math.max(1, Math.round(it.reps || 1)), steps: it.steps.map((s) => itemToUnified(s, sport)) };
   return stepToUnified(it, sport);
 }
 function remindersToUnified(rs: UIReminder[]): CardioReminder[] {
@@ -136,20 +151,18 @@ function stepFromUnified(b: CardioStep): UIStep {
 function remindersFromUnified(rs?: CardioReminder[] | null): UIReminder[] {
   return (rs || []).map((r) => ({ uid: uid(), type: (r.type === "hydrate" ? "hydrate" : "fuel") as "fuel" | "hydrate", everyMin: r.every_s ? String(Math.round(r.every_s / 60)) : "", note: r.note || "" })).filter((r) => r.everyMin);
 }
+function isStepBlock(b: CardioStepOrLoop): b is CardioStep { return (b as CardioStep).block_type === "step"; }
+function blockToItem(b: CardioStepOrLoop): UIItem {
+  if (isStepBlock(b)) return stepFromUnified(b);
+  const lp = b as { repeat?: number; steps?: CardioStepOrLoop[] };
+  const rep = Math.max(1, Math.round(lp.repeat || 1));
+  const inner = (lp.steps || []).map(blockToItem);
+  if (inner.length === 1 && rep === 1 && !isRepeat(inner[0])) return inner[0];
+  return { uid: uid(), loop: true, reps: rep, steps: inner.length ? inner : [blankStep("active")] };
+}
 function loadStructure(struct: CardioStructure | undefined): { items: UIItem[]; rem: UIReminder[] } {
   const blks = (struct?.blocks || []) as CardioStepOrLoop[];
-  const items: UIItem[] = [];
-  const isStep = (b: CardioStepOrLoop): b is CardioStep => (b as CardioStep).block_type === "step";
-  for (const b of blks) {
-    if (isStep(b)) items.push(stepFromUnified(b));
-    else {
-      const lp = b as { repeat?: number; steps?: CardioStepOrLoop[] };
-      const inner = (lp.steps || []).filter(isStep).map((s) => stepFromUnified(s as CardioStep));
-      const rep = Math.max(1, Math.round(lp.repeat || 1));
-      if (inner.length === 1 && rep === 1) items.push(inner[0]);
-      else items.push({ uid: uid(), loop: true, reps: rep, steps: inner.length ? inner : [blankStep("active")] });
-    }
-  }
+  const items: UIItem[] = blks.map(blockToItem);
   return { items, rem: remindersFromUnified(struct?.reminders) };
 }
 
@@ -162,22 +175,22 @@ function paceOf(st: UIStep): number | null {
 }
 function estimateTotals(items: UIItem[], sport: Sport): { secs: number; meters: number; complete: boolean } {
   let secs = 0, meters = 0, complete = true;
-  const one = (st: UIStep) => {
-    if (st.durType === "time") {
-      secs += st.secs || 0;
-      const p = paceOf(st);
-      if (p != null && p > 0) { /* no distance known */ }
-    } else if (st.durType === "distance") {
-      const mtr = st.distUnit === "km" ? (num(st.dist) || 0) * 1000 : (num(st.dist) || 0);
+  const one = (st: UIStep, mult: number) => {
+    if (st.durType === "time") { secs += (st.secs || 0) * mult; }
+    else if (st.durType === "distance") {
+      const mtr = (st.distUnit === "km" ? (num(st.dist) || 0) * 1000 : (num(st.dist) || 0)) * mult;
       meters += mtr;
       const p = paceOf(st);
       if (p != null && p > 0) secs += (sport === "swim" ? mtr / 100 : mtr / 1000) * p; else complete = false;
     } else complete = false;
   };
-  for (const it of items) {
-    if (isRepeat(it)) { const r = Math.max(1, it.reps || 1); for (let k = 0; k < r; k++) it.steps.forEach(one); }
-    else one(it);
-  }
+  const walk = (nodes: UIItem[], mult: number) => {
+    for (const it of nodes) {
+      if (isRepeat(it)) walk(it.steps, mult * Math.max(1, it.reps || 1));
+      else one(it, mult);
+    }
+  };
+  walk(items, 1);
   return { secs: Math.round(secs), meters, complete };
 }
 
@@ -247,10 +260,11 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
   useEffect(() => { cardioList().then((r) => setRoutines(r.routines || [])).catch(() => {}); }, [msg]);
 
   // ---- item helpers ----
-  const mapStep = (u: string, fn: (s: UIStep) => UIStep) => setItems((arr) => arr.map((it) => isRepeat(it) ? { ...it, steps: it.steps.map((s) => (s.uid === u ? fn(s) : s)) } : (it.uid === u ? fn(it as UIStep) : it)));
-  const removeItem = (u: string) => setItems((arr) => arr.filter((it) => it.uid !== u).map((it) => isRepeat(it) ? { ...it, steps: it.steps.filter((s) => s.uid !== u) } : it).filter((it) => !isRepeat(it) || it.steps.length));
-  const patchRepeat = (u: string, patch: Partial<UIRepeat>) => setItems((arr) => arr.map((it) => (isRepeat(it) && it.uid === u ? { ...it, ...patch } : it)));
-  const findStep = (u: string): UIStep | null => { for (const it of items) { if (!isRepeat(it) && it.uid === u) return it; if (isRepeat(it)) { const f = it.steps.find((s) => s.uid === u); if (f) return f; } } return null; };
+  const mapStep = (u: string, fn: (s: UIStep) => UIStep) => setItems((arr) => walkMapStep(arr, u, fn));
+  const removeItem = (u: string) => setItems((arr) => walkRemove(arr, u));
+  const patchRepeat = (u: string, patch: Partial<UIRepeat>) => setItems((arr) => walkPatchRepeat(arr, u, patch));
+  const addToRepeat = (repeatUid: string, node: UIItem) => setItems((arr) => walkAddToRepeat(arr, repeatUid, node));
+  const findStep = (u: string): UIStep | null => walkFindStep(items, u);
 
   function pickSport(sp: Sport) {
     setSport(sp);
@@ -451,6 +465,24 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
     );
   };
 
+  const renderNode = (it: UIItem, depth: number): JSX.Element => {
+    if (!isRepeat(it)) return stepRow(it, depth > 0);
+    return (
+      <div key={it.uid} style={{ borderRadius: 10, border: "1px solid rgba(162,116,255,0.28)", background: "rgba(162,116,255,0.05)", padding: 8, marginLeft: depth > 0 ? 10 : 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <input type="number" min={1} value={it.reps} onChange={(e) => patchRepeat(it.uid, { reps: Math.max(1, Math.round(num(e.target.value) || 1)) })} style={{ ...mini, width: 52, color: "#a274ff", fontWeight: 800 }} />
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#a274ff" }}>Times{depth > 0 ? " \u00b7 nested" : ""}</span>
+          <button onClick={() => removeItem(it.uid)} title="Remove repeat" style={{ marginLeft: "auto", background: "none", border: "none", color: "#6b7080", cursor: "pointer", fontSize: 16 }}>\u00d7</button>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{it.steps.map((child) => renderNode(child, depth + 1))}</div>
+        <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+          <button onClick={() => addToRepeat(it.uid, blankStep("active"))} style={{ ...dashBtn("rgba(162,116,255,0.4)"), fontSize: 11, padding: "5px 10px" }}>+ step</button>
+          {depth < 1 ? <button onClick={() => addToRepeat(it.uid, { uid: uid(), loop: true, reps: 4, steps: [blankStep("active")] })} style={{ ...dashBtn("rgba(162,116,255,0.4)"), fontSize: 11, padding: "5px 10px" }}>+ nested repeat</button> : null}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="card" style={{ marginBottom: 12 }}>
       {/* header */}
@@ -486,20 +518,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
       {/* steps */}
       <div className="eyebrow" style={{ marginTop: 14, marginBottom: 6 }}>Steps</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {items.map((it) => {
-          if (!isRepeat(it)) return stepRow(it, false);
-          return (
-            <div key={it.uid} style={{ borderRadius: 10, border: "1px solid rgba(162,116,255,0.28)", background: "rgba(162,116,255,0.05)", padding: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                <input type="number" min={1} value={it.reps} onChange={(e) => patchRepeat(it.uid, { reps: Math.max(1, Math.round(num(e.target.value) || 1)) })} style={{ ...mini, width: 52, color: "#a274ff", fontWeight: 800 }} />
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#a274ff" }}>Times</span>
-                <button onClick={() => removeItem(it.uid)} title="Remove repeat" style={{ marginLeft: "auto", background: "none", border: "none", color: "#6b7080", cursor: "pointer", fontSize: 16 }}>×</button>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{it.steps.map((s) => stepRow(s, true))}</div>
-              <button onClick={() => setItems((arr) => arr.map((x) => (isRepeat(x) && x.uid === it.uid ? { ...x, steps: [...x.steps, blankStep("active")] } : x)))} style={{ ...dashBtn("rgba(162,116,255,0.4)"), marginTop: 6, fontSize: 11, padding: "5px 10px" }}>+ step in repeat</button>
-            </div>
-          );
-        })}
+        {items.map((it) => renderNode(it, 0))}
       </div>
 
       {/* add step / repeat */}
