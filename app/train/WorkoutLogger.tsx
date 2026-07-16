@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import TodaySuggestion from "./TodaySuggestion";
 import {
   wkActive, wkStart, wkAddSet, wkCompleteSet, wkEditSet, wkDeleteSet, wkAddExercise, wkFinish, wkDiscard,
   wkRoutines, wkRoutine, wkSaveRoutine, wkSaveAsRoutine, wkUpdateRoutineFromSession, wkDuplicateRoutine, wkDeleteRoutine, wkParseRoutine, wkExercises, planWeek, fmtVolume, wkRename, cardioList, cardioPrescribe, recoveryGet, wkSession, wkRecompute, wkReorder, wkSetSuperset,
@@ -907,6 +908,10 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
             </div>
           )}
 
+
+          {!planToday.some((p) => (p.session_type || "").toLowerCase().includes("strength")) && (
+            <TodaySuggestion onStartPlan={(pid) => startFrom({ plan_id: pid })} />
+          )}
 
           <div className="eyebrow" style={{ marginTop: 4 }}>Saved routines</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
