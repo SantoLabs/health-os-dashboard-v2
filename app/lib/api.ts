@@ -133,6 +133,26 @@ export async function strengthGuidance(): Promise<StrGuidance> {
   return res.json();
 }
 
+// ---- strength composer (Phase 5 U2: Kai's split-aware strength session) ----
+export type StrSuggestExercise = { title: string; tracking_type: string; sets: number; reps: number; last_weight: number | null; suggestion: string };
+export type StrSuggestSplit = { split: string; days_since: number; cadence: number; due_score: number; is_leg: boolean; leg_blocked: boolean; not_too_soon: boolean };
+export type StrSuggest = {
+  ok: boolean; blocked: boolean; reason?: string;
+  split?: string; label?: string; intensity?: "ease" | "maintain" | "push"; why?: string;
+  exercises?: StrSuggestExercise[]; workout?: Record<string, unknown>;
+  est_duration_min?: number; signals?: Record<string, unknown>; splits?: StrSuggestSplit[];
+};
+export async function strengthSuggest(): Promise<StrSuggest> {
+  const res = await authedFetch(`/functions/v1/strength-compose?api=suggest`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+  if (!res.ok) throw new Error(`Couldn't load suggestion (${res.status})`);
+  return res.json();
+}
+export async function strengthCommitSuggestion(body: { workout: Record<string, unknown>; date?: string; why?: string; label?: string }): Promise<{ ok: boolean; plan_id?: string; updated?: boolean }> {
+  const res = await authedFetch(`/functions/v1/strength-compose?api=commit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(`Couldn't start suggestion (${res.status})`);
+  return res.json();
+}
+
 // ---- health-coach (legacy basic Q&A — superseded by the Kai coach below) ----
 export async function coachAsk(
   question: string,
