@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { raceList, raceOutlook } from "../lib/api";
-import type { RaceGoal, RaceOutlookResp, PredLeg, PacingLeg } from "../lib/api";
+import { raceList, raceOutlook, fuelRace } from "../lib/api";
+import type { RaceGoal, RaceOutlookResp, PredLeg, PacingLeg, RaceFuel } from "../lib/api";
 
 // Race outlook (Phase 4 · U3): a deterministic model predicts a realistic finish time from your fitness —
 // run legs via a Riegel fit on your best efforts, bike from recent outdoor ride speed, swim from CSS
@@ -45,13 +45,15 @@ export default function RaceOutlookPanel() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [fuel, setFuel] = useState<RaceFuel | null>(null);
 
   const loadOutlook = useCallback(async (id: string) => {
     setBusy(true); setErr(null);
     try {
-      const r = await raceOutlook(id);
+      const [r, f] = await Promise.all([raceOutlook(id), fuelRace(id).catch(() => null)]);
       if (!r.ok) setErr(r.error || "Couldn't build an outlook for this race.");
       else setData(r);
+      setFuel(f && f.ok ? f : null);
     } catch (e) { setErr(e instanceof Error ? e.message : "Something went wrong"); }
     finally { setBusy(false); }
   }, []);
@@ -67,7 +69,7 @@ export default function RaceOutlookPanel() {
     return () => { live = false; };
   }, [loadOutlook]);
 
-  function pick(id: string) { if (id === sel) return; setSel(id); setData(null); loadOutlook(id); }
+  function pick(id: string) { if (id === sel) return; setSel(id); setData(null); setFuel(null); loadOutlook(id); }
 
   const pred = data?.prediction;
   const pacing = data?.pacing;
@@ -152,6 +154,46 @@ export default function RaceOutlookPanel() {
                 );
               })}
               <div className="tiny subtle" style={{ marginTop: 6, opacity: 0.6 }}>{pacing.note}</div>
+            </div>
+          ) : null}
+
+          {fuel && fuel.ok ? (
+            <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <div className="tiny subtle" style={{ fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 7 }}>Race-day fuelling</div>
+              {fuel.carb_load ? (
+                <div className="tiny" style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "2px 0" }}>
+                  <span style={{ width: 96, color: "#ffb547", fontWeight: 700 }}>Carb-load</span>
+                  <span style={{ opacity: 0.9 }}>~{fuel.carb_load.grams} g/day</span>
+                  <span style={{ opacity: 0.55 }}>· {fuel.carb_load.window.toLowerCase()}</span>
+                </div>
+              ) : null}
+              {fuel.race_morning ? (
+                <div className="tiny" style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "2px 0" }}>
+                  <span style={{ width: 96, color: "#ffb547", fontWeight: 700 }}>Race morning</span>
+                  <span style={{ opacity: 0.9 }}>~{fuel.race_morning.grams} g</span>
+                  <span style={{ opacity: 0.55 }}>· {fuel.race_morning.window}</span>
+                </div>
+              ) : null}
+              {(fuel.on_course || []).length > 0 ? (
+                <div style={{ marginTop: 7 }}>
+                  <div className="tiny subtle" style={{ opacity: 0.6, marginBottom: 3 }}>On course</div>
+                  {(fuel.on_course || []).map((lg, i) => {
+                    const sp = SPORT[lg.leg.toLowerCase()] || { label: lg.leg, color: "#8a90a3" };
+                    return (
+                      <div key={i} className="tiny" style={{ padding: "3px 0" }}>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                          <span style={{ width: 44, color: sp.color, fontWeight: 700 }}>{lg.leg}</span>
+                          <span style={{ opacity: 0.6 }}>{lg.dur}</span>
+                          {lg.g_per_hr ? <span style={{ opacity: 0.9 }}>· {lg.g_per_hr} g/h · {lg.total_g}</span> : null}
+                        </div>
+                        {lg.guidance ? <div className="subtle" style={{ fontSize: 11, opacity: 0.7, lineHeight: 1.45, marginLeft: 52 }}>{lg.guidance}</div> : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+              {fuel.on_course_total_g ? <div className="tiny subtle" style={{ marginTop: 6, opacity: 0.7 }}>~{fuel.on_course_total_g} on the move · {fuel.hydration}</div> : null}
+              {fuel.why ? <div className="subtle tiny" style={{ marginTop: 8, lineHeight: 1.55, fontStyle: "italic" }}>“{fuel.why}”</div> : null}
             </div>
           ) : null}
         </div>
