@@ -374,6 +374,13 @@ export async function readinessWhy(): Promise<ReadinessWhy> {
   return res.json();
 }
 
+// POST a metric label + value -> one short, grounded Kai read for the factor card.
+export async function metricBrief(metric: string, value?: string | number): Promise<{ text: string }> {
+  const res = await authedFetch(`/functions/v1/metric-brief`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ metric, value }) });
+  if (!res.ok) throw new Error(`Couldn't load that read (${res.status})`);
+  return res.json();
+}
+
 export type KaiSavedInsight = { id: string; title?: string; body: string; pinned?: boolean; message_id?: string; thread_id?: string; created_at?: string };
 export async function coachInsights(): Promise<{ insights: KaiSavedInsight[] }> {
   const res = await authedFetch(`${AUX}?api=insights`);
