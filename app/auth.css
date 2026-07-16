@@ -193,3 +193,43 @@
 .strive-word .os { color: var(--ember); }
 .theme-toggle { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--text-2); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex: none; }
 .theme-toggle svg { width: 17px; height: 17px; display: block; }
+
+/* ==================== StriveOS masthead v2 (Unit B) ==================== */
+.topbar { align-items: center; margin-bottom: 14px; }
+.topbar-actions { display: flex; align-items: center; gap: 9px; }
+
+/* compact sync pill (replaces the old refresh column) */
+.sync-pill { display: inline-flex; align-items: center; gap: 7px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 7px 11px; cursor: pointer; font-family: inherit; color: var(--muted); white-space: nowrap; }
+.sync-pill-ic { color: var(--ember); flex: none; display: block; }
+.sync-pill-t { font-size: 11px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sync-pill:disabled { cursor: default; }
+.sync-pill[data-state="cooldown"] { opacity: 0.6; }
+.sync-pill[data-state="done"] .sync-pill-ic,
+.sync-pill[data-state="done"] .sync-pill-t { color: var(--success); }
+.spin-svg { animation: spin 0.8s linear infinite; transform-origin: 50% 50%; }
+
+/* notification bell */
+.bell-btn { position: relative; width: 38px; height: 38px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); color: var(--text); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex: none; }
+.bell-btn svg { display: block; }
+.bell-badge { position: absolute; top: 5px; right: 6px; min-width: 15px; height: 15px; padding: 0 3px; box-sizing: border-box; border-radius: 999px; background: var(--ember); border: 2px solid var(--surface); color: var(--on-ember); font-size: 9px; font-weight: 800; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
+
+/* notifications sheet (2b) */
+.notif-top { display: flex; justify-content: flex-end; margin: -2px 0 4px; }
+.notif-seeall { border: none; background: none; color: var(--ember-strong); font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit; padding: 2px 0; }
+.notif-empty { padding: 22px 0; text-align: center; color: var(--muted); font-size: 12.5px; }
+.notif-row { display: flex; gap: 13px; padding: 13px 0; border-bottom: 1px solid var(--line); align-items: flex-start; }
+.notif-row:last-child { border-bottom: none; }
+.notif-av { width: 38px; height: 38px; border-radius: 999px; background: var(--surface-2); flex: none; display: flex; align-items: center; justify-content: center; }
+.notif-av svg { width: 17px; height: 17px; display: block; }
+.notif-av-kai { background: var(--ember-tint); color: var(--ember-strong); font-size: 13px; font-weight: 800; }
+.notif-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.notif-title { font-size: 13px; font-weight: 700; color: var(--text); }
+.notif-body { font-size: 12px; color: var(--text-2); line-height: 1.45; }
+.notif-time { font-size: 10.5px; color: var(--faint); }
+.notif-act { display: flex; gap: 7px; margin-top: 8px; }
+.notif-btn { font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 5px 13px; cursor: pointer; font-family: inherit; }
+.notif-btn.primary { background: var(--ember); color: var(--on-ember); border: none; }
+.notif-btn.ghost { background: var(--surface-2); color: var(--text-2); border: 1px solid var(--line-2); }
+.notif-btn:disabled { opacity: 0.55; cursor: default; }
+.notif-dot { width: 8px; height: 8px; border-radius: 999px; background: var(--ember); flex: none; margin-top: 6px; }
+.notif-row.muted .notif-title { font-weight: 600; color: var(--text-2); }
