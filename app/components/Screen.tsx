@@ -27,10 +27,10 @@ export function Screen({
           <StriveMark />
           <span className="strive-word">Strive<span className="os">OS</span></span>
         </div>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+        <div className="topbar-actions">
           <ThemeToggle />
-          <NotificationBell />
           <RefreshButton />
+          <NotificationBell />
         </div>
       </header>
 
