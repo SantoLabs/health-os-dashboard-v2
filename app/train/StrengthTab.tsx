@@ -5,7 +5,6 @@ import { strengthStats, strengthSessions, type StrengthStats, type RadarAxis, ty
 import { muscleTint } from "./ui";
 import ExerciseDetail from "./ExerciseDetail";
 import WorkoutLogger from "./WorkoutLogger";
-import StrengthGuidance from "./StrengthGuidance";
 
 const AXES = ["Chest", "Back", "Core", "Legs", "Shoulders", "Arms"];
 const WIN: [string, string][] = [["30d", "30 days"], ["60d", "60 days"], ["90d", "90 days"], ["lifetime", "Lifetime"]];
@@ -79,7 +78,6 @@ export default function StrengthTab() {
 
   return (
     <div>
-      <StrengthGuidance />
       {stats && w ? (
         <div className="card" style={{ marginBottom: 8 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
