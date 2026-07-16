@@ -138,13 +138,16 @@ export type StrSuggestExercise = { title: string; tracking_type: string; sets: n
 export type StrSuggestSplit = { split: string; days_since: number; cadence: number; due_score: number; is_leg: boolean; leg_blocked: boolean; not_too_soon: boolean };
 export type StrAltSplit = { split: string; label: string; days_since: number; leg_blocked: boolean; due_score: number };
 export type StrSuggest = {
-  ok: boolean; blocked: boolean; reason?: string; declined?: boolean; forced?: boolean;
+  ok: boolean; blocked: boolean; reason?: string; declined?: boolean; forced?: boolean; feel?: "fresh" | "normal" | "beat" | null;
   split?: string; label?: string; intensity?: "ease" | "maintain" | "push"; why?: string;
   exercises?: StrSuggestExercise[]; workout?: Record<string, unknown>;
   est_duration_min?: number; signals?: Record<string, unknown>; splits?: StrSuggestSplit[]; alt_splits?: StrAltSplit[];
 };
-export async function strengthSuggest(split?: string): Promise<StrSuggest> {
-  const res = await authedFetch(`/functions/v1/strength-compose?api=suggest`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(split ? { split } : {}) });
+export async function strengthSuggest(split?: string, feel?: string): Promise<StrSuggest> {
+  const b: Record<string, string> = {};
+  if (split) b.split = split;
+  if (feel) b.feel = feel;
+  const res = await authedFetch(`/functions/v1/strength-compose?api=suggest`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b) });
   if (!res.ok) throw new Error(`Couldn't load suggestion (${res.status})`);
   return res.json();
 }
@@ -153,7 +156,7 @@ export async function strengthSwap(body: { action: "swap" | "decline"; from_spli
   if (!res.ok) throw new Error(`Couldn't record that (${res.status})`);
   return res.json();
 }
-export async function strengthCommitSuggestion(body: { workout: Record<string, unknown>; date?: string; why?: string; label?: string }): Promise<{ ok: boolean; plan_id?: string; updated?: boolean }> {
+export async function strengthCommitSuggestion(body: { workout: Record<string, unknown>; date?: string; why?: string; label?: string; feel?: string }): Promise<{ ok: boolean; plan_id?: string; updated?: boolean }> {
   const res = await authedFetch(`/functions/v1/strength-compose?api=commit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (!res.ok) throw new Error(`Couldn't start suggestion (${res.status})`);
   return res.json();
