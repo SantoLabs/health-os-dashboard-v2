@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useApi, actionGet, fetchApi, dashPost, readinessWhy, type ReadinessWhy } from "./lib/api";
+import { useApi, actionGet, fetchApi, dashPost, metricBrief, readinessWhy, type ReadinessWhy } from "./lib/api";
 import { Screen } from "./components/Screen";
 import KaiTodayNote from "./components/KaiTodayNote";
 import TodayNotosChip from "./components/TodayNotosChip";
@@ -74,6 +74,8 @@ const DEF: Record<string, string> = {
   steps: "Your daily step count \u2014 a simple gauge of everyday movement beyond structured workouts.",
   mood: "Your own morning check-in. It nudges today\u2019s readiness up or down within a small, bounded range.",
 };
+// The "i" static explainer shows only on the non-obvious metrics.
+const COMPLEX = new Set(["hrv", "bb", "vo2", "load", "debt"]);
 function factorKey(label: string): string {
   const l = label.toLowerCase();
   if (l.includes("debt")) return "debt";
@@ -120,22 +122,6 @@ function seriesFor(label: string, t: Trends | null): Ser | null {
   return null;
 }
 
-function nudgeFor(s: Ser, impact?: string): string | null {
-  const vals = s.pts.map((p) => p.v as number);
-  if (vals.length < 4 || s.betterUp == null) return null;
-  const mid = Math.floor(vals.length / 2);
-  const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
-  const delta = mean(vals.slice(mid)) - mean(vals.slice(0, mid));
-  const rng = Math.max(...vals) - Math.min(...vals) || 1;
-  const norm = delta / rng, eps = 0.08;
-  const dir = norm > eps ? 1 : norm < -eps ? -1 : 0;
-  const improving = dir !== 0 && ((s.betterUp && dir > 0) || (!s.betterUp && dir < 0));
-  const worsening = dir !== 0 && !improving;
-  const pos = impact === "positive", neg = impact === "negative";
-  if (improving) return pos ? "Great and still improving — keep it up. 👍" : "Heading the right way — keep the momentum going.";
-  if (worsening) return neg ? "Slipping lately — worth a focused reset." : "Solid for now, but drifting — keep an eye on it.";
-  return pos ? "Holding steady in a good place. 👍" : neg ? "Stuck low — a small change could nudge this up." : "Flat and stable this fortnight.";
-}
 
 function fmtDay(iso: string) { return new Date(iso + "T00:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short" }); }
 
@@ -211,6 +197,9 @@ export default function TodayPage() {
 
   const [why, setWhy] = useState<ReadinessWhy | null>(null);
   const [whyBusy, setWhyBusy] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
+  const [briefText, setBriefText] = useState<string | null>(null);
+  const briefCache = useRef<Record<string, string>>({});
 
   useEffect(() => { if (data?.checkin?.feeling_score != null) setMood(data.checkin.feeling_score); }, [data]);
 
@@ -229,6 +218,21 @@ export default function TodayPage() {
     }
   }, [sheet, why, whyBusy]);
 
+  // when a factor detail opens: reset the info popover + fetch a short Kai read (cached per metric)
+  useEffect(() => {
+    if (sheet?.kind !== "factor") { setInfoOpen(false); return; }
+    const f = data?.factors?.[sheet.i];
+    if (!f) return;
+    setInfoOpen(false);
+    const key = f.label;
+    if (briefCache.current[key] != null) { setBriefText(briefCache.current[key]); return; }
+    setBriefText(null);
+    let alive = true;
+    metricBrief(f.label, f.value)
+      .then((r) => { if (alive) { briefCache.current[key] = r.text; setBriefText(r.text); } })
+      .catch(() => { if (alive) setBriefText(""); });
+    return () => { alive = false; };
+  }, [sheet, data]);
 
   async function pickMood(v: number) {
     if (moodBusy) return;
@@ -324,18 +328,25 @@ export default function TodayPage() {
               const f = factors[sheet.i];
               const col = impactColor(f.impact);
               const ser = factorSer;
-              const nudge = ser ? nudgeFor(ser, f.impact) : null;
-              const def = DEF[factorKey(f.label)];
+              const k = factorKey(f.label);
+              const complex = COMPLEX.has(k);
               return (
                 <div className="sheet-body">
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 6 }}>
-                    <span style={{ fontSize: 26, fontWeight: 800, color: col, fontVariantNumeric: "tabular-nums" }}>{f.value}</span>
+                  <div className="fd-head">
+                    <span className="fd-value" style={{ color: col }}>{f.value}</span>
+                    {complex && DEF[k] && (
+                      <button className="fd-i" aria-label={`What is ${f.label}?`}
+                        onClick={() => setInfoOpen((o) => !o)} onMouseEnter={() => setInfoOpen(true)}>i</button>
+                    )}
                   </div>
-                  {f.detail && <div style={{ marginBottom: 4 }}>{f.detail}</div>}
-                  {f.note && <div style={{ color: "var(--muted)", fontSize: 12, lineHeight: 1.5 }}>{f.note}</div>}
-                  {def && <div className="fx-def">{def}</div>}
+                  {complex && infoOpen && DEF[k] && <div className="fd-info">{DEF[k]}</div>}
+                  {f.detail && <div className="fd-detail">{f.detail}</div>}
+                  {f.note && <div className="fd-note">{f.note}</div>}
+                  <div className="fd-kai">
+                    <span className="fd-kai-k">K</span>
+                    <span className="fd-kai-t">{briefText == null ? <span className="fd-kai-load">reading your data\u2026</span> : (briefText || "\u2014")}</span>
+                  </div>
                   {ser && <MiniChart pts={ser.pts} color={col} unit={ser.unit} />}
-                  {nudge && <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 600, color: col }}>{nudge}</div>}
                 </div>
               );
             })()}
