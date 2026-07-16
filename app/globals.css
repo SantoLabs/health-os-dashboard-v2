@@ -1,10 +1,78 @@
+/* ==================== StriveOS token layer (Phase 0) ====================
+   Semantic tokens drive the whole app. Light is the default :root; dark is
+   applied via [data-theme="dark"] (set pre-paint by the bootstrap script in
+   layout.tsx). The legacy aliases (--card/--card2/--line/--text/--muted) are
+   remapped onto the new palette so every not-yet-migrated screen inherits the
+   StriveOS look with no edits to that screen. */
 :root {
-  --bg: #0b0f17;
-  --card: #131a26;
-  --card2: #0f1622;
-  --line: #1f2937;
-  --text: #e5e7eb;
-  --muted: #94a3b8;
+  /* neutrals */
+  --bg: #faf6f1;
+  --surface: #ffffff;
+  --surface-2: #f5eee5;
+  --surface-3: #faf3eb;
+  --line: #efe7dc;
+  --line-2: #e5dacb;
+  --text: #2b2420;
+  --text-2: #6e6257;
+  --muted: #8a7f73;
+  --faint: #b0a597;
+  /* brand ember */
+  --ember: #d96f4e;
+  --ember-strong: #b75a3c;
+  --ember-lt: #e8956f;
+  --ember-tint: #fbede6;
+  --on-ember: #ffffff;
+  /* status */
+  --success: #5f8f63;
+  --success-tint: #f0f5ee;
+  --gold: #c98a2d;
+  --danger: #c4543b;
+  --kai: #7a6bc9;
+  /* inverse (dark chip on light, used by later tabs) */
+  --inverse-surface: #2b2420;
+  --on-inverse: #faf6f1;
+  /* radii */
+  --r-pill: 999px;
+  --r-lg: 28px;
+  --r-card: 24px;
+  --r-md: 18px;
+  --r-sm: 14px;
+  --r-chip: 12px;
+  /* shadows */
+  --shadow-card: 0 8px 24px rgba(120, 90, 60, 0.08);
+  --shadow-pop: 0 14px 34px rgba(80, 60, 40, 0.16);
+  --shadow-fab: 0 8px 24px rgba(217, 111, 78, 0.35), 0 2px 6px rgba(0, 0, 0, 0.12);
+  /* legacy aliases → new palette (keeps unmigrated screens coherent) */
+  --card: var(--surface);
+  --card2: var(--surface-2);
+}
+
+:root[data-theme="dark"] {
+  --bg: #201a15;
+  --surface: #2c251e;
+  --surface-2: #362e25;
+  --surface-3: #3e2c23;
+  --line: #3a322a;
+  --line-2: #4a4034;
+  --text: #f0e7db;
+  --text-2: #b8ab9a;
+  --muted: #a79a89;
+  --faint: #7e7365;
+  --ember: #d96f4e;
+  --ember-strong: #c4634a;
+  --ember-lt: #e8956f;
+  --ember-tint: #3e2c23;
+  --on-ember: #ffffff;
+  --success: #82b287;
+  --success-tint: rgba(130, 178, 135, 0.14);
+  --gold: #e0a64a;
+  --danger: #e08069;
+  --kai: #9c8fe0;
+  --inverse-surface: #f5eee5;
+  --on-inverse: #2b2420;
+  --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-pop: 0 14px 34px rgba(0, 0, 0, 0.5);
+  --shadow-fab: 0 8px 24px rgba(217, 111, 78, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -12,9 +80,16 @@
 html, body {
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-sans, "Plus Jakarta Sans"), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+/* Light-mode compatibility shim: the only unmigrated rules that hardcode a
+   light-gray text colour (built for the old dark theme). Keeps light mode
+   readable app-wide until each tab is migrated. Remove per-tab as we go. */
+:root:not([data-theme="dark"]) .nudge,
+:root:not([data-theme="dark"]) .ex-title,
+:root:not([data-theme="dark"]) .chip { color: var(--text-2); }
 
 .app {
   max-width: 480px;
@@ -87,18 +162,20 @@ html, body {
 .bottomnav {
   position: fixed; left: 0; right: 0; bottom: 0;
   display: flex; justify-content: space-around;
-  background: rgba(11, 15, 23, 0.92);
-  backdrop-filter: blur(10px);
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  backdrop-filter: blur(12px);
   border-top: 1px solid var(--line);
   padding: 8px 0 max(8px, env(safe-area-inset-bottom));
 }
 .nav {
-  background: none; border: 0; color: var(--muted);
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  font-size: 11px; cursor: pointer; padding: 4px 10px;
+  background: none; border: 0; color: var(--faint);
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  font-size: 10.5px; font-weight: 600; cursor: pointer; padding: 4px 10px;
+  text-decoration: none;
 }
-.nav-icon { font-size: 18px; }
-.nav.active { color: var(--text); }
+.nav-icon { font-size: 18px; line-height: 0; }
+.nav-icon svg { width: 22px; height: 22px; display: block; }
+.nav.active { color: var(--ember); font-weight: 700; }
 
 /* Desktop: keep the phone-width column centered with a touch more breathing room */
 @media (min-width: 640px) {
