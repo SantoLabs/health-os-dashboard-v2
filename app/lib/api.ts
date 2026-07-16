@@ -176,6 +176,19 @@ export async function fuelDay(date?: string): Promise<FuelDay | null> {
   const j = await res.json();
   return j?.fuel ?? null;
 }
+export type RaceFuelLeg = { leg: string; dur: string; g_per_hr?: string; total_g?: string; guidance?: string };
+export type RaceFuelBlock = { window: string; g_per_kg: number; grams: number; note: string };
+export type RaceFuel = {
+  ok: boolean; error?: string;
+  race?: { label: string; date: string; days_to_go: number; total: string; event_type?: string };
+  weight_kg?: number; carb_load?: RaceFuelBlock; race_morning?: RaceFuelBlock;
+  on_course?: RaceFuelLeg[]; on_course_total_g?: string; hydration?: string; why?: string;
+};
+export async function fuelRace(goalId: string): Promise<RaceFuel> {
+  const res = await authedFetch(`/functions/v1/fuel?op=race`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ goal_id: goalId }) });
+  if (!res.ok) throw new Error(`Couldn't load race fuelling (${res.status})`);
+  return res.json();
+}
 
 // ---- health-coach (legacy basic Q&A — superseded by the Kai coach below) ----
 export async function coachAsk(
