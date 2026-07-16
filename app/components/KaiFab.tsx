@@ -94,8 +94,8 @@ export default function KaiFab() {
           style={{
             position: "fixed", right: "max(16px, calc(50vw - 224px))", bottom: "calc(72px + env(safe-area-inset-bottom, 0px))",
             width: 54, height: 54, borderRadius: "50%", border: "none", cursor: "pointer", zIndex: 60,
-            background: "radial-gradient(circle at 30% 26%, #86b8ff, #4f9cf9 52%, #2a6bd0)",
-            boxShadow: "0 6px 20px rgba(20,80,170,.45), 0 2px 6px rgba(0,0,0,.3)",
+            background: "radial-gradient(circle at 30% 26%, #e8956f, #d96f4e 52%, #b75a3c)",
+            boxShadow: "0 6px 20px rgba(217,111,78,.45), 0 2px 6px rgba(0,0,0,.25)",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}
         >
