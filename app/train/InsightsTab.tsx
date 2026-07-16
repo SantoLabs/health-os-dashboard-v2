@@ -24,11 +24,11 @@ function Bars({ ins }: { ins: TrnInsight }) {
             <div style={{ flex: 1, height: 16, background: "rgba(255,255,255,0.05)", borderRadius: 6, overflow: "hidden" }}>
               <div style={{ width: `${Math.max(w, 3)}%`, height: "100%", borderRadius: 6, background: b.best ? "linear-gradient(135deg,#5f7dff,#a274ff)" : "rgba(255,255,255,0.18)" }} />
             </div>
-            <div style={{ width: 66, flexShrink: 0, textAlign: "right", fontSize: 11.5, color: b.value >= 0 ? "#cdd3e6" : "#8a90a6" }}>{b.value > 0 ? "+" : ""}{b.value} {ins.unit}</div>
+            <div style={{ width: 66, flexShrink: 0, textAlign: "right", fontSize: 11.5, color: b.value >= 0 ? "#cdd3e6" : "#8a90a6" }}>{b.disp ?? `${b.value > 0 ? "+" : ""}${b.value} ${ins.unit}`}</div>
           </div>
         );
       })}
-      <div style={{ fontSize: 10.5, color: "#6b7086", textAlign: "right", marginTop: 2 }}>slower &larr; vs your average &rarr; faster</div>
+      <div style={{ fontSize: 10.5, color: "#6b7086", textAlign: "right", marginTop: 2 }}>{ins.scale_caption}</div>
     </div>
   );
 }
