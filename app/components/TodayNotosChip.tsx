@@ -6,7 +6,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { coachNotifications } from "../lib/api";
-import { H, FAINT, FAT } from "./KaiChat";
 
 export default function TodayNotosChip() {
   const router = useRouter();
@@ -21,12 +20,21 @@ export default function TodayNotosChip() {
   }, []);
   if (count <= 0) return null;
   return (
-    <button onClick={() => router.push("/more/coach/notifications")}
-      style={{ width: "100%", display: "flex", alignItems: "center", gap: 9, background: "rgba(240,115,90,.08)", border: "1px solid rgba(240,115,90,.32)", borderRadius: 12, padding: "10px 13px", marginBottom: 12, cursor: "pointer", textAlign: "left" }}>
+    <button
+      onClick={() => router.push("/more/coach/notifications")}
+      style={{
+        width: "100%", display: "flex", alignItems: "center", gap: 9,
+        background: "var(--ember-tint)", border: "1px solid var(--ember)",
+        borderRadius: 12, padding: "10px 13px", marginBottom: 12, cursor: "pointer",
+        textAlign: "left", fontFamily: "inherit",
+      }}
+    >
       <span style={{ fontSize: 15 }}>🔔</span>
-      <span style={{ flex: 1, fontSize: 12.5, fontWeight: 700, color: H }}>{count} {count === 1 ? "reminder" : "reminders"} due now</span>
-      <span style={{ minWidth: 18, height: 18, padding: "0 5px", boxSizing: "border-box", borderRadius: 999, background: FAT, color: "#1a0c08", fontSize: 10.5, fontWeight: 900, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{count > 9 ? "9+" : count}</span>
-      <span style={{ fontSize: 15, color: FAINT }}>›</span>
+      <span style={{ flex: 1, fontSize: 12.5, fontWeight: 700, color: "var(--ember-strong)" }}>
+        {count} {count === 1 ? "reminder" : "reminders"} due now
+      </span>
+      <span style={{ minWidth: 18, height: 18, padding: "0 5px", boxSizing: "border-box", borderRadius: 999, background: "var(--ember)", color: "var(--on-ember)", fontSize: 10.5, fontWeight: 900, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{count > 9 ? "9+" : count}</span>
+      <span style={{ fontSize: 15, color: "var(--faint)" }}>›</span>
     </button>
   );
 }
