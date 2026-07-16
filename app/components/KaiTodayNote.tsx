@@ -50,7 +50,7 @@ export default function KaiTodayNote({
       {(onWhy || chips.length > 0) && (
         <div className="kai-chips">
           {onWhy && whyLabel ? <button className="kai-chip" onClick={onWhy}>{whyLabel}</button> : null}
-          {chips.map((ch, i) => (
+          {chips.slice(0, 2).map((ch, i) => (
             <button key={i} className="kai-chip" onClick={() => go(ch)}>{ch}</button>
           ))}
         </div>
