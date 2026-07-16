@@ -21,7 +21,7 @@ function chipsFor(d: StrSuggest): Chip[] {
   if (s.race_days != null) chips.push({ label: `${s.race_days}d to race`, tone: s.race_days <= 10 ? "bad" : s.race_days <= 21 ? "warn" : "neutral" });
   if (Number(s.leg_mins) >= 70) chips.push({ label: "legs worked yesterday", tone: "warn" });
   if (s.big_next2 === 1) chips.push({ label: "long session ahead", tone: "warn" });
-  if (s.tsb != null) chips.push({ label: `form ${Math.round(Number(s.tsb))}`, tone: s.tsb > 5 ? "good" : s.tsb >= -10 ? "neutral" : s.tsb >= -20 ? "warn" : "bad" });
+  if (s.tsb != null) { const tsb = Number(s.tsb); const fr = Math.sign(tsb) * Math.round(Math.abs(tsb)); chips.push({ label: `form ${fr}`, tone: tsb > 5 ? "good" : tsb >= -10 ? "neutral" : tsb >= -20 ? "warn" : "bad" }); }
   if (Number(s.s7d) >= 4) chips.push({ label: `${s.s7d} strength days`, tone: "warn" });
   return chips;
 }
