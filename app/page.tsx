@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useApi, actionGet, fetchApi, dashPost, coachExplain, readinessWhy, type ReadinessWhy } from "./lib/api";
+import { useApi, actionGet, fetchApi, dashPost, readinessWhy, type ReadinessWhy } from "./lib/api";
 import { Screen } from "./components/Screen";
 import KaiTodayNote from "./components/KaiTodayNote";
 import TodayNotosChip from "./components/TodayNotosChip";
@@ -63,7 +63,17 @@ function impactColor(i?: string): string { return i === "positive" ? "var(--succ
 
 // ---- factor identity icons (clean line icons, colored per signal) ----
 const ICON_COLOR: Record<string, string> = { sleep: "var(--kai)", debt: "var(--gold)", hrv: "var(--ember)", bb: "var(--success)", steps: "var(--ember)", load: "var(--success)", vo2: "var(--kai)", mood: "var(--ember)", dot: "var(--muted)" };
-const COMPLEX = new Set(["hrv", "bb", "vo2", "load", "debt"]);
+// Static, instant "what is this & why it matters" blurbs shown inside each factor's detail card.
+const DEF: Record<string, string> = {
+  hrv: "Heart-rate variability \u2014 the beat-to-beat variation in your heart rate overnight. Higher usually means better recovery and a rested nervous system; a dip often flags fatigue or stress.",
+  bb: "Body Battery is Garmin\u2019s 0\u2013100 estimate of your energy reserves, built from heart rate, stress and rest. It charges as you recover and drains with activity and stress.",
+  vo2: "VO\u2082max estimates how much oxygen your body can use at peak effort \u2014 a core marker of aerobic fitness. It climbs slowly with consistent endurance training.",
+  load: "Training load (ACWR) weighs your recent training against your longer-term average. Roughly 0.8\u20131.3 is the sweet spot \u2014 higher risks fatigue, lower risks detraining.",
+  debt: "Sleep debt is how far your last three nights fell short of your body\u2019s sleep need. It builds when you under-sleep and clears with earlier nights.",
+  sleep: "Total time asleep last night. Aim for ~7\u20139h \u2014 and consistent timing matters as much as the total.",
+  steps: "Your daily step count \u2014 a simple gauge of everyday movement beyond structured workouts.",
+  mood: "Your own morning check-in. It nudges today\u2019s readiness up or down within a small, bounded range.",
+};
 function factorKey(label: string): string {
   const l = label.toLowerCase();
   if (l.includes("debt")) return "debt";
@@ -187,7 +197,6 @@ type SheetState =
   | { kind: "factor"; i: number }
   | { kind: "why" }
   | { kind: "race" }
-  | { kind: "explain"; label: string; value: string }
   | null;
 
 export default function TodayPage() {
@@ -202,7 +211,6 @@ export default function TodayPage() {
 
   const [why, setWhy] = useState<ReadinessWhy | null>(null);
   const [whyBusy, setWhyBusy] = useState(false);
-  const [explainText, setExplainText] = useState<string | null>(null);
 
   useEffect(() => { if (data?.checkin?.feeling_score != null) setMood(data.checkin.feeling_score); }, [data]);
 
@@ -221,17 +229,6 @@ export default function TodayPage() {
     }
   }, [sheet, why, whyBusy]);
 
-  // fetch a grounded metric explanation when an "i" popover opens
-  useEffect(() => {
-    if (sheet?.kind !== "explain") return;
-    const { label, value } = sheet;
-    setExplainText(null);
-    let alive = true;
-    coachExplain(label, value)
-      .then((r) => { if (alive) setExplainText(r.text || "No explanation available."); })
-      .catch(() => { if (alive) setExplainText("Couldn't load that explanation right now."); });
-    return () => { alive = false; };
-  }, [sheet]);
 
   async function pickMood(v: number) {
     if (moodBusy) return;
@@ -308,14 +305,7 @@ export default function TodayPage() {
               return (
                 <button className="fx-row" key={i} onClick={() => setSheet({ kind: "factor", i })}>
                   <span className="fx-ic"><FactorIcon k={k} /></span>
-                  <span className="fx-name">
-                    {f.label}
-                    {COMPLEX.has(k) && (
-                      <span role="button" tabIndex={0} className="fx-info" aria-label={`What is ${f.label}?`}
-                        onClick={(e) => { e.stopPropagation(); setSheet({ kind: "explain", label: f.label, value: f.value }); }}
-                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); setSheet({ kind: "explain", label: f.label, value: f.value }); } }}>i</span>
-                    )}
-                  </span>
+                  <span className="fx-name">{f.label}</span>
                   <span className="fx-val" style={{ color: impactColor(f.impact) }}>{f.value}</span>
                   <svg className="fx-chev" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
                 </button>
@@ -335,13 +325,15 @@ export default function TodayPage() {
               const col = impactColor(f.impact);
               const ser = factorSer;
               const nudge = ser ? nudgeFor(ser, f.impact) : null;
+              const def = DEF[factorKey(f.label)];
               return (
                 <div className="sheet-body">
                   <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 6 }}>
                     <span style={{ fontSize: 26, fontWeight: 800, color: col, fontVariantNumeric: "tabular-nums" }}>{f.value}</span>
                   </div>
                   {f.detail && <div style={{ marginBottom: 4 }}>{f.detail}</div>}
-                  {f.note && <div style={{ color: "var(--muted)", fontSize: 12.5, lineHeight: 1.5 }}>{f.note}</div>}
+                  {f.note && <div style={{ color: "var(--muted)", fontSize: 12, lineHeight: 1.5 }}>{f.note}</div>}
+                  {def && <div className="fx-def">{def}</div>}
                   {ser && <MiniChart pts={ser.pts} color={col} unit={ser.unit} />}
                   {nudge && <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 600, color: col }}>{nudge}</div>}
                 </div>
@@ -378,14 +370,6 @@ export default function TodayPage() {
             {why && why.contributions.length === 0 && <div className="rz-empty">Not enough recent data to break this down yet.</div>}
           </Sheet>
 
-          {/* ---- metric info popover ---- */}
-          <Sheet open={sheet?.kind === "explain"} title={sheet?.kind === "explain" ? sheet.label : ""} onClose={() => setSheet(null)}>
-            <div className="mx-body">
-              {explainText == null
-                ? <div className="mx-loading"><span className="mx-dot" /> Kai is looking at your data…</div>
-                : explainText}
-            </div>
-          </Sheet>
 
           {/* ---- race detail sheet ---- */}
           <Sheet open={sheet?.kind === "race"} title={nextRace?.label || "Next race"} onClose={() => setSheet(null)}>
