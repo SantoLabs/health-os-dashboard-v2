@@ -162,6 +162,21 @@ export async function strengthCommitSuggestion(body: { workout: Record<string, u
   return res.json();
 }
 
+// ---- fuel (periodized daily fuelling, driven by the day's training) ----
+export type FuelAround = { pre?: string | null; during?: string | null; post?: string | null };
+export type FuelSession = { sport?: string; focus?: string | null; min?: number; kcal?: number };
+export type FuelDay = {
+  date: string; bucket: "rest" | "easy" | "moderate" | "long_hard"; weight_kg?: number;
+  kcal: number; protein_g: number; carbs_g: number; fat_g: number; fiber_g: number;
+  session_min?: number; session_kcal?: number; sessions?: FuelSession[]; around?: FuelAround | null; why?: string;
+};
+export async function fuelDay(date?: string): Promise<FuelDay | null> {
+  const res = await authedFetch(`/functions/v1/fuel?op=day`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(date ? { date } : {}) });
+  if (!res.ok) throw new Error(`Couldn't load fuelling (${res.status})`);
+  const j = await res.json();
+  return j?.fuel ?? null;
+}
+
 // ---- health-coach (legacy basic Q&A — superseded by the Kai coach below) ----
 export async function coachAsk(
   question: string,
