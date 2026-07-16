@@ -3,48 +3,17 @@
 import { useState, useEffect, useRef } from "react";
 import { useApi, actionGet, fetchApi, dashPost } from "./lib/api";
 import { Screen } from "./components/Screen";
-import KaiDailyCard from "./components/KaiDailyCard";
+import KaiTodayNote from "./components/KaiTodayNote";
 import TodayNotosChip from "./components/TodayNotosChip";
+import Sheet from "./components/Sheet";
 
 type Goal = { id: string; label: string; when_text?: string; target_date: string | null; days_away: number | null };
 
 function racePhase(days: number): { label: string; color: string } {
-  if (days <= 7) return { label: "Race week — taper & rest", color: "#f472b6" };
-  if (days <= 21) return { label: "Peak — sharpen, cut volume", color: "#fbbf24" };
-  if (days <= 56) return { label: "Build — push key sessions", color: "#34d399" };
-  return { label: "Base — consistency & volume", color: "#60a5fa" };
-}
-
-function RaceCountdown() {
-  const [goals, setGoals] = useState<Goal[] | null>(null);
-  useEffect(() => {
-    let alive = true;
-    actionGet<{ goals: Goal[] }>("goals_list").then((d) => { if (alive) setGoals(d.goals); }).catch(() => {});
-    return () => { alive = false; };
-  }, []);
-  if (!goals) return null;
-  const next = goals
-    .filter((g) => g.target_date && (g.days_away ?? -1) >= 0)
-    .sort((a, b) => (a.days_away ?? 0) - (b.days_away ?? 0))[0];
-  if (!next || next.days_away == null) return null;
-  const days = next.days_away;
-  const weeks = Math.floor(days / 7);
-  const phase = racePhase(days);
-  return (
-    <section className="card" style={{ borderLeft: `3px solid ${phase.color}` }}>
-      <div className="lever-top">
-        <span className="subtle tiny">NEXT RACE</span>
-        <span className="subtle tiny">{next.target_date}</span>
-      </div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 4 }}>
-        <span style={{ fontSize: 28, fontWeight: 700 }}>{days}</span>
-        <span className="subtle">days · {next.label}</span>
-      </div>
-      <div className="tiny" style={{ marginTop: 6, color: phase.color }}>
-        {phase.label}{weeks >= 2 ? ` · ~${weeks} wks out` : ""}
-      </div>
-    </section>
-  );
+  if (days <= 7) return { label: "Race week — taper & rest", color: "var(--ember)" };
+  if (days <= 21) return { label: "Peak — sharpen, cut volume", color: "var(--gold)" };
+  if (days <= 56) return { label: "Build — push key sessions", color: "var(--success)" };
+  return { label: "Base — consistency & volume", color: "var(--kai)" };
 }
 
 type Factor = {
@@ -60,12 +29,22 @@ type Today = {
 };
 
 const MOODS = [
-  { v: 1, emoji: "😖", label: "Rough" },
-  { v: 2, emoji: "😕", label: "Meh" },
-  { v: 3, emoji: "😐", label: "OK" },
-  { v: 4, emoji: "🙂", label: "Good" },
-  { v: 5, emoji: "😄", label: "Great" },
+  { v: 1, label: "Rough" },
+  { v: 2, label: "Meh" },
+  { v: 3, label: "OK" },
+  { v: 4, label: "Good" },
+  { v: 5, label: "Great" },
 ];
+
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
+}
+function longDate(): string {
+  return new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+}
 function freshDate(iso?: string): string {
   if (!iso) return "";
   const d = new Date(iso.length <= 10 ? iso + "T00:00:00" : iso);
@@ -77,8 +56,9 @@ type Pt = { date: string; v: number | null };
 type SleepPt = { date: string; total: number | null };
 type Trends = { sleep: SleepPt[]; hrv: Pt[]; steps: Pt[]; acwr: Pt[]; debt: Pt[]; vo2max: Pt[] };
 
-function scoreColor(s: number): string { return s >= 75 ? "#34d399" : s >= 50 ? "#fbbf24" : "#f87171"; }
-function impactColor(i?: string): string { return i === "positive" ? "#34d399" : i === "negative" ? "#f87171" : "#94a3b8"; }
+function scoreColor(s: number): string { return s >= 75 ? "var(--success)" : s >= 50 ? "var(--gold)" : "var(--danger)"; }
+function scoreCap(s: number): string { return s >= 75 ? "READY" : s >= 50 ? "MODERATE" : "LOW"; }
+function impactColor(i?: string): string { return i === "positive" ? "var(--success)" : i === "negative" ? "var(--danger)" : "var(--muted)"; }
 
 type Ser = { pts: Pt[]; unit: string; betterUp: boolean | null };
 
@@ -119,6 +99,23 @@ function nudgeFor(s: Ser, impact?: string): string | null {
 
 function fmtDay(iso: string) { return new Date(iso + "T00:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short" }); }
 
+function ReadinessRing({ score }: { score: number }) {
+  const r = 47, c = 2 * Math.PI * r, p = Math.max(0, Math.min(100, score)) / 100;
+  const col = scoreColor(score);
+  return (
+    <div className="rd-ring">
+      <svg viewBox="0 0 108 108">
+        <circle cx="54" cy="54" r={r} fill="none" stroke="var(--surface-2)" strokeWidth="9" />
+        <circle cx="54" cy="54" r={r} fill="none" stroke={col} strokeWidth="9" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - p)} />
+      </svg>
+      <div className="rd-ring-num">
+        <div className="rd-ring-score">{score}</div>
+        <div className="rd-ring-cap">{scoreCap(score)}</div>
+      </div>
+    </div>
+  );
+}
+
 function MiniChart({ pts, color, unit }: { pts: Pt[]; color: string; unit: string }) {
   const w = 260, h = 64, pad = 6, padB = 14;
   const vals = pts.map((p) => p.v as number);
@@ -156,14 +153,25 @@ function MiniChart({ pts, color, unit }: { pts: Pt[]; color: string; unit: strin
   );
 }
 
+type SheetState = { kind: "factor"; i: number } | { kind: "why" } | { kind: "race" } | null;
+
 export default function TodayPage() {
   const { data, error } = useApi<Today>("today");
   const [trends, setTrends] = useState<Trends | null>(null);
-  const [open, setOpen] = useState<number | null>(null);
+  const [goals, setGoals] = useState<Goal[] | null>(null);
   const [mood, setMood] = useState<number | null>(null);
   const [moodBusy, setMoodBusy] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const [sheet, setSheet] = useState<SheetState>(null);
 
   useEffect(() => { if (data?.checkin?.feeling_score != null) setMood(data.checkin.feeling_score); }, [data]);
+
+  useEffect(() => {
+    let alive = true;
+    fetchApi<Trends>("trends&days=14").then((t) => { if (alive) setTrends(t); }).catch(() => {});
+    actionGet<{ goals: Goal[] }>("goals_list").then((d) => { if (alive) setGoals(d.goals); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
 
   async function pickMood(v: number) {
     if (moodBusy) return;
@@ -173,90 +181,89 @@ export default function TodayPage() {
     finally { setMoodBusy(false); }
   }
 
-  useEffect(() => {
-    let alive = true;
-    fetchApi<Trends>("trends&days=14").then((t) => { if (alive) setTrends(t); }).catch(() => {});
-    return () => { alive = false; };
-  }, []);
+  const nextRace = (goals || [])
+    .filter((g) => g.target_date && (g.days_away ?? -1) >= 0)
+    .sort((a, b) => (a.days_away ?? 0) - (b.days_away ?? 0))[0];
+
+  const factors = data?.factors ?? [];
+  const shownFactors = showAll ? factors : factors.slice(0, 4);
+  const factorSer = sheet?.kind === "factor" ? seriesFor(factors[sheet.i]?.label ?? "", trends) : null;
 
   return (
-    <Screen title="Today" error={error} loading={!data && !error}>
+    <Screen title="" error={error} loading={!data && !error}>
       {data && (
         <>
-          <KaiDailyCard liveReadiness={{ score: data.score, label: data.label }} />
+          <div className="today-greet">{greeting()}</div>
+          <div className="today-date">{longDate()}</div>
+
           <TodayNotosChip />
-          <section className="card readiness">
-            <div className="ring" style={{ ["--c" as string]: scoreColor(data.score), ["--p" as string]: data.score / 100 }}>
-              <span className="ring-num">{data.score}</span>
+
+          <section className="rd-card">
+            <div className="rd-top">
+              <ReadinessRing score={data.score} />
+              <div className="rd-textwrap">
+                <div className="rd-label">{data.label}</div>
+                <div className="rd-verdict">{data.verdict}</div>
+              </div>
             </div>
-            <div className="readiness-text">
-              <div className="readiness-label">{data.label}</div>
-              <div className="subtle">{data.verdict}</div>
+            <KaiTodayNote whyLabel={`Why ${data.score}?`} onWhy={() => setSheet({ kind: "why" })} />
+          </section>
+
+          {nextRace && nextRace.days_away != null && (
+            <button className="race-strip" onClick={() => setSheet({ kind: "race" })}>
+              <svg className="rs-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 21V4a1 1 0 0 1 1-1h13l-2.5 4L18 11H5" /><path d="M4 21h4" />
+              </svg>
+              <span className="rs-body">
+                <span className="rs-title">Race in {nextRace.days_away} {nextRace.days_away === 1 ? "day" : "days"}{nextRace.label ? ` — ${nextRace.label}` : ""}</span>
+                <span className="rs-sub">{racePhase(nextRace.days_away).label}</span>
+              </span>
+              <svg className="rs-chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+            </button>
+          )}
+
+          <section className="mood-card">
+            <div className="mood-q">How are you feeling today?</div>
+            <div className="mood-seg">
+              {MOODS.map((m) => (
+                <button key={m.v} className={mood === m.v ? "mood-opt on" : "mood-opt"} disabled={moodBusy} onClick={() => pickMood(m.v)}>
+                  {m.label}
+                </button>
+              ))}
             </div>
           </section>
 
-          <RaceCountdown />
-
-          <section className="card">
-            <div className="subtle" style={{ fontSize: 13, marginBottom: 10 }}>How are you feeling today?</div>
-            <div style={{ display: "flex", gap: 6, justifyContent: "space-between" }}>
-              {MOODS.map((m) => {
-                const on = mood === m.v;
-                return (
-                  <button key={m.v} onClick={() => pickMood(m.v)} disabled={moodBusy} aria-label={m.label}
-                    style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "8px 2px", borderRadius: 12, cursor: moodBusy ? "default" : "pointer",
-                      border: on ? "1px solid #6366f1" : "1px solid rgba(255,255,255,0.08)", background: on ? "rgba(99,102,241,0.16)" : "rgba(255,255,255,0.03)",
-                      opacity: on || mood == null ? 1 : 0.55, transition: "all .12s" }}>
-                    <span style={{ fontSize: 22, lineHeight: 1 }}>{m.emoji}</span>
-                    <span className="tiny" style={{ color: on ? "#a5b4fc" : "var(--muted)" }}>{m.label}</span>
-                  </button>
-                );
-              })}
+          <div className="plan-row">
+            <div className="plan-card">
+              <div className="plan-head">🏃 Training</div>
+              <div className="plan-body">{data.training}</div>
             </div>
-          </section>
-
-          <h2 className="section-title">Your plan today</h2>
-          <section className="row2">
-            <div className="card mini">
-              <div className="mini-head">🏃 Training</div>
-              <div className="mini-body">{data.training}</div>
+            <div className="plan-card">
+              <div className="plan-head">🥗 Nutrition</div>
+              <div className="plan-body">{data.nutrition}</div>
             </div>
-            <div className="card mini">
-              <div className="mini-head">🥗 Nutrition</div>
-              <div className="mini-body">{data.nutrition}</div>
-            </div>
-          </section>
+          </div>
 
-          {data.sleep_nudge && <section className="card nudge">💤 {data.sleep_nudge}</section>}
+          {data.sleep_nudge && <div className="sleep-nudge2">💤 {data.sleep_nudge}</div>}
 
-          <h2 className="section-title">Today&apos;s factors <span className="subtle tiny">· tap for detail</span></h2>
-          <section className="factor-list">
-            {data.factors?.map((f, i) => {
-              const isOpen = open === i;
-              const col = impactColor(f.impact);
-              const ser = isOpen ? seriesFor(f.label, trends) : null;
-              const nudge = ser ? nudgeFor(ser, f.impact) : null;
-              return (
-                <div className={isOpen ? "card factor-row open" : "card factor-row"} key={i}>
-                  <button className="factor-head" onClick={() => setOpen(isOpen ? null : i)}>
-                    <span className="factor-emoji">{f.emoji}</span>
-                    <span className="factor-label">{f.label}</span>
-                    <span className="factor-spacer" />
-                    <span className="dot-impact" style={{ background: col }} />
-                    <span className="factor-value" style={{ color: col }}>{f.value}</span>
-                    <span className={isOpen ? "chev open" : "chev"}>⌄</span>
-                  </button>
-                  {isOpen && (
-                    <div className="factor-detail">
-                      {f.detail && <div className="subtle tiny">{f.detail}</div>}
-                      {f.note && <div className="factor-note">{f.note}</div>}
-                      {ser && <MiniChart pts={ser.pts} color={col} unit={ser.unit} />}
-                      {nudge && <div className="factor-nudge" style={{ color: col }}>{nudge}</div>}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+          <div className="today-sec">
+            <span className="today-sec-t">Today&apos;s factors</span>
+            <span className="today-sec-s">tap for detail</span>
+          </div>
+          <section className="fx-card">
+            {shownFactors.map((f, i) => (
+              <button className="fx-row" key={i} onClick={() => setSheet({ kind: "factor", i })}>
+                <span className="fx-emoji">{f.emoji}</span>
+                <span className="fx-name">{f.label}</span>
+                <span className="fx-val" style={{ color: impactColor(f.impact) }}>{f.value}</span>
+                <svg className="fx-chev" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+              </button>
+            ))}
+            {factors.length > 4 && (
+              <button className="fx-more" onClick={() => setShowAll((v) => !v)}>
+                {showAll ? "Show less" : `${factors.length - 4} more factors`}
+              </button>
+            )}
           </section>
 
           {data.data_through && (
@@ -265,6 +272,56 @@ export default function TodayPage() {
               {data.last_synced ? ` · synced ${freshDate(data.last_synced)}` : ""}
             </div>
           )}
+
+          {/* ---- 2b sheets ---- */}
+          <Sheet open={sheet?.kind === "factor"} title={sheet?.kind === "factor" ? factors[sheet.i]?.label ?? "" : ""} onClose={() => setSheet(null)}>
+            {sheet?.kind === "factor" && factors[sheet.i] && (() => {
+              const f = factors[sheet.i];
+              const col = impactColor(f.impact);
+              const ser = factorSer;
+              const nudge = ser ? nudgeFor(ser, f.impact) : null;
+              return (
+                <div className="sheet-body">
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 6 }}>
+                    <span style={{ fontSize: 26, fontWeight: 800, color: col, fontVariantNumeric: "tabular-nums" }}>{f.value}</span>
+                    <span style={{ fontSize: 20 }}>{f.emoji}</span>
+                  </div>
+                  {f.detail && <div style={{ marginBottom: 4 }}>{f.detail}</div>}
+                  {f.note && <div style={{ color: "var(--muted)", fontSize: 12.5, lineHeight: 1.5 }}>{f.note}</div>}
+                  {ser && <MiniChart pts={ser.pts} color={col} unit={ser.unit} />}
+                  {nudge && <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 600, color: col }}>{nudge}</div>}
+                </div>
+              );
+            })()}
+          </Sheet>
+
+          <Sheet open={sheet?.kind === "why"} title={`Why ${data.score}?`} onClose={() => setSheet(null)}>
+            <div className="sheet-body">
+              <div style={{ marginBottom: 12 }}>{data.verdict}</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {factors.slice(0, 6).map((f, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 15, width: 20, textAlign: "center" }}>{f.emoji}</span>
+                    <span style={{ flex: 1, fontSize: 13.5, color: "var(--text)" }}>{f.label}</span>
+                    <span style={{ fontSize: 13.5, fontWeight: 700, color: impactColor(f.impact) }}>{f.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Sheet>
+
+          <Sheet open={sheet?.kind === "race"} title={nextRace?.label || "Next race"} onClose={() => setSheet(null)}>
+            {nextRace && nextRace.days_away != null && (
+              <div className="sheet-body">
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 8 }}>
+                  <span style={{ fontSize: 30, fontWeight: 800, color: "var(--ember)" }}>{nextRace.days_away}</span>
+                  <span>{nextRace.days_away === 1 ? "day to go" : "days to go"}</span>
+                </div>
+                {nextRace.target_date && <div style={{ marginBottom: 6 }}>Race day · {freshDate(nextRace.target_date)}</div>}
+                <div style={{ color: racePhase(nextRace.days_away).color, fontWeight: 600 }}>{racePhase(nextRace.days_away).label}</div>
+              </div>
+            )}
+          </Sheet>
         </>
       )}
     </Screen>
