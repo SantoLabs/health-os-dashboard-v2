@@ -414,3 +414,70 @@ html, body {
 /* section label (scoped) */
 .trainv2 .eyebrow { font-size:10.5px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--muted); margin:16px 2px 9px; display:block; }
 
+
+/* ==================== StriveOS Phase 1 — Today ==================== */
+.today-greet { padding: 4px 4px 0; font-size: 26px; font-weight: 800; letter-spacing: -0.03em; color: var(--text); }
+.today-date { padding: 2px 4px 16px; font-size: 14px; color: var(--muted); }
+
+.rd-card { background: var(--surface); border-radius: var(--r-lg); padding: 22px; box-shadow: var(--shadow-card); border: 1px solid var(--line); margin-bottom: 14px; }
+.rd-top { display: flex; align-items: center; gap: 18px; }
+.rd-ring { position: relative; width: 104px; height: 104px; flex: none; }
+.rd-ring svg { width: 104px; height: 104px; transform: rotate(-90deg); display: block; }
+.rd-ring-num { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.rd-ring-score { font-size: 32px; font-weight: 800; letter-spacing: -0.03em; color: var(--text); font-variant-numeric: tabular-nums; line-height: 1; }
+.rd-ring-cap { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; color: var(--muted); text-transform: uppercase; margin-top: 3px; }
+.rd-textwrap { display: flex; flex-direction: column; gap: 6px; }
+.rd-label { font-size: 18px; font-weight: 800; color: var(--text); }
+.rd-verdict { font-size: 13.5px; color: var(--text-2); line-height: 1.5; }
+
+.kai-inset { margin-top: 16px; background: var(--surface-3); border-radius: var(--r-md); padding: 15px; display: flex; gap: 12px; align-items: flex-start; }
+.kai-k { width: 30px; height: 30px; border-radius: 999px; background: var(--ember); flex: none; display: flex; align-items: center; justify-content: center; color: var(--on-ember); font-size: 12px; font-weight: 800; }
+.kai-note { font-size: 13px; line-height: 1.55; color: var(--text-2); }
+.kai-note b { color: var(--text); font-weight: 700; }
+.kai-chips { display: flex; gap: 8px; margin-top: 13px; flex-wrap: wrap; }
+.kai-chip { font-size: 12.5px; font-weight: 600; color: var(--ember-strong); background: var(--ember-tint); border: none; border-radius: 999px; padding: 8px 14px; cursor: pointer; font-family: inherit; }
+
+.race-strip { width: 100%; text-align: left; background: var(--inverse-surface); color: var(--on-inverse); border: none; border-radius: var(--r-card); padding: 17px 20px; display: flex; align-items: center; gap: 15px; margin-bottom: 14px; cursor: pointer; font-family: inherit; }
+.rs-icon { flex: none; }
+.rs-body { flex: 1; display: flex; flex-direction: column; gap: 2px; text-align: left; }
+.rs-title { font-size: 15px; font-weight: 700; }
+.rs-sub { font-size: 12.5px; opacity: 0.72; }
+.rs-chev { flex: none; opacity: 0.7; }
+
+.mood-card { background: var(--surface); border-radius: var(--r-card); border: 1px solid var(--line); padding: 16px 18px; margin-bottom: 14px; }
+.mood-q { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 12px; }
+.mood-seg { display: flex; background: var(--surface-2); border-radius: var(--r-sm); padding: 4px; gap: 4px; }
+.mood-opt { flex: 1; text-align: center; padding: 9px 0; font-size: 12.5px; font-weight: 600; color: var(--muted); background: none; border: none; border-radius: 11px; cursor: pointer; font-family: inherit; transition: color .12s, background .12s; }
+.mood-opt.on { color: var(--on-ember); background: var(--ember); font-weight: 700; box-shadow: 0 3px 8px rgba(217, 111, 78, 0.3); }
+.mood-opt:disabled { cursor: default; }
+
+.plan-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+.plan-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); padding: 15px; }
+.plan-head { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 7px; }
+.plan-body { font-size: 12.5px; color: var(--text-2); line-height: 1.5; }
+
+.sleep-nudge2 { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 12px 14px; font-size: 13px; color: var(--text-2); margin-bottom: 14px; display: flex; gap: 8px; align-items: flex-start; line-height: 1.5; }
+
+.today-sec { display: flex; align-items: baseline; justify-content: space-between; margin: 4px 4px 10px; }
+.today-sec-t { font-size: 15px; font-weight: 700; color: var(--text); }
+.today-sec-s { font-size: 12px; color: var(--faint); }
+
+.fx-card { background: var(--surface); border-radius: var(--r-card); border: 1px solid var(--line); overflow: hidden; margin-bottom: 14px; }
+.fx-row { display: flex; align-items: center; gap: 14px; padding: 15px 18px; border: none; border-bottom: 1px solid var(--line); width: 100%; background: none; cursor: pointer; text-align: left; font-family: inherit; }
+.fx-row:last-child { border-bottom: none; }
+.fx-emoji { font-size: 18px; width: 22px; text-align: center; flex: none; }
+.fx-name { flex: 1; font-size: 14.5px; font-weight: 600; color: var(--text); }
+.fx-val { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.fx-chev { color: var(--faint); flex: none; }
+.fx-more { width: 100%; padding: 14px; background: none; border: none; color: var(--ember-strong); font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+
+/* 2b bottom sheet */
+.sheet-back { position: fixed; inset: 0; background: rgba(20, 14, 10, 0.44); z-index: 200; display: flex; align-items: flex-end; justify-content: center; animation: sheet-fade 0.18s ease; }
+.sheet-panel { width: 100%; max-width: 480px; background: var(--surface); border-radius: 28px 28px 0 0; padding: 10px 20px max(20px, env(safe-area-inset-bottom)); box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.28); animation: sheet-up 0.24s cubic-bezier(0.22, 1, 0.36, 1); max-height: 86vh; overflow-y: auto; }
+.sheet-handle { width: 38px; height: 4px; border-radius: 999px; background: var(--line-2); margin: 6px auto 14px; }
+.sheet-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.sheet-title { flex: 1; font-size: 17px; font-weight: 800; color: var(--text); }
+.sheet-x { width: 30px; height: 30px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text-2); font-size: 16px; line-height: 1; cursor: pointer; flex: none; }
+.sheet-body { font-size: 13.5px; color: var(--text-2); line-height: 1.55; }
+@keyframes sheet-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
