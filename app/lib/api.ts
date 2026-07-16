@@ -123,6 +123,16 @@ export async function insights(): Promise<TrnInsightsResp> {
   return res.json();
 }
 
+// ---- strength guidance (Phase 5 U2: endurance-aware autoregulation) ----
+export type StrGuidanceSignal = { key: string; label: string; tone: "good" | "warn" | "bad" | "neutral" };
+export type StrGuidanceLift = { title: string; muscle_group: string | null; last_date: string; last_weight: number; last_reps: number; last_sets: number; trend: "up" | "flat" | "down"; suggestion: string };
+export type StrGuidance = { ok: boolean; generated_at: string; verdict: "push" | "maintain" | "ease"; verdict_label: string; verdict_why: string; signals: StrGuidanceSignal[]; lifts: StrGuidanceLift[]; subjective_ready: boolean; note: string };
+export async function strengthGuidance(): Promise<StrGuidance> {
+  const res = await authedFetch(`/functions/v1/strength-guidance?api=guidance`);
+  if (!res.ok) throw new Error(`Couldn't load strength guidance (${res.status})`);
+  return res.json();
+}
+
 // ---- health-coach (legacy basic Q&A — superseded by the Kai coach below) ----
 export async function coachAsk(
   question: string,
