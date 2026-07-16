@@ -107,10 +107,10 @@ export async function trainingLoad(days = 120): Promise<TrnLoadResp> {
 }
 
 // ---- insights (Phase 5: pattern surfacing) ----
-export type TrnInsightBucket = { label: string; n: number; value: number; best: boolean };
+export type TrnInsightBucket = { label: string; n: number; value: number; best: boolean; disp?: string };
 export type TrnInsight = {
   id: string; sport: string; title: string; headline: string;
-  metric_label: string; unit: string;
+  metric_label: string; unit: string; scale_caption: string;
   buckets: TrnInsightBucket[];
   stat: { n: number; r: number; effect: string };
   confidence: "strong" | "moderate" | "weak" | "insufficient";
