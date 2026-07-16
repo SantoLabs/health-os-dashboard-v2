@@ -8,6 +8,7 @@ const INT: Record<string, { label: string; bg: string; fg: string }> = {
   ease: { label: "Easy", bg: "rgba(255,181,71,0.15)", fg: "#ffb547" },
 };
 const TONE: Record<string, string> = { good: "#34d399", warn: "#ffb547", bad: "#fb7185", neutral: "#8a90a6" };
+const FEELS: { k: string; label: string }[] = [{ k: "fresh", label: "Fresh" }, { k: "normal", label: "Normal" }, { k: "beat", label: "Beat" }];
 
 const SWAP_REASONS = ["Feeling fresh", "Want variety", "Prefer this today", "Coach pick felt off"];
 const DECLINE_REASONS = ["Too tired", "Need rest", "Short on time", "Active enough today"];
@@ -37,6 +38,8 @@ export default function TodaySuggestion({ onStartPlan }: { onStartPlan: (planId:
   const [pending, setPending] = useState<Pending>(null);
   const [working, setWorking] = useState(false);
   const [declined, setDeclined] = useState(false);
+  const [feel, setFeel] = useState<string | null>(null);
+  const [feeling, setFeeling] = useState(false);
 
   useEffect(() => {
     let a = true;
@@ -50,11 +53,21 @@ export default function TodaySuggestion({ onStartPlan }: { onStartPlan: (planId:
     if (!d || !d.workout || swapOpen) return;
     setBusy(true); setCErr(null);
     try {
-      const r = await strengthCommitSuggestion({ workout: d.workout, why: d.why, label: d.label });
+      const r = await strengthCommitSuggestion({ workout: d.workout, why: d.why, label: d.label, feel: feel || undefined });
       if (r.plan_id) onStartPlan(r.plan_id);
       else setCErr("Couldn't start — try again.");
     } catch { setCErr("Couldn't start — try again."); }
     finally { setBusy(false); }
+  }
+
+  async function pickFeel(f: string) {
+    if (!d || feeling) return;
+    setFeeling(true); setCErr(null);
+    try {
+      const nx = await strengthSuggest(d.forced ? d.split : undefined, f);
+      setFeel(f); setD(nx);
+    } catch { /* keep current */ }
+    finally { setFeeling(false); }
   }
 
   async function chooseReason(reason: string) {
@@ -63,7 +76,7 @@ export default function TodaySuggestion({ onStartPlan }: { onStartPlan: (planId:
     try {
       if (pending.kind === "swap") {
         await strengthSwap({ action: "swap", from_split: d.split, to_split: pending.to, reason });
-        const nx = await strengthSuggest(pending.to);
+        const nx = await strengthSuggest(pending.to, feel || undefined);
         setD(nx); setSwapOpen(false); setPending(null);
       } else {
         await strengthSwap({ action: "decline", from_split: d.split, reason });
@@ -127,6 +140,19 @@ export default function TodaySuggestion({ onStartPlan }: { onStartPlan: (planId:
             ))}
           </div>
         )}
+
+        <div onClick={stop} style={{ marginTop: 11, display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+          <span className="subtle tiny">Feeling today?</span>
+          {FEELS.map((f) => {
+            const on = feel === f.k;
+            return (
+              <button key={f.k} disabled={feeling} onClick={() => pickFeel(f.k)}
+                style={{ fontSize: 11.5, fontWeight: 700, padding: "4px 11px", borderRadius: 999, border: `1px solid ${on ? "rgba(162,116,255,0.6)" : "rgba(255,255,255,0.14)"}`, background: on ? "rgba(139,124,246,0.22)" : "transparent", color: on ? "#c9b6ff" : "#9aa0b4", cursor: feeling ? "default" : "pointer" }}>{f.label}</button>
+            );
+          })}
+          {feeling && <span className="subtle tiny" style={{ opacity: 0.8 }}>updating…</span>}
+        </div>
+
         {cErr && <div className="subtle tiny" style={{ color: "#fb7185", marginTop: 6 }}>{cErr}</div>}
 
         {!swapOpen ? (
