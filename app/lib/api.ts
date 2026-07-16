@@ -365,6 +365,15 @@ export async function coachExplain(metric: string, value?: string | number): Pro
   if (!res.ok) throw new Error(`Couldn't explain that (${res.status})`);
   return res.json();
 }
+export type ReadinessContribution = { key: string; label: string; points: number; dir: "up" | "down" };
+export type ReadinessWhy = { score: number | null; base_score: number | null; mood_adj: number; label: string | null; contributions: ReadinessContribution[]; reasoning: string };
+// GET signed per-signal contributions to today's readiness + a short reasoning line.
+export async function readinessWhy(): Promise<ReadinessWhy> {
+  const res = await authedFetch(`/functions/v1/readiness-why`);
+  if (!res.ok) throw new Error(`Couldn't load readiness breakdown (${res.status})`);
+  return res.json();
+}
+
 export type KaiSavedInsight = { id: string; title?: string; body: string; pinned?: boolean; message_id?: string; thread_id?: string; created_at?: string };
 export async function coachInsights(): Promise<{ insights: KaiSavedInsight[] }> {
   const res = await authedFetch(`${AUX}?api=insights`);
