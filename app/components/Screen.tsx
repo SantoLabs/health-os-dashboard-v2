@@ -3,6 +3,8 @@
 import { ReactNode } from "react";
 import RefreshButton from "./RefreshButton";
 import NotificationBell from "./NotificationBell";
+import StriveMark from "./StriveMark";
+import ThemeToggle from "./ThemeToggle";
 
 export function Screen({
   title,
@@ -22,10 +24,11 @@ export function Screen({
     <div className="app">
       <header className="topbar">
         <div className="brand-wrap">
-          <span className="brand-logo" aria-hidden>🏃</span>
-          <span className="brand">Health OS</span>
+          <StriveMark />
+          <span className="strive-word">Strive<span className="os">OS</span></span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+          <ThemeToggle />
           <NotificationBell />
           <RefreshButton />
         </div>
