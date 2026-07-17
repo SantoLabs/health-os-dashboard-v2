@@ -9,12 +9,12 @@ import type { WeekDay, ComposeWorkout, ComposeStep, ComposeLoop, ComposeTarget }
 // deterministic guardrail layer that keeps it sound (a rest day, no stacked hard days, no hard-after-long).
 // The week persists so reopening shows the same plan; commit writes it into your schedule in one go.
 
-const GRAD = "linear-gradient(135deg,#5f7dff,#a274ff)";
+const GRAD = "linear-gradient(135deg,var(--ember),var(--ember-strong))";
 const EXAMPLES = ["Balanced 5-day week", "Easy base week, low intensity", "3 runs + 2 rides, one long day", "Beginner week, 4 days"];
 const ROLE_COLOR: Record<string, string> = {
-  recovery: "#6fae8f", easy: "#6fae8f", endurance: "#6fb0d6", technique: "#6fb0d6",
-  tempo: "#e0b15a", threshold: "#e08a5a", intervals: "#e06a6a", vo2: "#e06a6a", rep: "#e06a6a",
-  long: "#a274ff", brick: "#a274ff", strength: "#9aa0b5", rest: "#6b7180",
+  recovery: "var(--success)", easy: "var(--success)", endurance: "#6fb0d6", technique: "#6fb0d6",
+  tempo: "var(--gold)", threshold: "var(--ember)", intervals: "var(--danger)", vo2: "var(--danger)", rep: "var(--danger)",
+  long: "var(--ember-strong)", brick: "var(--ember-strong)", strength: "var(--muted)", rest: "var(--muted)",
 };
 
 function pace(s: number): string { const m = Math.floor(s / 60); const r = Math.round(s % 60); return `${m}:${String(r).padStart(2, "0")}`; }
@@ -104,7 +104,7 @@ export default function WeekPanel() {
         placeholder="e.g. balanced 5-day week, I've got a bike and pool plus I run, easing back into structure"
         rows={2}
         disabled={busy}
-        style={{ width: "100%", boxSizing: "border-box", marginTop: 10, background: "rgba(255,255,255,0.04)", color: "inherit", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: 10, fontSize: 13, resize: "vertical", fontFamily: "inherit" }}
+        style={{ width: "100%", boxSizing: "border-box", marginTop: 10, background: "var(--surface-2)", color: "inherit", border: "1px solid var(--line)", borderRadius: 8, padding: 10, fontSize: 13, resize: "vertical", fontFamily: "inherit" }}
       />
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
         {EXAMPLES.map((ex) => <button key={ex} className="trn-sub" disabled={busy} onClick={() => { setText(ex); run(ex); }}>{ex}</button>)}
@@ -115,18 +115,18 @@ export default function WeekPanel() {
         </button>
       </div>
 
-      {err ? <div className="tiny" style={{ marginTop: 10, color: "#ff8a8a" }}>{err}</div> : null}
+      {err ? <div className="tiny" style={{ marginTop: 10, color: "var(--danger)" }}>{err}</div> : null}
 
       {days ? (
-        <div style={{ marginTop: 12, padding: 12, borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+        <div style={{ marginTop: 12, padding: 12, borderRadius: 12, background: "var(--surface-2)", border: "1px solid var(--line)" }}>
           {weekStart ? <div className="tiny" style={{ opacity: 0.55, marginBottom: 8 }}>Week of {weekLabel(weekStart)}</div> : null}
 
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {days.map((d) => {
-              const color = ROLE_COLOR[(d.role || "").toLowerCase()] || "#8a90a3";
+              const color = ROLE_COLOR[(d.role || "").toLowerCase()] || "var(--muted)";
               const hl = d.rest ? "" : d.strength ? "Supportive strength" : headline(d.workout);
               return (
-                <div key={d.day_offset} style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "5px 0", opacity: d.rest ? 0.55 : 1, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                <div key={d.day_offset} style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "5px 0", opacity: d.rest ? 0.55 : 1, borderBottom: "1px solid var(--line)" }}>
                   <div className="tiny" style={{ width: 30, opacity: 0.6, fontWeight: 700 }}>{dow(d.session_date)}</div>
                   <div style={{ width: 7, height: 7, borderRadius: 4, background: color, flexShrink: 0, transform: "translateY(1px)" }} />
                   <div style={{ flex: 1, fontSize: 13 }}>
@@ -145,10 +145,10 @@ export default function WeekPanel() {
           </div>
 
           {weekWhy ? <div className="subtle tiny" style={{ marginTop: 10, lineHeight: 1.5, fontStyle: "italic" }}>“{weekWhy}”</div> : null}
-          {repairs.map((r, j) => <div key={j} className="tiny" style={{ marginTop: 6, color: "#8ab4ff" }}>↺ {r}</div>)}
+          {repairs.map((r, j) => <div key={j} className="tiny" style={{ marginTop: 6, color: "var(--ember)" }}>↺ {r}</div>)}
 
           {done ? (
-            <div className="tiny" style={{ marginTop: 12, color: "#79e0a8", fontWeight: 700 }}>✓ {done}</div>
+            <div className="tiny" style={{ marginTop: 12, color: "var(--success)", fontWeight: 700 }}>✓ {done}</div>
           ) : (
             <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
               <button disabled={busy} onClick={commit} style={{ flex: 1, padding: 10, borderRadius: 10, border: "none", cursor: "pointer", color: "#fff", fontWeight: 700, fontSize: 12, background: GRAD }}>{busy ? "Adding…" : "Add week to schedule"}</button>
