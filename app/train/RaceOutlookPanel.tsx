@@ -9,7 +9,7 @@ import type { RaceGoal, RaceOutlookResp, PredLeg, PacingLeg, RaceFuel } from "..
 // (+open-water), tri = legs + transitions — with a confidence range, an even/negative-split pacing plan,
 // and Kai's honest read of the runway. Not grade-adjusted (no per-point course elevation).
 
-const GRAD = "linear-gradient(135deg,#5f7dff,#a274ff)";
+const GRAD = "linear-gradient(135deg,var(--ember),var(--ember-strong))";
 const SPORT: Record<string, { label: string; color: string }> = {
   swim: { label: "Swim", color: "#5aa9e0" },
   bike: { label: "Bike", color: "#e0a15a" },
@@ -33,9 +33,9 @@ function legPace(l: PredLeg | PacingLeg, val?: number): string {
 }
 function fmtDate(iso?: string): string { return iso ? new Date(iso + "T00:00:00Z").toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" }) : ""; }
 const TREND: Record<string, { icon: string; color: string; label: string }> = {
-  improving: { icon: "↗", color: "#79e0a8", label: "fitness trending up" },
-  sliding: { icon: "↘", color: "#ffca7a", label: "fitness slipping lately" },
-  steady: { icon: "→", color: "#8ab4ff", label: "fitness steady" },
+  improving: { icon: "↗", color: "var(--success)", label: "fitness trending up" },
+  sliding: { icon: "↘", color: "var(--gold)", label: "fitness slipping lately" },
+  steady: { icon: "→", color: "var(--ember)", label: "fitness steady" },
 };
 
 export default function RaceOutlookPanel() {
@@ -92,18 +92,18 @@ export default function RaceOutlookPanel() {
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
           {races.map((r) => (
             <button key={r.id} className="trn-sub" onClick={() => pick(r.id)} disabled={busy}
-              style={sel === r.id ? { background: "rgba(121,224,168,0.12)", border: "1px solid rgba(121,224,168,0.35)", color: "#cfeede" } : undefined}>
+              style={sel === r.id ? { background: "color-mix(in srgb, var(--ember) 12%, transparent)", border: "1px solid color-mix(in srgb, var(--ember) 35%, transparent)", color: "var(--ember-strong)" } : undefined}>
               {r.label}
             </button>
           ))}
         </div>
       ) : null}
 
-      {err ? <div className="tiny" style={{ marginTop: 12, color: "#ff8a8a" }}>{err} · <button className="trn-sub" onClick={() => sel && loadOutlook(sel)}>retry</button></div> : null}
+      {err ? <div className="tiny" style={{ marginTop: 12, color: "var(--danger)" }}>{err} · <button className="trn-sub" onClick={() => sel && loadOutlook(sel)}>retry</button></div> : null}
       {busy && !data ? <div className="subtle tiny" style={{ marginTop: 12 }}>Kai is crunching your numbers…</div> : null}
 
       {pred ? (
-        <div style={{ marginTop: 12, padding: 14, borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+        <div style={{ marginTop: 12, padding: 14, borderRadius: 12, background: "var(--surface-2)", border: "1px solid var(--line)" }}>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
             <div>
               <div className="tiny subtle" style={{ textTransform: "uppercase", letterSpacing: 0.4, fontWeight: 700 }}>Predicted finish</div>
@@ -120,9 +120,9 @@ export default function RaceOutlookPanel() {
           {pred.legs && pred.legs.length > 1 ? (
             <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 4 }}>
               {pred.legs.map((l, i) => {
-                const sp = SPORT[l.sport] || { label: l.sport, color: "#8a90a3" };
+                const sp = SPORT[l.sport] || { label: l.sport, color: "var(--muted)" };
                 return (
-                  <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "5px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                  <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "5px 0", borderBottom: "1px solid var(--line)" }}>
                     <div style={{ width: 8, height: 8, borderRadius: 4, background: sp.color, flexShrink: 0, transform: "translateY(1px)" }} />
                     <div style={{ width: 44, fontSize: 13, fontWeight: 600 }}>{sp.label}</div>
                     <div style={{ flex: 1, fontSize: 13 }}>
@@ -139,10 +139,10 @@ export default function RaceOutlookPanel() {
           {data?.narrative ? <div className="subtle tiny" style={{ marginTop: 12, lineHeight: 1.55, fontStyle: "italic" }}>“{data.narrative}”</div> : null}
 
           {pacing && pacing.legs.length > 0 ? (
-            <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+            <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--line)" }}>
               <div className="tiny subtle" style={{ fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 6 }}>Pacing plan</div>
               {pacing.legs.map((l, i) => {
-                const sp = SPORT[l.sport] || { label: l.sport, color: "#8a90a3" };
+                const sp = SPORT[l.sport] || { label: l.sport, color: "var(--muted)" };
                 return (
                   <div key={i} className="tiny" style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "3px 0" }}>
                     <span style={{ width: 44, color: sp.color, fontWeight: 700 }}>{sp.label}</span>
@@ -158,18 +158,18 @@ export default function RaceOutlookPanel() {
           ) : null}
 
           {fuel && fuel.ok ? (
-            <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+            <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--line)" }}>
               <div className="tiny subtle" style={{ fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", marginBottom: 7 }}>Race-day fuelling</div>
               {fuel.carb_load ? (
                 <div className="tiny" style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "2px 0" }}>
-                  <span style={{ width: 96, color: "#ffb547", fontWeight: 700 }}>Carb-load</span>
+                  <span style={{ width: 96, color: "var(--gold)", fontWeight: 700 }}>Carb-load</span>
                   <span style={{ opacity: 0.9 }}>~{fuel.carb_load.grams} g/day</span>
                   <span style={{ opacity: 0.55 }}>· {fuel.carb_load.window.toLowerCase()}</span>
                 </div>
               ) : null}
               {fuel.race_morning ? (
                 <div className="tiny" style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "2px 0" }}>
-                  <span style={{ width: 96, color: "#ffb547", fontWeight: 700 }}>Race morning</span>
+                  <span style={{ width: 96, color: "var(--gold)", fontWeight: 700 }}>Race morning</span>
                   <span style={{ opacity: 0.9 }}>~{fuel.race_morning.grams} g</span>
                   <span style={{ opacity: 0.55 }}>· {fuel.race_morning.window}</span>
                 </div>
@@ -178,7 +178,7 @@ export default function RaceOutlookPanel() {
                 <div style={{ marginTop: 7 }}>
                   <div className="tiny subtle" style={{ opacity: 0.6, marginBottom: 3 }}>On course</div>
                   {(fuel.on_course || []).map((lg, i) => {
-                    const sp = SPORT[lg.leg.toLowerCase()] || { label: lg.leg, color: "#8a90a3" };
+                    const sp = SPORT[lg.leg.toLowerCase()] || { label: lg.leg, color: "var(--muted)" };
                     return (
                       <div key={i} className="tiny" style={{ padding: "3px 0" }}>
                         <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
