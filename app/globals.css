@@ -282,7 +282,7 @@ html, body {
 /* ===================== Training revamp v2 ===================== */
 .trainv2 {
   --t-indigo:var(--ember); --t-violet:var(--ember-strong);
-  --t-grad:linear-gradient(135deg,var(--ember),var(--ember-strong));
+  --t-grad:linear-gradient(135deg,#e8956f,#d96f4e);
   --t-green:var(--success); --t-amber:var(--gold); --t-coral:var(--danger); --t-cyan:#3ec8e6;
   --t-surf2:var(--surface-2); --t-surf3:var(--surface-3); --t-line2:var(--line-2);
   --z1:#5b6573; --z2:#4a9bff; --z3:#34d6a4; --z4:#ffb547; --z5:#ff5e5e;
