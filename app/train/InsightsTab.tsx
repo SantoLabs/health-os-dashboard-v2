@@ -3,10 +3,10 @@ import { useEffect, useState } from "react";
 import { insights, type TrnInsight, type TrnInsightsResp } from "../lib/api";
 
 const CONF: Record<string, { label: string; bg: string; fg: string }> = {
-  strong: { label: "Strong signal", bg: "rgba(74,222,128,0.15)", fg: "#4ade80" },
-  moderate: { label: "Moderate signal", bg: "rgba(95,125,255,0.15)", fg: "#9db0ff" },
-  weak: { label: "Weak signal", bg: "rgba(255,181,71,0.15)", fg: "#ffb547" },
-  insufficient: { label: "Not enough data", bg: "rgba(255,255,255,0.07)", fg: "#8a90a6" },
+  strong: { label: "Strong signal", bg: "color-mix(in srgb, var(--success) 15%, transparent)", fg: "var(--success)" },
+  moderate: { label: "Moderate signal", bg: "color-mix(in srgb, var(--ember) 15%, transparent)", fg: "var(--ember)" },
+  weak: { label: "Weak signal", bg: "color-mix(in srgb, var(--gold) 15%, transparent)", fg: "var(--gold)" },
+  insufficient: { label: "Not enough data", bg: "var(--surface-2)", fg: "var(--muted)" },
 };
 
 function Bars({ ins }: { ins: TrnInsight }) {
@@ -20,15 +20,15 @@ function Bars({ ins }: { ins: TrnInsight }) {
         const w = ((b.value - min) / span) * 100;
         return (
           <div key={b.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 92, flexShrink: 0, textAlign: "right", fontSize: 12, fontWeight: b.best ? 700 : 500, color: b.best ? "#c9b6ff" : "#8a90a6" }}>{b.label}</div>
-            <div style={{ flex: 1, height: 16, background: "rgba(255,255,255,0.05)", borderRadius: 6, overflow: "hidden" }}>
-              <div style={{ width: `${Math.max(w, 3)}%`, height: "100%", borderRadius: 6, background: b.best ? "linear-gradient(135deg,#5f7dff,#a274ff)" : "rgba(255,255,255,0.18)" }} />
+            <div style={{ width: 92, flexShrink: 0, textAlign: "right", fontSize: 12, fontWeight: b.best ? 700 : 500, color: b.best ? "var(--ember)" : "var(--muted)" }}>{b.label}</div>
+            <div style={{ flex: 1, height: 16, background: "var(--surface-2)", borderRadius: 6, overflow: "hidden" }}>
+              <div style={{ width: `${Math.max(w, 3)}%`, height: "100%", borderRadius: 6, background: b.best ? "var(--t-grad)" : "var(--muted)" }} />
             </div>
-            <div style={{ width: 66, flexShrink: 0, textAlign: "right", fontSize: 11.5, color: b.value >= 0 ? "#cdd3e6" : "#8a90a6" }}>{b.disp ?? `${b.value > 0 ? "+" : ""}${b.value} ${ins.unit}`}</div>
+            <div style={{ width: 66, flexShrink: 0, textAlign: "right", fontSize: 11.5, color: b.value >= 0 ? "var(--text-2)" : "var(--muted)" }}>{b.disp ?? `${b.value > 0 ? "+" : ""}${b.value} ${ins.unit}`}</div>
           </div>
         );
       })}
-      <div style={{ fontSize: 10.5, color: "#6b7086", textAlign: "right", marginTop: 2 }}>{ins.scale_caption}</div>
+      <div style={{ fontSize: 10.5, color: "var(--muted)", textAlign: "right", marginTop: 2 }}>{ins.scale_caption}</div>
     </div>
   );
 }
@@ -44,8 +44,8 @@ function InsightCard({ ins }: { ins: TrnInsight }) {
       <div style={{ fontSize: 15.5, fontWeight: 700, margin: "6px 0 2px" }}>{ins.headline}</div>
       <div className="subtle tiny">{ins.metric_label}</div>
       <Bars ins={ins} />
-      <div style={{ fontSize: 12.5, color: "#cdd3e6", marginTop: 6 }}>{ins.stat.effect} <span className="subtle">&middot; n {ins.stat.n} &middot; r {ins.stat.r}</span></div>
-      {ins.kai && <div style={{ fontSize: 12.5, color: "#c9b6ff", marginTop: 6, fontStyle: "italic" }}>Kai: {ins.kai}</div>}
+      <div style={{ fontSize: 12.5, color: "var(--text-2)", marginTop: 6 }}>{ins.stat.effect} <span className="subtle">&middot; n {ins.stat.n} &middot; r {ins.stat.r}</span></div>
+      {ins.kai && <div style={{ fontSize: 12.5, color: "var(--ember)", marginTop: 6, fontStyle: "italic" }}>Kai: {ins.kai}</div>}
       <div className="subtle tiny" style={{ marginTop: 6, lineHeight: 1.4 }}>{ins.note}</div>
     </div>
   );
