@@ -643,7 +643,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
       <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "var(--bg)", display: "flex", flexDirection: "column" }}>
         <div style={{ borderBottom: "1px solid var(--line)", background: "var(--bg)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", width: "100%", maxWidth: 480, margin: "0 auto" }}>
-            <button onClick={() => { if (editSessionId) { onExitEdit?.(); } else { setView("home"); loadHome(); } }} aria-label="Back" style={{ width: 34, height: 34, borderRadius: 9, flex: "0 0 auto", cursor: "pointer", background: "var(--surface-2)", border: "1px solid var(--line)", color: "#fff", fontSize: 20, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
+            <button onClick={() => { if (editSessionId) { onExitEdit?.(); } else { setView("home"); loadHome(); } }} aria-label="Back" style={{ width: 34, height: 34, borderRadius: 9, flex: "0 0 auto", cursor: "pointer", background: "var(--surface-2)", border: "1px solid var(--line)", color: "var(--text)", fontSize: 20, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
             {titleEdit !== null ? (
               <input autoFocus value={titleEdit} onChange={(e) => setTitleEdit(e.target.value)} onBlur={saveTitle} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} style={{ flex: 1, minWidth: 0, background: "var(--surface-2)", color: "inherit", border: "1px solid var(--line)", borderRadius: 8, padding: "7px 10px", fontSize: 15, fontWeight: 800, fontFamily: "inherit" }} />
             ) : (
@@ -651,7 +651,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
             )}
             <button onClick={() => { if (editSessionId) { doDone(); return; } const un = (bundle.sets || []).filter((x) => !x.completed && !isTemp(x.id)).length; if (done === 0) { setFinishConfirm({ type: "empty", n: 0 }); } else if (un > 0) { setFinishConfirm({ type: "partial", n: un }); } else { setFinishing(true); } }} style={btn("color-mix(in srgb, var(--success) 90%, transparent)")} disabled={busy}>{editSessionId ? "Done" : "Finish"}</button>
             <div style={{ position: "relative", flex: "0 0 auto" }}>
-              <button onClick={() => setMenuOpen((o) => !o)} aria-label="More" style={{ width: 34, height: 34, borderRadius: 9, cursor: "pointer", background: "var(--surface-2)", border: "1px solid var(--line)", color: "#fff", fontSize: 18, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>⋯</button>
+              <button onClick={() => setMenuOpen((o) => !o)} aria-label="More" style={{ width: 34, height: 34, borderRadius: 9, cursor: "pointer", background: "var(--surface-2)", border: "1px solid var(--line)", color: "var(--text)", fontSize: 18, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>⋯</button>
               {menuOpen ? (
                 <>
                   <div onClick={() => setMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 410 }} />
@@ -768,7 +768,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
                   <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{finishConfirm.n} exercise set{finishConfirm.n > 1 ? "s" : ""} without logging</div>
                   <div className="subtle tiny" style={{ marginBottom: 14 }}>They won&apos;t be saved. Finish without them?</div>
                   <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={() => setFinishConfirm(null)} style={{ flex: 1, padding: 11, borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface-2)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>No</button>
+                    <button onClick={() => setFinishConfirm(null)} style={{ flex: 1, padding: 11, borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface-2)", color: "var(--text)", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>No</button>
                     <button onClick={() => { setFinishConfirm(null); setFinishing(true); }} style={{ ...btn("color-mix(in srgb, var(--success) 90%, transparent)"), flex: 1, padding: 11 }}>Yes</button>
                   </div>
                 </>
@@ -855,7 +855,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
                 </div>
                 <div style={{ flex: 1, overflowY: "auto", padding: 8 }}>
                   {others.length === 0 ? <div className="subtle tiny" style={{ padding: 10 }}>Add another exercise first.</div> : others.map((x) => { const on = ssPick.includes(x.idx); return (
-                    <button key={x.idx} onClick={() => setSsPick((p) => (on ? p.filter((i) => i !== x.idx) : [...p, x.idx]))} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 10px", background: "none", border: "none", borderBottom: "1px solid var(--line)", cursor: "pointer", color: "#fff", textAlign: "left" }}>
+                    <button key={x.idx} onClick={() => setSsPick((p) => (on ? p.filter((i) => i !== x.idx) : [...p, x.idx]))} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 10px", background: "none", border: "none", borderBottom: "1px solid var(--line)", cursor: "pointer", color: "var(--text)", textAlign: "left" }}>
                       <span style={{ width: 20, height: 20, borderRadius: 6, flex: "0 0 auto", border: on ? "none" : "1px solid var(--line)", background: on ? col : "transparent", color: "#04110a", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>{on ? "✓" : ""}</span>
                       <span style={{ fontSize: 14, fontWeight: 600, flex: 1, minWidth: 0 }}>{x.name}</span>
                       {x.ssg != null && x.ssg !== existing ? <span className="subtle tiny" style={{ flex: "0 0 auto" }}>in another</span> : null}
@@ -863,7 +863,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
                   ); })}
                 </div>
                 <div style={{ padding: 12, borderTop: "1px solid var(--line)", display: "flex", gap: 8 }}>
-                  <button onClick={() => { setSsFor(null); setSsPick([]); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface-2)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                  <button onClick={() => { setSsFor(null); setSsPick([]); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface-2)", color: "var(--text)", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Cancel</button>
                   <button disabled={ssPick.length === 0} onClick={() => { groupTogether(ssFor, ssPick); setSsFor(null); setSsPick([]); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "none", background: ssPick.length ? col : "var(--surface-2)", color: ssPick.length ? "#04110a" : "var(--muted)", fontWeight: 800, fontSize: 13, cursor: ssPick.length ? "pointer" : "default" }}>{existing != null ? "Update superset" : "Create superset"}</button>
                 </div>
               </div>
@@ -1183,7 +1183,7 @@ function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExi
               </div>
               <div style={{ flex: 1, overflowY: "auto", padding: 8 }}>
                 {items.map((x, j) => { if (j === ssFor) return null; const on = ssPick.includes(j); return (
-                  <button key={j} onClick={() => setSsPick((p) => (on ? p.filter((k) => k !== j) : [...p, j]))} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 10px", background: "none", border: "none", borderBottom: "1px solid var(--line)", cursor: "pointer", color: "#fff", textAlign: "left" }}>
+                  <button key={j} onClick={() => setSsPick((p) => (on ? p.filter((k) => k !== j) : [...p, j]))} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 10px", background: "none", border: "none", borderBottom: "1px solid var(--line)", cursor: "pointer", color: "var(--text)", textAlign: "left" }}>
                     <span style={{ width: 20, height: 20, borderRadius: 6, flex: "0 0 auto", border: on ? "none" : "1px solid var(--line)", background: on ? col : "transparent", color: "#04110a", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>{on ? "✓" : ""}</span>
                     <span style={{ fontSize: 14, fontWeight: 600, flex: 1, minWidth: 0 }}>{x.exercise_name}</span>
                     {x.superset_group != null && x.superset_group !== existing ? <span className="subtle tiny" style={{ flex: "0 0 auto" }}>in another</span> : null}
@@ -1191,7 +1191,7 @@ function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExi
                 ); })}
               </div>
               <div style={{ padding: 12, borderTop: "1px solid var(--line)", display: "flex", gap: 8 }}>
-                <button onClick={() => { setSsFor(null); setSsPick([]); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface-2)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                <button onClick={() => { setSsFor(null); setSsPick([]); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface-2)", color: "var(--text)", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Cancel</button>
                 <button disabled={ssPick.length === 0} onClick={() => { bGroupTogether(ssFor, ssPick); setSsFor(null); setSsPick([]); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "none", background: ssPick.length ? col : "var(--surface-2)", color: ssPick.length ? "#04110a" : "var(--muted)", fontWeight: 800, fontSize: 13, cursor: ssPick.length ? "pointer" : "default" }}>{existing != null ? "Update superset" : "Create superset"}</button>
               </div>
             </div>
