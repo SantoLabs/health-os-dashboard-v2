@@ -11,7 +11,7 @@ import type { ComposeWorkout, ComposeValidator, ComposeStep, ComposeLoop, Compos
 // then Add to plan (a date) or Save as a routine. The proposal persists so reopening shows the same
 // workout — no silent re-roll.
 
-const GRAD = "linear-gradient(135deg,var(--ember),var(--ember-strong))";
+const GRAD = "var(--t-grad)";
 const EXAMPLES = [
   "6×800m at 5k effort off 90s jog",
   "90min bike, 3×12min threshold",
