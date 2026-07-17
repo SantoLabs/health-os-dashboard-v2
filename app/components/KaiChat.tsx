@@ -9,12 +9,12 @@ import * as React from "react";
 import { useState, useRef, useEffect, type CSSProperties, type ReactNode } from "react";
 import { coachApply, coachUndo, coachSaveInsight, coachExplain, coachFeedback, type KaiMessage, type KaiAction, type KaiItem } from "../lib/api";
 
-export const PAGE = "#0e1320", SURF = "#161d2c", RAISED = "#1a2232", INPUTBG = "#171f2e", SUNKEN = "#0f1622";
-export const BORDER = "#232c40", BORDER_STRONG = "#2a3550", BORDER_ACCENT = "#2f4a78";
-export const H = "#f3f6fb", BODY = "#dbe3f0", SECOND = "#9fb2d0", MUTED = "#79839a", FAINT = "#6e7891", FAINTER = "#5e6678";
-export const ACCENT = "#4f9cf9", ACCENT_LT = "#7fb0ff", ACCENT_DEEP = "#2a6bd0";
+export const PAGE = "var(--bg)", SURF = "var(--surface)", RAISED = "var(--surface-2)", INPUTBG = "var(--surface-2)", SUNKEN = "var(--surface-3)";
+export const BORDER = "var(--line)", BORDER_STRONG = "var(--line-2)", BORDER_ACCENT = "var(--ember)";
+export const H = "var(--text)", BODY = "var(--text)", SECOND = "var(--text-2)", MUTED = "var(--muted)", FAINT = "var(--faint)", FAINTER = "var(--faint)";
+export const ACCENT = "var(--ember)", ACCENT_LT = "var(--ember-strong)", ACCENT_DEEP = "var(--ember-strong)";
 export const PROT = "#5b9bff", CARB = "#f3b14e", FAT = "#f0735a", FIBR = "#46c79a";
-export const USER_BG = "#284067", USER_TX = "#eaf1ff";
+export const USER_BG = "var(--ember)", USER_TX = "var(--on-ember)";
 
 const SUGGEST = [
   "Am I on track for 20% body fat by September?",
@@ -25,7 +25,7 @@ const SUGGEST = [
 
 export function KaiMark({ size = 28 }: { size?: number }) {
   return (
-    <span style={{ width: size, height: size, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center", background: "radial-gradient(circle at 30% 26%, #86b8ff, #4f9cf9 52%, #2a6bd0)", flexShrink: 0 }}>
+    <span style={{ width: size, height: size, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center", background: "radial-gradient(circle at 30% 26%, #e8956f, #d96f4e 52%, #b75a3c)", flexShrink: 0 }}>
       <svg width={size * 0.56} height={size * 0.56} viewBox="0 0 24 24" fill="none">
         <path d="M6 9c1.8-2.4 4.2-2.4 6 0s4.2 2.4 6 0" stroke="#fff" strokeWidth="2.3" strokeLinecap="round" />
         <path d="M6 14c1.8-2.4 4.2-2.4 6 0s4.2 2.4 6 0" stroke="#fff" strokeWidth="2.3" strokeLinecap="round" />
@@ -190,7 +190,7 @@ function ScheduleActionCard({ msg, onApplied, onUndone }: { msg: KaiMessage; onA
 
   if (a.status === "applied") {
     return (
-      <div style={{ marginTop: 8, borderRadius: 16, padding: 13, background: "rgba(79,156,249,.08)", border: "1px solid rgba(79,156,249,.35)" }}>
+      <div style={{ marginTop: 8, borderRadius: 16, padding: 13, background: "rgba(217,111,78,.08)", border: "1px solid rgba(217,111,78,.35)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ width: 22, height: 22, borderRadius: "50%", background: ACCENT, color: "#08182e", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 900 }}>✓</span>
           <span style={{ fontSize: 12.5, fontWeight: 700, color: H }}>Session moved</span>
@@ -210,7 +210,7 @@ function ScheduleActionCard({ msg, onApplied, onUndone }: { msg: KaiMessage; onA
   return (
     <div style={{ marginTop: 8, borderRadius: 16, padding: 13, background: RAISED, border: "1px solid " + BORDER_STRONG }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <span style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(79,156,249,.16)", color: ACCENT, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>🗓</span>
+        <span style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(217,111,78,.16)", color: ACCENT, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>🗓</span>
         <span style={{ fontSize: 13, fontWeight: 700, color: H }}>{a.title || "Reschedule session"}</span>
       </div>
 
@@ -544,7 +544,7 @@ function PlanActionCard({ msg, onApplied, onUndone }: CardProps) {
 
   if (a.status === "applied") {
     return (
-      <div style={{ marginTop: 8, borderRadius: 16, padding: 13, background: "rgba(79,156,249,.08)", border: "1px solid rgba(79,156,249,.35)" }}>
+      <div style={{ marginTop: 8, borderRadius: 16, padding: 13, background: "rgba(217,111,78,.08)", border: "1px solid rgba(217,111,78,.35)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ width: 22, height: 22, borderRadius: "50%", background: ACCENT, color: "#08182e", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 900 }}>✓</span>
           <span style={{ fontSize: 12.5, fontWeight: 700, color: H }}>Added to your schedule</span>
@@ -562,9 +562,9 @@ function PlanActionCard({ msg, onApplied, onUndone }: CardProps) {
   return (
     <div style={{ marginTop: 8, borderRadius: 16, padding: 13, background: RAISED, border: "1px solid " + BORDER_STRONG }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        <span style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(79,156,249,.16)", color: ACCENT, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>🗓</span>
+        <span style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(217,111,78,.16)", color: ACCENT, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>🗓</span>
         <span style={{ fontSize: 13, fontWeight: 700, color: H }}>{a.title || "Add to schedule"}</span>
-        {a.delta_badge?.text ? <span style={{ marginLeft: "auto", fontSize: 10.5, fontWeight: 700, color: ACCENT_LT, background: "rgba(79,156,249,.14)", borderRadius: 999, padding: "3px 9px" }}>{a.delta_badge.text}</span> : null}
+        {a.delta_badge?.text ? <span style={{ marginLeft: "auto", fontSize: 10.5, fontWeight: 700, color: ACCENT_LT, background: "rgba(217,111,78,.14)", borderRadius: 999, padding: "3px 9px" }}>{a.delta_badge.text}</span> : null}
       </div>
 
       <div style={{ background: SUNKEN, borderRadius: 12, padding: 6, display: "flex", flexDirection: "column", gap: 1 }}>
@@ -606,7 +606,7 @@ export function ActionCard(props: { msg: KaiMessage; onApplied: (m: KaiMessage) 
 }
 
 const stepBtn: CSSProperties = { width: 26, height: 26, borderRadius: 7, border: "1px solid " + BORDER, background: INPUTBG, color: SECOND, fontSize: 14, cursor: "pointer", lineHeight: 1 };
-export const primaryBtn: CSSProperties = { padding: "10px 0", borderRadius: 11, border: "none", background: ACCENT, color: "#0c1422", fontSize: 13, fontWeight: 800, cursor: "pointer" };
+export const primaryBtn: CSSProperties = { padding: "10px 0", borderRadius: 11, border: "none", background: ACCENT, color: "var(--on-ember)", fontSize: 13, fontWeight: 800, cursor: "pointer" };
 const ghostBtn: CSSProperties = { flex: 1, padding: "10px 0", borderRadius: 11, border: "1px solid " + BORDER_STRONG, background: "transparent", color: SECOND, fontSize: 13, fontWeight: 700, cursor: "pointer" };
 const errStyle: CSSProperties = { fontSize: 11, color: FAT, marginTop: 8 };
 const keptStyle: CSSProperties = { marginTop: 8, fontSize: 11.5, color: FAINT, fontStyle: "italic" };
@@ -615,8 +615,8 @@ const cardHead: CSSProperties = { display: "flex", alignItems: "center", gap: 8,
 const cardTitle: CSSProperties = { fontSize: 13, fontWeight: 700, color: H };
 const miniLabel: CSSProperties = { fontSize: 9.5, color: FAINT, textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 2 };
 const fineprint: CSSProperties = { fontSize: 10, color: FAINTER, marginTop: 8 };
-function cardIcon(color: string): CSSProperties { return { width: 24, height: 24, borderRadius: 7, background: "rgba(79,156,249,.16)", color, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13 }; }
-function badgePill(color: string): CSSProperties { return { marginLeft: "auto", fontSize: 10.5, fontWeight: 800, color, background: "rgba(91,155,255,.12)", border: "1px solid rgba(91,155,255,.3)", borderRadius: 999, padding: "3px 8px" }; }
+function cardIcon(color: string): CSSProperties { return { width: 24, height: 24, borderRadius: 7, background: "rgba(217,111,78,.16)", color, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13 }; }
+function badgePill(color: string): CSSProperties { return { marginLeft: "auto", fontSize: 10.5, fontWeight: 800, color, background: "rgba(217,111,78,.12)", border: "1px solid rgba(217,111,78,.30)", borderRadius: 999, padding: "3px 8px" }; }
 
 // ===================== Voice input (Wave 2) =====================
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -704,7 +704,7 @@ export function WhyChip({ metric, value, label = "Why?" }: { metric: string; val
   }
   return (
     <span style={{ display: "inline-block" }}>
-      <button onClick={go} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(79,156,249,.1)", border: "1px solid " + BORDER_ACCENT, color: ACCENT_LT, fontSize: 11, fontWeight: 700, borderRadius: 999, padding: "3px 9px", cursor: "pointer" }}>
+      <button onClick={go} style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(217,111,78,.1)", border: "1px solid " + BORDER_ACCENT, color: ACCENT_LT, fontSize: 11, fontWeight: 700, borderRadius: 999, padding: "3px 9px", cursor: "pointer" }}>
         <KaiMark size={13} /> {label}
       </button>
       {open ? (
@@ -783,7 +783,7 @@ export function MessageRow({ msg, onApplied, onUndone }: { msg: KaiMessage; onAp
         {Array.isArray(msg.citations) && msg.citations.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
             {msg.citations.map((c, i) => (
-              <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: SECOND, background: "#141b29", border: "1px solid #283250", borderRadius: 999, padding: "3px 8px" }}>
+              <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: SECOND, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 999, padding: "3px 8px" }}>
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: c.color }} />{c.label}
               </span>
             ))}
