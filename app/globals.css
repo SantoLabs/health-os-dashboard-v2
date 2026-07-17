@@ -432,6 +432,7 @@ html, body {
 
 .kai-inset { margin-top: 11px; background: var(--surface-3); border-radius: var(--r-md); padding: 10px; display: flex; gap: 8px; align-items: flex-start; }
 .kai-k { width: 22px; height: 22px; border-radius: 999px; background: var(--ember); flex: none; display: flex; align-items: center; justify-content: center; color: var(--on-ember); font-size: 9.5px; font-weight: 800; }
+.kai-k svg { width: 13px; height: 13px; display: block; }
 .kai-note { font-size: 11px; line-height: 1.5; color: var(--text-2); }
 .kai-note b { color: var(--text); font-weight: 700; }
 .kai-chips { display: flex; gap: 6px; margin-top: 9px; flex-wrap: wrap; }
