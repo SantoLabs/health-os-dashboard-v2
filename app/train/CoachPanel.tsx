@@ -23,6 +23,13 @@ type WeekSession = {
 
 function fmtDay(iso: string) { return new Date(iso + "T00:00:00Z").toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" }); }
 function fmtDate(iso: string) { return new Date(iso + "T00:00:00Z").toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" }); }
+function intensityColor(s: string): string {
+  const k = (s || "").toLowerCase();
+  if (/easy|recover|z1|z2/.test(k)) return "var(--success)";
+  if (/mod|tempo|z3/.test(k)) return "var(--gold)";
+  if (/hard|thresh|vo2|interval|z4|z5|rep|max/.test(k)) return "var(--danger)";
+  return "var(--muted)";
+}
 
 export default function CoachPanel() {
   const [resp, setResp] = useState<TrnProposeResp | null>(null);
@@ -93,7 +100,7 @@ export default function CoachPanel() {
           <div style={{ fontSize: 14, fontWeight: 700 }}>Kai&apos;s plan for you</div>
           <button className="trn-sub" onClick={load} disabled={loading}>{loading ? "Thinking…" : "↻ Refresh"}</button>
         </div>
-        {resp?.summary ? <div className="subtle tiny" style={{ marginTop: 6, lineHeight: 1.5 }}>{resp.summary}</div> : null}
+        {resp?.summary ? <div className="tiny" style={{ marginTop: 6, lineHeight: 1.5, color: "var(--text-2)" }}>{resp.summary}</div> : null}
         {ctx && (ctx.readiness != null || ctx.next_race) ? (
           <div className="tiny" style={{ marginTop: 6, opacity: 0.65 }}>
             {ctx.readiness != null ? `Readiness ${ctx.readiness}` : ""}
@@ -139,12 +146,13 @@ export default function CoachPanel() {
                     {wasSwapped ? <div className="tiny" style={{ marginBottom: 6, color: "var(--ember)", fontWeight: 700 }}>↺ Kai swapped this in</div> : null}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
                       <div style={{ fontWeight: 700, fontSize: 13 }}>{fmtDay(p.session_date)} · {p.is_rest_day ? "Rest" : p.session_type}</div>
-                      <div className="tiny" style={{ opacity: 0.55, whiteSpace: "nowrap" }}>
-                        {fmtDate(p.session_date)}{p.planned_duration ? ` · ${p.planned_duration}m` : ""}{p.intensity && !p.is_rest_day ? ` · ${p.intensity}` : ""}
+                      <div className="tiny" style={{ whiteSpace: "nowrap", color: "var(--muted)" }}>
+                        {fmtDate(p.session_date)}{p.planned_duration ? ` · ${p.planned_duration}m` : ""}
+                        {p.intensity && !p.is_rest_day ? <span style={{ color: intensityColor(p.intensity), fontWeight: 700 }}> · {p.intensity}</span> : null}
                       </div>
                     </div>
                     <div style={{ fontSize: 13, marginTop: 4 }}>{p.activity}</div>
-                    {p.rationale ? <div className="subtle tiny" style={{ marginTop: 6, lineHeight: 1.5, fontStyle: "italic" }}>“{p.rationale}”</div> : null}
+                    {p.rationale ? <div className="tiny" style={{ marginTop: 6, lineHeight: 1.5, fontStyle: "italic", color: "var(--text-2)" }}>“{p.rationale}”</div> : null}
                     {flags.map((f, j) => (
                       <div key={j} className="tiny" style={{ marginTop: 6, color: f.severity === "warn" ? "var(--gold)" : "var(--ember)" }}>⚠ {f.message}</div>
                     ))}
@@ -166,18 +174,18 @@ export default function CoachPanel() {
                           ))}
                         </div>
                         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                          <button disabled={adapting} onClick={() => decline(p, declineText.trim())} style={{ flex: 1, padding: 10, borderRadius: 10, border: "none", cursor: "pointer", color: "#fff", fontWeight: 700, fontSize: 12, background: "linear-gradient(135deg,var(--ember),var(--ember-strong))" }}>
+                          <button disabled={adapting} onClick={() => decline(p, declineText.trim())} style={{ flex: 1, padding: 10, borderRadius: 10, border: "none", cursor: "pointer", color: "#fff", fontWeight: 700, fontSize: 12, background: "var(--t-grad)" }}>
                             {adapting ? "Kai's swapping…" : "Send & swap"}
                           </button>
-                          <button disabled={adapting} onClick={() => { setDeclineFor(null); setDeclineText(""); }} className="trn-sub" style={{ flex: 1 }}>Cancel</button>
+                          <button disabled={adapting} onClick={() => { setDeclineFor(null); setDeclineText(""); }} className="trn-sub" style={{ flex: 1, background: "var(--surface)" }}>Cancel</button>
                         </div>
                       </div>
                     ) : (
                       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                        <button disabled={busyId === p.id} onClick={() => accept(p)} style={{ flex: 1, padding: 10, borderRadius: 10, border: "none", cursor: "pointer", color: "#fff", fontWeight: 700, fontSize: 12, background: "linear-gradient(135deg,var(--ember),var(--ember-strong))" }}>
+                        <button disabled={busyId === p.id} onClick={() => accept(p)} style={{ flex: 1, padding: 10, borderRadius: 10, border: "none", cursor: "pointer", color: "#fff", fontWeight: 700, fontSize: 12, background: "var(--t-grad)" }}>
                           {busyId === p.id ? "Adding…" : (p.is_rest_day ? "Accept rest" : "Add to plan")}
                         </button>
-                        <button disabled={busyId === p.id} onClick={() => openDecline(p)} className="trn-sub" style={{ flex: 1 }}>Not today</button>
+                        <button disabled={busyId === p.id} onClick={() => openDecline(p)} className="trn-sub" style={{ flex: 1, background: "var(--surface)" }}>Not today</button>
                       </div>
                     )}
                   </div>
