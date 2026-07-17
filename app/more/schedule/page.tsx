@@ -33,10 +33,10 @@ type Win = { planned: number; completed: number; pct: number | null; planned_min
 type HistoryResp = { windows: { week: Win; d15: Win; d30: Win }; current_streak: number; best_streak: number; weeks: { week: string; planned: number; completed: number }[] };
 
 /* ════════════════════ design tokens (from the prototype) ════════════════════ */
-const A = "#6C5CE7";                       // accent / brand
-const CARD = "#15151D", CARD2 = "#121219", CHIPBG = "#1B1B25";
-const T1 = "#F4F4F7", T2 = "#C7C7D2", T3 = "#8E8E9C", T4 = "#6E6E7C";
-const INT: Record<string, string> = { easy: "#34D399", moderate: "#FBBF24", hard: "#FB7185" };
+const A = "var(--ember)";                       // accent / brand
+const CARD = "var(--surface)", CARD2 = "var(--surface-2)", CHIPBG = "var(--surface-3)";
+const T1 = "var(--text)", T2 = "var(--text-2)", T3 = "var(--muted)", T4 = "var(--faint)";
+const INT: Record<string, string> = { easy: "var(--success)", moderate: "var(--gold)", hard: "var(--danger)" };
 const EFFORTS = ["Easy", "Aerobic", "Tempo", "Threshold", "Intervals", "Drills"];
 const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -140,12 +140,12 @@ function onCalendar(it: Item) { return it.kind === "event" || it.committed || it
 
 /* ════════════════════ tiny style helpers ════════════════════ */
 const SS: Record<string, React.CSSProperties> = {
-  card: { background: CARD, border: "1px solid rgba(255,255,255,.06)", borderRadius: 16, padding: 14, marginBottom: 12 },
-  navBtn: { background: CHIPBG, border: "1px solid rgba(255,255,255,.1)", color: T2, width: 34, height: 34, borderRadius: 9, fontSize: 17, lineHeight: 1, cursor: "pointer", flex: "none" },
-  iconAct: { background: CARD2, border: "1px solid rgba(255,255,255,.1)", color: T2, width: 36, height: 36, borderRadius: 11, fontSize: 16, cursor: "pointer", display: "grid", placeItems: "center", flex: "none" },
+  card: { background: CARD, border: "1px solid var(--line)", borderRadius: 16, padding: 14, marginBottom: 12 },
+  navBtn: { background: CHIPBG, border: "1px solid var(--line)", color: T2, width: 34, height: 34, borderRadius: 9, fontSize: 17, lineHeight: 1, cursor: "pointer", flex: "none" },
+  iconAct: { background: CARD2, border: "1px solid var(--line)", color: T2, width: 36, height: 36, borderRadius: 11, fontSize: 16, cursor: "pointer", display: "grid", placeItems: "center", flex: "none" },
 };
 function chipStyle(active: boolean, extra?: React.CSSProperties): React.CSSProperties {
-  return { padding: "9px 12px", borderRadius: 10, border: "1px solid " + (active ? "transparent" : "rgba(255,255,255,.1)"), background: active ? A : CHIPBG, color: active ? "#fff" : T2, font: "600 12px 'Plus Jakarta Sans',sans-serif", cursor: "pointer", flex: "none", ...extra };
+  return { padding: "9px 12px", borderRadius: 10, border: "1px solid " + (active ? "transparent" : "var(--line)"), background: active ? A : CHIPBG, color: active ? "#fff" : T2, font: "600 12px 'Plus Jakarta Sans',sans-serif", cursor: "pointer", flex: "none", ...extra };
 }
 
 const SCOPED_CSS = `
@@ -156,7 +156,7 @@ const SCOPED_CSS = `
 .schd input{font-family:inherit;}
 .schd-grid-scroll{overflow:auto;-webkit-overflow-scrolling:touch;}
 .schd-grid-scroll::-webkit-scrollbar{height:6px;width:6px;}
-.schd-grid-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:3px;}
+.schd-grid-scroll::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:3px;}
 @keyframes schd-in{from{transform:translateY(16px);opacity:.6}to{transform:translateY(0);opacity:1}}
 @media (prefers-reduced-motion: reduce){.schd-sheet{animation:none!important;}}
 `;
@@ -350,13 +350,13 @@ export default function SchedulePage() {
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
       <div className="hscroll" style={{ flex: 1, minWidth: 0 }}>
         {tabs.map(([k, label]) => (
-          <button key={k} onClick={() => setView(k)} style={{ padding: "9px 15px", borderRadius: 11, border: "none", cursor: "pointer", font: "700 13px 'Plus Jakarta Sans',sans-serif", flex: "none", ...(view === k ? { background: A, color: "#fff", boxShadow: "0 4px 12px " + hexA(A, .4) } : { background: CARD2, color: T3 }) }}>{label}</button>
+          <button key={k} onClick={() => setView(k)} style={{ padding: "9px 15px", borderRadius: 11, border: "none", cursor: "pointer", font: "700 13px 'Plus Jakarta Sans',sans-serif", flex: "none", ...(view === k ? { background: A, color: "#fff", boxShadow: "0 4px 12px " + "color-mix(in srgb, var(--ember) 40%, transparent)" } : { background: CARD2, color: T3 }) }}>{label}</button>
         ))}
       </div>
         <button style={{ ...SS.iconAct, background: A, border: "none", color: "#fff", flex: "none" }} title="Add activity" onClick={() => openAdd(today)}>＋</button>
       </div>
 
-      {weekErr && <div style={{ ...SS.card, borderColor: "#7f1d1d" }}><b>Couldn&apos;t load</b><div style={{ color: T3, fontSize: 12, marginTop: 4 }}>{weekErr}</div></div>}
+      {weekErr && <div style={{ ...SS.card, borderColor: "var(--danger)" }}><b>Couldn&apos;t load</b><div style={{ color: T3, fontSize: 12, marginTop: 4 }}>{weekErr}</div></div>}
 
       {view === "week" && renderWeek()}
       {view === "month" && renderMonth()}
@@ -430,7 +430,7 @@ export default function SchedulePage() {
         {allDay.length > 0 && (
           <div style={{ display: "flex", paddingLeft: 34, marginTop: 4, position: "relative", height: 20 }}>
             {allDay.map((b) => { const t = T[b.tkey]; const di = wDates.indexOf(b.date); return (
-              <div key={b.id} onClick={() => openEdit(b)} style={{ position: "absolute", left: 34 + di * 92 + 3, top: 0, width: 86, height: 18, background: hexA(t.color, .22), border: "1px solid " + hexA(t.color, .4), borderRadius: 6, padding: "0 5px", fontSize: 9, fontWeight: 700, color: "#E7E7EE", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", cursor: "pointer" }}>{t.emoji} {b.title}</div>
+              <div key={b.id} onClick={() => openEdit(b)} style={{ position: "absolute", left: 34 + di * 92 + 3, top: 0, width: 86, height: 18, background: hexA(t.color, .22), border: "1px solid " + hexA(t.color, .4), borderRadius: 6, padding: "0 5px", fontSize: 9, fontWeight: 700, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", cursor: "pointer" }}>{t.emoji} {b.title}</div>
             ); })}
           </div>
         )}
@@ -439,32 +439,32 @@ export default function SchedulePage() {
           <div style={{ position: "relative", width: 34 + gridW, height: hours.length * hourH, marginTop: 6 }}>
             {/* hour rows + labels */}
             {hours.map((h, i) => (
-              <div key={h} style={{ position: "absolute", left: 0, top: i * hourH, width: 34 + gridW, height: hourH, borderTop: "1px solid rgba(255,255,255,.045)" }}>
+              <div key={h} style={{ position: "absolute", left: 0, top: i * hourH, width: 34 + gridW, height: hourH, borderTop: "1px solid var(--line)" }}>
                 <span style={{ position: "absolute", left: 0, top: -7, fontSize: 9, color: T4, width: 30, textAlign: "right" }}>{fmtHour(h)}</span>
               </div>
             ))}
             {/* day columns */}
             {wDates.map((dt, i) => { const isT = dt === today; return (
-              <div key={dt} style={{ position: "absolute", left: 34 + i * 92, top: 0, width: 92, height: hours.length * hourH, borderLeft: "1px solid rgba(255,255,255,.04)", background: isT ? hexA(A, .05) : "transparent" }} onClick={(e) => { if (e.target === e.currentTarget) { const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect(); const hh = Math.min(20, Math.max(6, 6 + Math.floor((e.clientY - rect.top) / hourH))); openAddAt(dt, hh); } }} />
+              <div key={dt} style={{ position: "absolute", left: 34 + i * 92, top: 0, width: 92, height: hours.length * hourH, borderLeft: "1px solid var(--line)", background: isT ? "color-mix(in srgb, var(--ember) 5%, transparent)" : "transparent" }} onClick={(e) => { if (e.target === e.currentTarget) { const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect(); const hh = Math.min(20, Math.max(6, 6 + Math.floor((e.clientY - rect.top) / hourH))); openAddAt(dt, hh); } }} />
             ); })}
             {/* synced meetings (read-only) */}
             {meetings.map((m) => { const di = wDates.indexOf(m.date); const top = (m.hour! - 6) * hourH + (m.min / 60) * hourH; const h = Math.max((m.dur / 60) * hourH, 26); return (
-              <div key={m.id} style={{ position: "absolute", left: 34 + di * 92 + 3, top, width: 86, height: h, background: "repeating-linear-gradient(45deg,#252C3A,#252C3A 3px,#1E2430 3px,#1E2430 6px)", border: "1px solid rgba(150,164,196,.3)", borderLeft: "3px solid #6E7C96", borderRadius: 8, padding: "4px 6px", overflow: "hidden", zIndex: 4 }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: "#C7D2E0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.title}</div>
-                <div style={{ fontSize: 8, color: "#8696B0" }}>🔵 Google</div>
+              <div key={m.id} style={{ position: "absolute", left: 34 + di * 92 + 3, top, width: 86, height: h, background: "var(--surface-2)", border: "1px solid var(--line-2)", borderLeft: "3px solid var(--muted)", borderRadius: 8, padding: "4px 6px", overflow: "hidden", zIndex: 4 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: "var(--text-2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.title}</div>
+                <div style={{ fontSize: 8, color: "var(--muted)" }}>🔵 Google</div>
               </div>
             ); })}
             {/* draggable workout blocks */}
             {blocks.map((b) => { const t = T[b.tkey]; const di = wDates.indexOf(b.date); const isDrag = drag && drag.id === b.id && drag.moved; const done = b.status === "done"; const skip = b.status === "skipped"; const top = (b.hour! - 6) * hourH + (b.min / 60) * hourH; const h = Math.max((b.dur / 60) * hourH, 30); return (
               <div key={b.id} onPointerDown={(e) => { e.preventDefault(); setDrag({ id: b.id, sx: e.clientX, sy: e.clientY, dx: 0, dy: 0, moved: false, di, hour: b.hour!, min: b.min }); }}
                 style={{ position: "absolute", left: 34 + di * 92 + 3, top, width: 86, height: h, background: hexA(t.color, skip ? .07 : .18), border: "1px solid " + hexA(t.color, .45), borderLeft: "3px solid " + t.color, borderRadius: 8, padding: "4px 6px", cursor: "grab", touchAction: "none", overflow: "hidden", display: "flex", flexDirection: "column", gap: 1, opacity: skip ? .6 : 1, zIndex: isDrag ? 50 : 6, transform: isDrag ? `translate(${drag!.dx}px,${drag!.dy}px)` : "none", boxShadow: isDrag ? "0 14px 32px rgba(0,0,0,.55)" : "none" }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: skip ? "#9696A6" : T1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textDecoration: skip ? "line-through" : "none" }}>{done ? "🎉 " : t.emoji + " "}{b.title}</div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: skip ? "var(--muted)" : T1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textDecoration: skip ? "line-through" : "none" }}>{done ? "🎉 " : t.emoji + " "}{b.title}</div>
                 <div style={{ fontSize: 9, color: hexA(t.color, .95) }}>{fmtT(b.hour!, b.min)}</div>
               </div>
             ); })}
             {/* now line */}
             {showNow && nowTop >= 0 && nowTop <= hours.length * hourH && (
-              <div style={{ position: "absolute", left: 34, width: gridW, top: nowTop, height: 0, borderTop: "2px solid #FB7185", zIndex: 8, boxShadow: "0 0 8px rgba(251,113,133,.5)" }} />
+              <div style={{ position: "absolute", left: 34, width: gridW, top: nowTop, height: 0, borderTop: "2px solid var(--danger)", zIndex: 8, boxShadow: "0 0 8px color-mix(in srgb, var(--danger) 50%, transparent)" }} />
             )}
           </div>
         </div>
@@ -502,7 +502,7 @@ export default function SchedulePage() {
               const inMonth = d.slice(0, 7) === first.slice(0, 7);
               const isToday = d === today, isSel = d === selDate;
               return (
-                <button key={d} onClick={() => setSelDate(d)} style={{ minHeight: 52, borderRadius: 9, padding: "4px 3px 0", overflow: "hidden", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "stretch", background: isSel ? hexA(A, .16) : isToday ? "rgba(255,255,255,.05)" : "rgba(255,255,255,.02)", border: isSel ? "1px solid " + hexA(A, .6) : isToday ? "1px solid " + hexA(A, .45) : "1px solid transparent", opacity: inMonth ? 1 : .4 }}>
+                <button key={d} onClick={() => setSelDate(d)} style={{ minHeight: 52, borderRadius: 9, padding: "4px 3px 0", overflow: "hidden", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "stretch", background: isSel ? "color-mix(in srgb, var(--ember) 16%, transparent)" : isToday ? "var(--surface-2)" : "var(--surface-2)", border: isSel ? "1px solid " + "color-mix(in srgb, var(--ember) 60%, transparent)" : isToday ? "1px solid " + "color-mix(in srgb, var(--ember) 45%, transparent)" : "1px solid transparent", opacity: inMonth ? 1 : .4 }}>
                   <div style={{ fontSize: 11, fontWeight: isToday ? 800 : 600, color: isToday ? A : T2, textAlign: "center", marginBottom: 1 }}>{num(d)}</div>
                   {evs.slice(0, 2).map((x) => { const c = T[x.tkey].color; const done = x.status === "done", skip = x.status === "skipped"; return (
                     <div key={x.id} style={{ background: hexA(c, .9), color: "#0A0A0F", fontSize: 8, fontWeight: 700, padding: "1px 4px", borderRadius: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 1, opacity: skip ? .45 : done ? .7 : 1, textDecoration: skip ? "line-through" : "none" }}>{T[x.tkey].emoji} {x.title}</div>
@@ -526,7 +526,7 @@ export default function SchedulePage() {
   function selDayRow(x: Item) {
     const t = T[x.tkey]; const done = x.status === "done", skip = x.status === "skipped";
     const past = x.date < today; const tag = x.cat === "meeting" ? "event" : x.cat === "rest" ? "rest" : done ? "done" : skip ? "skipped" : past ? "missed" : "planned";
-    const tagColors: Record<string, [string, number]> = { done: ["#34D399", .12], missed: ["#FB7185", .12], skipped: ["#6E6E7C", .18], planned: ["#8E7DF2", .14], rest: ["#94A3B8", .12], event: ["#93C5FD", .14] };
+    const tagColors: Record<string, [string, number]> = { done: ["#5f8f63", .14], missed: ["#c4543b", .14], skipped: ["#8a7f73", .16], planned: ["#d96f4e", .14], rest: ["#94A3B8", .12], event: ["#93C5FD", .14] };
     const tc = tagColors[tag] || tagColors.planned;
     const meta = [x.hour != null && !x.allDay ? fmtT(x.hour, x.min) : x.allDay ? "All day" : "", x.dur && x.cat === "workout" ? x.dur + "m" : "", km(x.dist)].filter(Boolean).join(" · ");
     return (
@@ -556,7 +556,7 @@ export default function SchedulePage() {
       <>
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           <button onClick={() => openAdd(today)} style={{ flex: 1, padding: 12, borderRadius: 14, border: "none", background: A, color: "#fff", fontWeight: 700, fontSize: 13.5, cursor: "pointer" }}>＋ Activity</button>
-          <button onClick={() => { setMode("add"); setDraft({ tkey: "travel", session_type: "Travel", activity: "", session_date: today, start_time: null, planned_duration: 0, notes: "event:travel:allday" }); setSheet("form"); }} style={{ flex: 1, padding: 12, borderRadius: 14, border: "1px solid rgba(255,255,255,.1)", background: CARD2, color: T1, fontWeight: 700, fontSize: 13.5, cursor: "pointer" }}>✈️ Event</button>
+          <button onClick={() => { setMode("add"); setDraft({ tkey: "travel", session_type: "Travel", activity: "", session_date: today, start_time: null, planned_duration: 0, notes: "event:travel:allday" }); setSheet("form"); }} style={{ flex: 1, padding: 12, borderRadius: 14, border: "1px solid var(--line)", background: CARD2, color: T1, fontWeight: 700, fontSize: 13.5, cursor: "pointer" }}>✈️ Event</button>
         </div>
         {gKeys.length === 0 && <div style={{ ...SS.card, textAlign: "center", padding: 24 }}><div style={{ fontSize: 28 }}>📭</div><div style={{ fontWeight: 700, margin: "6px 0 4px" }}>Nothing on your calendar</div><div style={{ color: T3, fontSize: 12 }}>Add an activity or event here, or send a session from Kai in the Coach tab.</div></div>}
         {gKeys.map((gk) => {
@@ -566,7 +566,7 @@ export default function SchedulePage() {
           if (prevMon !== -1 && gMon !== prevMon) banner = MON_L[gMon] + " " + parse(gk).getFullYear(); prevMon = gMon;
           return (
             <div key={gk}>
-              {banner && <div style={{ margin: "18px -2px 8px", height: 64, borderRadius: 16, background: `linear-gradient(120deg, ${hexA(A, .55)}, #1d6b4f 60%, #2a8f5f)`, display: "flex", alignItems: "flex-end", padding: 14, fontSize: 18, fontWeight: 800, color: "#fff" }}>{banner}</div>}
+              {banner && <div style={{ margin: "18px -2px 8px", height: 64, borderRadius: 16, background: "var(--t-grad)", display: "flex", alignItems: "flex-end", padding: 14, fontSize: 18, fontWeight: 800, color: "#fff" }}>{banner}</div>}
               <div style={{ color: T3, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", margin: "4px 2px 8px" }}>{range}</div>
               {groups.get(gk)!.map((dk) => { const isT = dk === today; return (
                 <div key={dk} style={{ display: "flex", gap: 10, marginBottom: 10 }}>
@@ -595,9 +595,9 @@ export default function SchedulePage() {
   function renderSheet() {
     return (
       <div onClick={closeSheet} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 1500, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-        <div className="schd-sheet" onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: "#101017", border: "1px solid rgba(255,255,255,.08)", borderRadius: "20px 20px 0 0", padding: "18px 16px max(18px,env(safe-area-inset-bottom))", maxHeight: "90vh", overflowY: "auto", animation: "schd-in .22s ease" }}>
+        <div className="schd-sheet" onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "20px 20px 0 0", padding: "18px 16px max(18px,env(safe-area-inset-bottom))", maxHeight: "90vh", overflowY: "auto", animation: "schd-in .22s ease" }}>
           <div style={{ position: "sticky", top: 0, display: "flex", justifyContent: "flex-end", zIndex: 5 }}>
-            <button onClick={closeSheet} aria-label="Close" style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid rgba(255,255,255,.12)", background: CHIPBG, color: T2, fontSize: 15, lineHeight: 1, cursor: "pointer" }}>✕</button>
+            <button onClick={closeSheet} aria-label="Close" style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid var(--line-2)", background: CHIPBG, color: T2, fontSize: 15, lineHeight: 1, cursor: "pointer" }}>✕</button>
           </div>
           {sheet === "form" && renderForm()}
         </div>
@@ -619,7 +619,7 @@ export default function SchedulePage() {
         <div style={{ fontSize: 11.5, color: T3, marginBottom: 14 }}>{isEvent ? "Travel, races and social plans give the coach busy/travel context." : "Added to your Health OS calendar (committed) so a regenerate won't move it."}</div>
 
         {mode !== "edit" && (
-          <div style={{ display: "flex", gap: 6, padding: 3, background: CARD2, border: "1px solid rgba(255,255,255,.08)", borderRadius: 11, marginBottom: 12 }}>
+          <div style={{ display: "flex", gap: 6, padding: 3, background: CARD2, border: "1px solid var(--line)", borderRadius: 11, marginBottom: 12 }}>
             <button onClick={() => setD({ notes: undefined, tkey: "run", session_type: "Run", start_time: "07:00" })} style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 13, ...(!isEvent ? { background: A, color: "#fff" } : { background: "transparent", color: T3 }) }}>🏃 Activity</button>
             <button onClick={() => setD({ notes: "event:travel", tkey: "travel", session_type: "Travel", start_time: "09:00", end_time: "10:00" })} style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 13, ...(isEvent ? { background: A, color: "#fff" } : { background: "transparent", color: T3 }) }}>📅 Event</button>
           </div>
@@ -627,7 +627,7 @@ export default function SchedulePage() {
         <label style={fl}>Type</label>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6 }}>
           {(isEvent ? (["travel", "race", "social", "custom"] as TKey[]) : PICK_TYPES).map((k) => { const t = T[k]; const sel = tkey === k; return (
-            <button key={k} onClick={() => setD(isEvent ? { tkey: k, session_type: t.label, notes: "event:" + k + (allDay ? ":allday" : "") } : { tkey: k, session_type: t.label })} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 2px", borderRadius: 12, cursor: "pointer", background: sel ? hexA(t.color, .18) : CHIPBG, border: "1px solid " + (sel ? hexA(t.color, .6) : "rgba(255,255,255,.06)"), color: "#E7E7EE" }}><span style={{ fontSize: 18 }}>{t.emoji}</span><span style={{ fontSize: 9, color: T3 }}>{t.label}</span></button>
+            <button key={k} onClick={() => setD(isEvent ? { tkey: k, session_type: t.label, notes: "event:" + k + (allDay ? ":allday" : "") } : { tkey: k, session_type: t.label })} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 2px", borderRadius: 12, cursor: "pointer", background: sel ? hexA(t.color, .18) : CHIPBG, border: "1px solid " + (sel ? hexA(t.color, .6) : "var(--line)"), color: "var(--text)" }}><span style={{ fontSize: 18 }}>{t.emoji}</span><span style={{ fontSize: 9, color: T3 }}>{t.label}</span></button>
           ); })}
         </div>
 
@@ -637,7 +637,7 @@ export default function SchedulePage() {
         <label style={fl}>Day</label>
         <div className="hscroll" style={{ marginTop: 5 }}>
           {[0, 1, 2, 3, 4, 5, 6].map((i) => { const dt = addDays(fMon, i); const sel = draft.session_date === dt; return (
-            <button key={dt} onClick={() => setD({ session_date: dt })} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, minWidth: 44, padding: "8px 0", borderRadius: 11, border: "1px solid " + (sel ? "transparent" : "rgba(255,255,255,.1)"), background: sel ? A : CHIPBG, color: sel ? "#fff" : T2, cursor: "pointer", flex: "none" }}><span style={{ fontSize: 11, fontWeight: 700 }}>{DOW[i].slice(0, 2)}</span><span style={{ fontSize: 14, fontWeight: 700 }}>{num(dt)}</span></button>
+            <button key={dt} onClick={() => setD({ session_date: dt })} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, minWidth: 44, padding: "8px 0", borderRadius: 11, border: "1px solid " + (sel ? "transparent" : "var(--line)"), background: sel ? A : CHIPBG, color: sel ? "#fff" : T2, cursor: "pointer", flex: "none" }}><span style={{ fontSize: 11, fontWeight: 700 }}>{DOW[i].slice(0, 2)}</span><span style={{ fontSize: 14, fontWeight: 700 }}>{num(dt)}</span></button>
           ); })}
         </div>
         <input type="date" value={draft.session_date || ""} onChange={(e) => setD({ session_date: e.target.value })} style={{ ...inp, marginTop: 8 }} />
@@ -645,7 +645,7 @@ export default function SchedulePage() {
         {isEvent && (
           <>
             <label style={fl}>All day</label>
-            <button onClick={() => allDay ? setD({ notes: "event:" + tkey, start_time: "09:00", end_time: "10:00" }) : setD({ notes: "event:" + tkey + ":allday", start_time: null, end_time: null })} style={{ width: "100%", padding: "12px 14px", borderRadius: 11, cursor: "pointer", fontWeight: 700, fontSize: 14, border: "1px solid " + (allDay ? "transparent" : "rgba(255,255,255,.12)"), background: allDay ? A : CHIPBG, color: allDay ? "#fff" : T2, display: "flex", alignItems: "center", justifyContent: "space-between" }}><span>{allDay ? "All-day event" : "Has a set start & end time"}</span><span style={{ fontSize: 12, opacity: .85 }}>{allDay ? "ON" : "OFF"}</span></button>
+            <button onClick={() => allDay ? setD({ notes: "event:" + tkey, start_time: "09:00", end_time: "10:00" }) : setD({ notes: "event:" + tkey + ":allday", start_time: null, end_time: null })} style={{ width: "100%", padding: "12px 14px", borderRadius: 11, cursor: "pointer", fontWeight: 700, fontSize: 14, border: "1px solid " + (allDay ? "transparent" : "var(--line-2)"), background: allDay ? A : CHIPBG, color: allDay ? "#fff" : T2, display: "flex", alignItems: "center", justifyContent: "space-between" }}><span>{allDay ? "All-day event" : "Has a set start & end time"}</span><span style={{ fontSize: 12, opacity: .85 }}>{allDay ? "ON" : "OFF"}</span></button>
           </>
         )}
         {!allDay && (
@@ -678,13 +678,13 @@ export default function SchedulePage() {
           <button onClick={toggleDraftDone} style={{ width: "100%", padding: 14, borderRadius: 14, cursor: "pointer", font: "700 14px 'Plus Jakarta Sans',sans-serif", marginTop: 14, border: "1px solid " + (draft.completed ? "transparent" : hexA("#34D399", .4)), background: draft.completed ? "#34D399" : hexA("#34D399", .1), color: draft.completed ? "#06281c" : "#34D399" }}>{draft.completed ? "✓ Completed — tap to undo" : "Mark as completed 🎉"}</button>
         )}
         {mode === "edit" && draft.id && !isEvent && draft.committed && (
-          <button onClick={async () => { if (!draft.id) return; const _m = monOf(draft.session_date || today); await planPost("uncommit", { id: draft.id }, _m); closeSheet(); await loadWeek(_m); refreshAll(); showToast("Removed from calendar"); }} style={{ width: "100%", padding: 13, borderRadius: 14, cursor: "pointer", fontWeight: 700, fontSize: 13.5, marginTop: 8, border: "1px solid rgba(255,255,255,.14)", background: CARD2, color: T2 }}>↩ Remove from calendar</button>
+          <button onClick={async () => { if (!draft.id) return; const _m = monOf(draft.session_date || today); await planPost("uncommit", { id: draft.id }, _m); closeSheet(); await loadWeek(_m); refreshAll(); showToast("Removed from calendar"); }} style={{ width: "100%", padding: 13, borderRadius: 14, cursor: "pointer", fontWeight: 700, fontSize: 13.5, marginTop: 8, border: "1px solid var(--line-2)", background: CARD2, color: T2 }}>↩ Remove from calendar</button>
         )}
         <button onClick={saveDraft} disabled={busy || !draft.session_date} style={{ width: "100%", border: "none", color: "#fff", font: "700 15px 'Plus Jakarta Sans',sans-serif", padding: 15, borderRadius: 14, cursor: "pointer", background: A, marginTop: 8 }}>{busy ? "Saving…" : mode === "edit" ? "Save changes" : isEvent ? "Add event" : "Add to plan"}</button>
         {mode === "edit" && draft.id && (
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-            {!isEvent && <button onClick={skipDraft} style={{ flex: 1, padding: 12, borderRadius: 12, border: "1px solid rgba(255,255,255,.12)", background: CARD2, color: T2, fontWeight: 700, cursor: "pointer" }}>{draft.skipped ? "Restore" : "Skip"}</button>}
-            <button onClick={deleteDraft} style={{ flex: 1, padding: 12, borderRadius: 12, border: "1px solid rgba(248,113,133,.4)", background: "rgba(248,113,133,.12)", color: "#FB7185", fontWeight: 700, cursor: "pointer" }}>Delete</button>
+            {!isEvent && <button onClick={skipDraft} style={{ flex: 1, padding: 12, borderRadius: 12, border: "1px solid var(--line-2)", background: CARD2, color: T2, fontWeight: 700, cursor: "pointer" }}>{draft.skipped ? "Restore" : "Skip"}</button>}
+            <button onClick={deleteDraft} style={{ flex: 1, padding: 12, borderRadius: 12, border: "1px solid color-mix(in srgb, var(--danger) 40%, transparent)", background: "color-mix(in srgb, var(--danger) 12%, transparent)", color: "var(--danger)", fontWeight: 700, cursor: "pointer" }}>Delete</button>
           </div>
         )}
         <button onClick={closeSheet} style={{ width: "100%", padding: 12, borderRadius: 12, border: "none", background: "none", color: T3, fontWeight: 600, cursor: "pointer", marginTop: 8 }}>Cancel</button>
@@ -695,15 +695,15 @@ export default function SchedulePage() {
 }
 
 /* ════════════════════ small components ════════════════════ */
-function Loading() { return <div style={{ textAlign: "center", color: "#8E8E9C", padding: "40px 0", fontSize: 13 }}>Loading…</div>; }
+function Loading() { return <div style={{ textAlign: "center", color: "var(--muted)", padding: "40px 0", fontSize: 13 }}>Loading…</div>; }
 function Stepper({ label, onUp, onDown }: { label: string; onUp: () => void; onDown: () => void }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", background: "#1B1B25", border: "1px solid rgba(255,255,255,.1)", borderRadius: 12, overflow: "hidden" }}>
-      <button onClick={onUp} style={{ width: 56, padding: "4px 0", border: "none", background: "none", color: "#C7C7D2", cursor: "pointer", fontSize: 13 }}>▲</button>
-      <div style={{ fontSize: 22, fontWeight: 800, color: "#F4F4F7", padding: "0 0 2px" }}>{label}</div>
-      <button onClick={onDown} style={{ width: 56, padding: "4px 0", border: "none", background: "none", color: "#C7C7D2", cursor: "pointer", fontSize: 13 }}>▼</button>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", background: "var(--surface-3)", border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden" }}>
+      <button onClick={onUp} style={{ width: 56, padding: "4px 0", border: "none", background: "none", color: "var(--text-2)", cursor: "pointer", fontSize: 13 }}>▲</button>
+      <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text)", padding: "0 0 2px" }}>{label}</div>
+      <button onClick={onDown} style={{ width: 56, padding: "4px 0", border: "none", background: "none", color: "var(--text-2)", cursor: "pointer", fontSize: 13 }}>▼</button>
     </div>
   );
 }
-const fl: React.CSSProperties = { display: "block", fontSize: 11, color: "#8E8E9C", textTransform: "uppercase", letterSpacing: ".05em", margin: "14px 2px 6px", fontWeight: 700 };
-const inp: React.CSSProperties = { width: "100%", background: "#1B1B25", border: "1px solid rgba(255,255,255,.1)", color: "#F4F4F7", borderRadius: 11, padding: "11px 12px", fontSize: 15, boxSizing: "border-box" };
+const fl: React.CSSProperties = { display: "block", fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".05em", margin: "14px 2px 6px", fontWeight: 700 };
+const inp: React.CSSProperties = { width: "100%", background: "var(--surface-3)", border: "1px solid var(--line)", color: "var(--text)", borderRadius: 11, padding: "11px 12px", fontSize: 15, boxSizing: "border-box" };
