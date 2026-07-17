@@ -673,7 +673,9 @@ export function CameraButton({ onImage, disabled }: { onImage: (img: PickedImage
       {/* choose an existing photo */}
       <input ref={upRef} type="file" accept="image/*" onChange={onChange} style={{ display: "none" }} />
       <button onClick={() => setMenu((m) => !m)} disabled={disabled} aria-label="Add photo"
-        style={{ width: 44, height: 44, borderRadius: "50%", border: "1px solid " + (menu ? BORDER_ACCENT : BORDER_STRONG), background: INPUTBG, color: SECOND, fontSize: 16, cursor: disabled ? "default" : "pointer", flexShrink: 0, opacity: disabled ? 0.5 : 1 }}>📷</button>
+        style={{ width: 40, height: 40, borderRadius: "50%", border: "none", background: menu ? "var(--ember-tint)" : "var(--surface-2)", color: menu ? "var(--ember-strong)" : "var(--text-2)", cursor: disabled ? "default" : "pointer", flexShrink: 0, opacity: disabled ? 0.5 : 1, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L8 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-4l-1.5-2z" /><circle cx="12" cy="13" r="3.5" /></svg>
+      </button>
       {menu ? (
         <>
           <div onClick={() => setMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 80 }} />
