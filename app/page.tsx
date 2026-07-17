@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
 import { useApi, actionGet, fetchApi, dashPost, metricBrief, readinessWhy, type ReadinessWhy } from "./lib/api";
 import { Screen } from "./components/Screen";
 import KaiTodayNote from "./components/KaiTodayNote";
@@ -186,7 +185,6 @@ type SheetState =
   | null;
 
 export default function TodayPage() {
-  const router = useRouter();
   const { data, error } = useApi<Today>("today");
   const [trends, setTrends] = useState<Trends | null>(null);
   const [goals, setGoals] = useState<Goal[] | null>(null);
@@ -243,8 +241,10 @@ export default function TodayPage() {
   }
 
   function askKai(seed: string) {
-    try { window.sessionStorage.setItem("kai_seed", seed); } catch { /* ignore */ }
-    router.push("/more/ask");
+    setSheet(null);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("kai:open", { detail: { seed } }));
+    }
   }
 
   const nextRace = (goals || [])
