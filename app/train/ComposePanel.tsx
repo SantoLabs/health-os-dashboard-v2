@@ -11,7 +11,7 @@ import type { ComposeWorkout, ComposeValidator, ComposeStep, ComposeLoop, Compos
 // then Add to plan (a date) or Save as a routine. The proposal persists so reopening shows the same
 // workout — no silent re-roll.
 
-const GRAD = "linear-gradient(135deg,#5f7dff,#a274ff)";
+const GRAD = "linear-gradient(135deg,var(--ember),var(--ember-strong))";
 const EXAMPLES = [
   "6×800m at 5k effort off 90s jog",
   "90min bike, 3×12min threshold",
@@ -118,7 +118,7 @@ export default function ComposePanel() {
         placeholder="e.g. 6×800m at 5k effort off 90 seconds jog recovery, with a warm-up and cool-down"
         rows={2}
         disabled={busy}
-        style={{ width: "100%", boxSizing: "border-box", marginTop: 10, background: "rgba(255,255,255,0.04)", color: "inherit", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: 10, fontSize: 13, resize: "vertical", fontFamily: "inherit" }}
+        style={{ width: "100%", boxSizing: "border-box", marginTop: 10, background: "var(--surface-2)", color: "inherit", border: "1px solid var(--line)", borderRadius: 8, padding: 10, fontSize: 13, resize: "vertical", fontFamily: "inherit" }}
       />
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
         {EXAMPLES.map((ex) => (
@@ -131,10 +131,10 @@ export default function ComposePanel() {
         </button>
       </div>
 
-      {err ? <div className="tiny" style={{ marginTop: 10, color: "#ff8a8a" }}>{err}</div> : null}
+      {err ? <div className="tiny" style={{ marginTop: 10, color: "var(--danger)" }}>{err}</div> : null}
 
       {workout ? (
-        <div style={{ marginTop: 12, padding: 12, borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+        <div style={{ marginTop: 12, padding: 12, borderRadius: 12, background: "var(--surface-2)", border: "1px solid var(--line)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
             <div style={{ fontWeight: 700, fontSize: 13.5 }}>{workout.name}</div>
             <div className="tiny" style={{ opacity: 0.55, whiteSpace: "nowrap", textTransform: "capitalize" }}>{workout.sport}{workout.type === "brick" ? " · brick" : ""}</div>
@@ -147,7 +147,7 @@ export default function ComposePanel() {
                 const w = lp.steps[0]; const rec = lp.steps[1];
                 return (
                   <div key={i} style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-                    <div style={{ fontWeight: 800, fontSize: 13, color: "#a6c0ff", minWidth: 26 }}>{lp.repeat}×</div>
+                    <div style={{ fontWeight: 800, fontSize: 13, color: "var(--ember)", minWidth: 26 }}>{lp.repeat}×</div>
                     <div style={{ fontSize: 13 }}>
                       {w ? `${fmtMeasure(w.measure)}${fmtTarget(w.targets?.[0]) ? ` @ ${fmtTarget(w.targets[0])}` : ""}` : ""}
                       {rec ? <span style={{ opacity: 0.6 }}>{`  /  ${fmtMeasure(rec.measure)}${fmtTarget(rec.targets?.[0]) ? ` @ ${fmtTarget(rec.targets[0])}` : ""} recovery`}</span> : null}
@@ -162,18 +162,18 @@ export default function ComposePanel() {
 
           {why ? <div className="subtle tiny" style={{ marginTop: 10, lineHeight: 1.5, fontStyle: "italic" }}>“{why}”</div> : null}
 
-          {repairs.map((r, j) => <div key={"r" + j} className="tiny" style={{ marginTop: 6, color: "#8ab4ff" }}>↺ Kai adjusted: {r}</div>)}
-          {warnings.map((w, j) => <div key={"w" + j} className="tiny" style={{ marginTop: 6, color: "#ffca7a" }}>⚠ {w}</div>)}
-          {invalid ? <div className="tiny" style={{ marginTop: 6, color: "#ff8a8a" }}>This one didn&apos;t fully validate — try rephrasing.</div> : null}
+          {repairs.map((r, j) => <div key={"r" + j} className="tiny" style={{ marginTop: 6, color: "var(--ember)" }}>↺ Kai adjusted: {r}</div>)}
+          {warnings.map((w, j) => <div key={"w" + j} className="tiny" style={{ marginTop: 6, color: "var(--gold)" }}>⚠ {w}</div>)}
+          {invalid ? <div className="tiny" style={{ marginTop: 6, color: "var(--danger)" }}>This one didn&apos;t fully validate — try rephrasing.</div> : null}
 
           {done ? (
-            <div className="tiny" style={{ marginTop: 12, color: "#79e0a8", fontWeight: 700 }}>✓ {done}</div>
+            <div className="tiny" style={{ marginTop: 12, color: "var(--success)", fontWeight: 700 }}>✓ {done}</div>
           ) : showDate ? (
             <div style={{ marginTop: 12 }}>
               <div className="tiny subtle" style={{ marginBottom: 6 }}>Which day?</div>
               <div style={{ display: "flex", gap: 8 }}>
                 <input type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={busy}
-                  style={{ flex: 1, background: "rgba(255,255,255,0.04)", color: "inherit", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "8px 10px", fontSize: 13, fontFamily: "inherit" }} />
+                  style={{ flex: 1, background: "var(--surface-2)", color: "inherit", border: "1px solid var(--line)", borderRadius: 8, padding: "8px 10px", fontSize: 13, fontFamily: "inherit" }} />
                 <button disabled={busy} onClick={addToPlan} style={{ padding: "8px 14px", borderRadius: 10, border: "none", cursor: "pointer", color: "#fff", fontWeight: 700, fontSize: 12, background: GRAD }}>{busy ? "Adding…" : "Confirm"}</button>
                 <button disabled={busy} onClick={() => setShowDate(false)} className="trn-sub">Cancel</button>
               </div>
