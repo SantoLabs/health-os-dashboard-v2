@@ -28,7 +28,7 @@ function HowTo({ title, cat }: { title: string; cat: WkExercise | null }) {
         <div className="card">
           <div className="eyebrow" style={{ marginBottom: 8 }}>{cat.name}</div>
           {rows.filter(([, v]) => v).map(([k, v]) => (
-            <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderTop: "1px solid rgba(255,255,255,0.05)", fontSize: 13 }}>
+            <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderTop: "1px solid var(--line)", fontSize: 13 }}>
               <span className="subtle">{k}</span>
               <span style={{ fontWeight: 600, textTransform: "capitalize" }}>{String(v).replace(/_/g, " ")}</span>
             </div>
@@ -110,7 +110,7 @@ export default function ExerciseDetail({ title, onBack }: { title: string; onBac
           {peak != null ? "All-time best" : "Bodyweight movement"}
           {s.best_e1rm != null ? ` · robust best ${kg(s.best_e1rm)} kg` : ""}
         </div>
-        <Spark values={e1rmSeries} target={target} color="#6d8bff" />
+        <Spark values={e1rmSeries} target={target} color="var(--ember)" />
         <div className="trn-range">
           {RANGES.map((r) => (
             <button key={r.k} className={range === r.k ? "on" : ""} onClick={() => setRange(r.k)}>{r.k}</button>
@@ -122,12 +122,12 @@ export default function ExerciseDetail({ title, onBack }: { title: string; onBac
         <div className="trn-cell"><div className="v tnum">{s.recent_top_weight != null ? kg(s.recent_top_weight) : "—"}</div><div className="l">top set kg</div></div>
         <div className="trn-cell"><div className="v tnum">{s.max_weight != null ? kg(s.max_weight) : "—"}</div><div className="l">heaviest kg</div></div>
         <div className="trn-cell hl"><div className="v tnum">{s.best_e1rm != null ? kg(s.best_e1rm) : "—"}</div><div className="l">best 1RM</div></div>
-        <div className="trn-cell"><div className="v tnum" style={{ color: vsPrior == null ? undefined : vsPrior >= 0 ? "#34d6a4" : "#ff6f5e" }}>{vsPrior == null ? "—" : `${vsPrior >= 0 ? "+" : "−"}${Math.abs(vsPrior)}`}</div><div className="l">vs prior</div></div>
+        <div className="trn-cell"><div className="v tnum" style={{ color: vsPrior == null ? undefined : vsPrior >= 0 ? "var(--success)" : "var(--danger)" }}>{vsPrior == null ? "—" : `${vsPrior >= 0 ? "+" : "−"}${Math.abs(vsPrior)}`}</div><div className="l">vs prior</div></div>
       </div>
 
       <div className="card">
         <div className="trn-eyebrow">Session volume · {range}</div>
-        <Spark values={volSeries} color="#34d6a4" height={90} />
+        <Spark values={volSeries} color="var(--success)" height={90} />
       </div>
 
       <div className="eyebrow">Recent sessions</div>
