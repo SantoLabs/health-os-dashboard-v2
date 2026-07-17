@@ -3,11 +3,11 @@ import { useEffect, useState } from "react";
 import { strengthSuggest, strengthCommitSuggestion, strengthSwap, type StrSuggest } from "../lib/api";
 
 const INT: Record<string, { label: string; bg: string; fg: string }> = {
-  push: { label: "Progress", bg: "rgba(52,211,153,0.15)", fg: "#34d399" },
-  maintain: { label: "Maintain", bg: "rgba(95,125,255,0.15)", fg: "#9db0ff" },
-  ease: { label: "Easy", bg: "rgba(255,181,71,0.15)", fg: "#ffb547" },
+  push: { label: "Progress", bg: "color-mix(in srgb, var(--success) 15%, transparent)", fg: "var(--success)" },
+  maintain: { label: "Maintain", bg: "color-mix(in srgb, var(--ember) 15%, transparent)", fg: "var(--ember)" },
+  ease: { label: "Easy", bg: "color-mix(in srgb, var(--gold) 15%, transparent)", fg: "var(--gold)" },
 };
-const TONE: Record<string, string> = { good: "#34d399", warn: "#ffb547", bad: "#fb7185", neutral: "#8a90a6" };
+const TONE: Record<string, string> = { good: "var(--success)", warn: "var(--gold)", bad: "var(--danger)", neutral: "var(--muted)" };
 const FEELS: { k: string; label: string }[] = [{ k: "fresh", label: "Fresh" }, { k: "normal", label: "Normal" }, { k: "beat", label: "Beat" }];
 
 const SWAP_REASONS = ["Feeling fresh", "Want variety", "Prefer this today", "Coach pick felt off"];
@@ -125,18 +125,18 @@ export default function TodaySuggestion({ onStartPlan }: { onStartPlan: (planId:
       {eyebrow}
       <div
         onClick={() => { if (!busy && !swapOpen) start(); }}
-        style={{ padding: 12, borderRadius: 12, cursor: busy || swapOpen ? "default" : "pointer", background: "rgba(139,124,246,0.08)", border: "1px solid rgba(162,116,255,0.35)" }}
+        style={{ padding: 12, borderRadius: 12, cursor: busy || swapOpen ? "default" : "pointer", background: "color-mix(in srgb, var(--ember) 8%, transparent)", border: "1px solid color-mix(in srgb, var(--ember) 35%, transparent)" }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ fontSize: 15, fontWeight: 800 }}>{d.label}</div>
           <span className="pill" style={{ background: c.bg, color: c.fg, fontSize: 10.5, fontWeight: 700 }}>{c.label}</span>
-          <span style={{ marginLeft: "auto", fontSize: 12.5, fontWeight: 700, color: "#c9b6ff" }}>{busy ? "Starting…" : "Start ›"}</span>
+          <span style={{ marginLeft: "auto", fontSize: 12.5, fontWeight: 700, color: "var(--ember)" }}>{busy ? "Starting…" : "Start ›"}</span>
         </div>
         <div className="subtle tiny" style={{ marginTop: 3 }}>{headline} · {nEx} exercise{nEx === 1 ? "" : "s"}{d.est_duration_min ? ` · ~${d.est_duration_min} min` : ""}</div>
         {chips.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 9 }}>
             {chips.map((ch, i) => (
-              <span key={i} style={{ fontSize: 11, fontWeight: 600, color: TONE[ch.tone] || "#8a90a6", background: "rgba(255,255,255,0.05)", borderRadius: 999, padding: "3px 9px" }}>{ch.label}</span>
+              <span key={i} style={{ fontSize: 11, fontWeight: 600, color: TONE[ch.tone] || "var(--muted)", background: "var(--surface-2)", borderRadius: 999, padding: "3px 9px" }}>{ch.label}</span>
             ))}
           </div>
         )}
@@ -147,32 +147,32 @@ export default function TodaySuggestion({ onStartPlan }: { onStartPlan: (planId:
             const on = feel === f.k;
             return (
               <button key={f.k} disabled={feeling} onClick={() => pickFeel(f.k)}
-                style={{ fontSize: 11.5, fontWeight: 700, padding: "4px 11px", borderRadius: 999, border: `1px solid ${on ? "rgba(162,116,255,0.6)" : "rgba(255,255,255,0.14)"}`, background: on ? "rgba(139,124,246,0.22)" : "transparent", color: on ? "#c9b6ff" : "#9aa0b4", cursor: feeling ? "default" : "pointer" }}>{f.label}</button>
+                style={{ fontSize: 11.5, fontWeight: 700, padding: "4px 11px", borderRadius: 999, border: `1px solid ${on ? "color-mix(in srgb, var(--ember) 55%, transparent)" : "var(--line)"}`, background: on ? "color-mix(in srgb, var(--ember) 18%, transparent)" : "transparent", color: on ? "var(--ember)" : "var(--muted)", cursor: feeling ? "default" : "pointer" }}>{f.label}</button>
             );
           })}
           {feeling && <span className="subtle tiny" style={{ opacity: 0.8 }}>updating…</span>}
         </div>
 
-        {cErr && <div className="subtle tiny" style={{ color: "#fb7185", marginTop: 6 }}>{cErr}</div>}
+        {cErr && <div className="subtle tiny" style={{ color: "var(--danger)", marginTop: 6 }}>{cErr}</div>}
 
         {!swapOpen ? (
-          <button onClick={(e) => { stop(e); setSwapOpen(true); }} style={{ marginTop: 10, background: "none", border: "none", color: "#9aa0b4", fontSize: 12, fontWeight: 600, padding: 0, cursor: "pointer" }}>Not feeling it? Swap ▾</button>
+          <button onClick={(e) => { stop(e); setSwapOpen(true); }} style={{ marginTop: 10, background: "none", border: "none", color: "var(--muted)", fontSize: 12, fontWeight: 600, padding: 0, cursor: "pointer" }}>Not feeling it? Swap ▾</button>
         ) : (
-          <div onClick={stop} style={{ marginTop: 11, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 10 }}>
+          <div onClick={stop} style={{ marginTop: 11, borderTop: "1px solid var(--line)", paddingTop: 10 }}>
             {!pending ? (
               <>
                 <div className="subtle tiny" style={{ marginBottom: 7 }}>Do a different split instead:</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {alts.map((a) => (
                     <button key={a.split} onClick={() => setPending({ kind: "swap", to: a.split, toLabel: a.label })}
-                      style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 600, color: "inherit", cursor: "pointer" }}>
-                      {a.label}<span style={{ color: "#8a90a6", fontWeight: 500 }}> · {a.days_since}d{a.leg_blocked ? " · legs" : ""}</span>
+                      style={{ background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 600, color: "inherit", cursor: "pointer" }}>
+                      {a.label}<span style={{ color: "var(--muted)", fontWeight: 500 }}> · {a.days_since}d{a.leg_blocked ? " · legs" : ""}</span>
                     </button>
                   ))}
                 </div>
                 <div style={{ display: "flex", gap: 12, marginTop: 10, alignItems: "center" }}>
-                  <button onClick={() => setPending({ kind: "decline" })} style={{ background: "none", border: "none", color: "#ffb0b0", fontSize: 12, fontWeight: 600, padding: 0, cursor: "pointer" }}>Not today</button>
-                  <button onClick={() => setSwapOpen(false)} style={{ background: "none", border: "none", color: "#8a90a6", fontSize: 12, padding: 0, cursor: "pointer" }}>Cancel</button>
+                  <button onClick={() => setPending({ kind: "decline" })} style={{ background: "none", border: "none", color: "var(--danger)", fontSize: 12, fontWeight: 600, padding: 0, cursor: "pointer" }}>Not today</button>
+                  <button onClick={() => setSwapOpen(false)} style={{ background: "none", border: "none", color: "var(--muted)", fontSize: 12, padding: 0, cursor: "pointer" }}>Cancel</button>
                 </div>
               </>
             ) : (
@@ -181,10 +181,10 @@ export default function TodaySuggestion({ onStartPlan }: { onStartPlan: (planId:
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {reasons.map((r) => (
                     <button key={r} disabled={working} onClick={() => chooseReason(r)}
-                      style={{ background: "rgba(139,124,246,0.12)", border: "1px solid rgba(162,116,255,0.3)", borderRadius: 999, padding: "5px 11px", fontSize: 12, fontWeight: 600, color: "#c9b6ff", cursor: working ? "default" : "pointer", opacity: working ? 0.6 : 1 }}>{r}</button>
+                      style={{ background: "color-mix(in srgb, var(--ember) 12%, transparent)", border: "1px solid color-mix(in srgb, var(--ember) 30%, transparent)", borderRadius: 999, padding: "5px 11px", fontSize: 12, fontWeight: 600, color: "var(--ember)", cursor: working ? "default" : "pointer", opacity: working ? 0.6 : 1 }}>{r}</button>
                   ))}
                 </div>
-                <button onClick={() => setPending(null)} disabled={working} style={{ background: "none", border: "none", color: "#8a90a6", fontSize: 12, padding: 0, marginTop: 9, cursor: "pointer" }}>← Back</button>
+                <button onClick={() => setPending(null)} disabled={working} style={{ background: "none", border: "none", color: "var(--muted)", fontSize: 12, padding: 0, marginTop: 9, cursor: "pointer" }}>← Back</button>
               </>
             )}
           </div>
