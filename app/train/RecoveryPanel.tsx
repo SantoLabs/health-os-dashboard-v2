@@ -43,8 +43,8 @@ const FIG_LABEL: Record<string, string> = {
   glutes: "Glutes", hamstrings: "Hamstrings",
 };
 
-const REC_PAL: Record<string, string> = { fresh: "#4ecb8f", recovering: "#e3ac4e", fatigued: "#ef6584" };
-const LOAD_PAL: Record<string, string> = { neglected: "#565b6b", light: "#6d8ce8", heavy: "#9d7bf0", peak: "#ef6584" };
+const REC_PAL: Record<string, string> = { fresh: "var(--success)", recovering: "var(--gold)", fatigued: "var(--danger)" };
+const LOAD_PAL: Record<string, string> = { neglected: "var(--muted)", light: "var(--gold)", heavy: "var(--ember)", peak: "var(--danger)" };
 const HINTS: Record<string, string> = {
   fatigued: "give it another day", recovering: "light work is fine", fresh: "ready to train",
   neglected: "no recent volume", light: "low recent volume", heavy: "high recent volume", peak: "highest recent volume",
@@ -54,7 +54,7 @@ const loadState = (pct: number) => (pct >= 80 ? "peak" : pct >= 50 ? "heavy" : p
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 function MobRow({ x }: { x: RecMobility }) {
-  return <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderTop: "1px solid rgba(255,255,255,0.05)" }}><span style={{ fontSize: 14 }}>🧘</span><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 600 }}>{x.name}</div><div className="subtle tiny">{[x.primary_muscle, x.default_prescription].filter(Boolean).join(" · ")}</div></div></div>;
+  return <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderTop: "1px solid var(--line)" }}><span style={{ fontSize: 14 }}>🧘</span><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 600 }}>{x.name}</div><div className="subtle tiny">{[x.primary_muscle, x.default_prescription].filter(Boolean).join(" · ")}</div></div></div>;
 }
 
 export default function RecoveryPanel({ onGoWorkouts }: { onGoWorkouts?: () => void }) {
@@ -99,7 +99,7 @@ export default function RecoveryPanel({ onGoWorkouts }: { onGoWorkouts?: () => v
 
   const selM = sel ? (M[sel.mg] || null) : null;
   const selState = selM ? stateOf(selM) : null;
-  const selColor = selState ? palette[selState] : "#8b90a0";
+  const selColor = selState ? palette[selState] : "var(--muted)";
   const selPct = selM ? (mode === "recovery" ? selM.freshness : selM.load_pct) : 0;
   const selAliases = sel ? (MUS[sel.mg]?.aliases || []) : [];
   const selMob = sel ? mobility.filter((x) => x.primary_muscle != null && selAliases.includes(x.primary_muscle)).slice(0, 6) : [];
@@ -107,15 +107,15 @@ export default function RecoveryPanel({ onGoWorkouts }: { onGoWorkouts?: () => v
   const pickFig = (fk: string) => setSel((s) => (s && s.fig === fk ? null : { mg: FKEY_MG[fk], label: FIG_LABEL[fk], fig: fk }));
 
   const legend = mode === "recovery"
-    ? [["#ef6584", "Fatigued"], ["#e3ac4e", "Recovering"], ["#4ecb8f", "Fresh"]]
-    : [["#565b6b", "Neglected"], ["#6d8ce8", "Light"], ["#9d7bf0", "Heavy"], ["#ef6584", "Peak"]];
+    ? [["var(--danger)", "Fatigued"], ["var(--gold)", "Recovering"], ["var(--success)", "Fresh"]]
+    : [["var(--muted)", "Neglected"], ["var(--gold)", "Light"], ["var(--ember)", "Heavy"], ["var(--danger)", "Peak"]];
 
   return (
     <div>
       {ctx && (ctx.readiness != null || ctx.acwr != null) ? (
         <div className="card" style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <div style={{ textAlign: "center", minWidth: 46 }}>
-            <div className="tnum" style={{ fontSize: 24, fontWeight: 800, color: ctx.readiness != null && ctx.readiness < 40 ? "#ef6584" : ctx.readiness != null && ctx.readiness < 65 ? "#e3ac4e" : "#4ecb8f" }}>{ctx.readiness ?? "—"}</div>
+            <div className="tnum" style={{ fontSize: 24, fontWeight: 800, color: ctx.readiness != null && ctx.readiness < 40 ? "var(--danger)" : ctx.readiness != null && ctx.readiness < 65 ? "var(--gold)" : "var(--success)" }}>{ctx.readiness ?? "—"}</div>
             <div className="subtle tiny">readiness</div>
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -128,41 +128,41 @@ export default function RecoveryPanel({ onGoWorkouts }: { onGoWorkouts?: () => v
       <div className="card" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ fontSize: 14, fontWeight: 700 }}>Muscle map</div>
-          <div style={{ display: "flex", gap: 4, background: "rgba(255,255,255,0.05)", borderRadius: 999, padding: 3 }}>
+          <div style={{ display: "flex", gap: 4, background: "var(--surface-2)", borderRadius: 999, padding: 3 }}>
             {(["recovery", "load"] as Mode[]).map((m) => (
-              <button key={m} onClick={() => setMode(m)} style={{ padding: "5px 12px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, textTransform: "capitalize", background: mode === m ? "linear-gradient(135deg,#5f7dff,#a274ff)" : "transparent", color: mode === m ? "#fff" : "#8a90a6" }}>{m}</button>
+              <button key={m} onClick={() => setMode(m)} style={{ padding: "5px 12px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, textTransform: "capitalize", background: mode === m ? "var(--t-grad)" : "transparent", color: mode === m ? "#fff" : "var(--muted)" }}>{m}</button>
             ))}
           </div>
         </div>
-        {err ? <div className="subtle tiny" style={{ color: "#ff8a8a" }}>{err}</div> : null}
+        {err ? <div className="subtle tiny" style={{ color: "var(--danger)" }}>{err}</div> : null}
         {loading ? <div className="muted center pad">Loading…</div> : (
           <>
             <div style={{ display: "flex", justifyContent: "space-evenly" }}>
-              <div style={{ width: 150, height: 285 }}><MuscleFigure view="front" states={states} palette={palette} selected={sel?.fig ?? null} onSelect={pickFig} /></div>
-              <div style={{ width: 150, height: 285 }}><MuscleFigure view="back" states={states} palette={palette} selected={sel?.fig ?? null} onSelect={pickFig} /></div>
+              <div style={{ width: 150, height: 285 }}><MuscleFigure view="front" states={states} palette={palette} base="var(--muted)" selected={sel?.fig ?? null} onSelect={pickFig} /></div>
+              <div style={{ width: 150, height: 285 }}><MuscleFigure view="back" states={states} palette={palette} base="var(--muted)" selected={sel?.fig ?? null} onSelect={pickFig} /></div>
             </div>
             <div style={{ display: "flex", justifyContent: "space-evenly" }}>
               <span className="subtle tiny">Front</span><span className="subtle tiny">Back</span>
             </div>
 
             {sel ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 14, padding: "12px 14px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 14, padding: "12px 14px" }}>
                 <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ fontSize: 13, fontWeight: 700 }}>{sel.label}</span>
-                    {selState ? <span style={{ background: selColor + "22", color: selColor, fontSize: 10, fontWeight: 700, borderRadius: 999, padding: "2px 8px", textTransform: "uppercase", letterSpacing: 0.4 }}>{cap(selState)}</span> : null}
+                    {selState ? <span style={{ background: `color-mix(in srgb, ${selColor} 16%, transparent)`, color: selColor, fontSize: 10, fontWeight: 700, borderRadius: 999, padding: "2px 8px", textTransform: "uppercase", letterSpacing: 0.4 }}>{cap(selState)}</span> : null}
                   </div>
                   <div className="subtle tiny">
                     {selM && selM.days_ago != null ? `Last trained ${selM.days_ago === 0 ? "today" : selM.days_ago + "d ago"}${selState ? " · " + HINTS[selState] : ""}` : "Never trained — no recent volume."}
                   </div>
                   {selM ? <div className="subtle tiny" style={{ opacity: 0.8 }}>{selM.sets_14d} sets · {Math.round(selM.vol_14d).toLocaleString("en-US")} kg / 14d</div> : null}
-                  <div style={{ height: 5, borderRadius: 999, background: "rgba(255,255,255,0.08)", overflow: "hidden", marginTop: 2 }}>
+                  <div style={{ height: 5, borderRadius: 999, background: "var(--line-2)", overflow: "hidden", marginTop: 2 }}>
                     <div style={{ height: "100%", borderRadius: 999, background: selColor, width: selPct + "%" }} />
                   </div>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
                   <span style={{ color: selColor, fontSize: 18, fontWeight: 800 }} className="tnum">{selPct}%</span>
-                  <span onClick={() => setSel(null)} style={{ color: "#6b7080", fontSize: 11, cursor: "pointer" }}>Close</span>
+                  <span onClick={() => setSel(null)} style={{ color: "var(--muted)", fontSize: 11, cursor: "pointer" }}>Close</span>
                 </div>
               </div>
             ) : null}
@@ -176,7 +176,7 @@ export default function RecoveryPanel({ onGoWorkouts }: { onGoWorkouts?: () => v
 
             <div style={{ display: "flex", justifyContent: "center", gap: 16, flexWrap: "wrap" }}>
               {legend.map(([c, t]) => (
-                <span key={t} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "#8a90a6" }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: c, display: "inline-block" }} />{t}</span>
+                <span key={t} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: c, display: "inline-block" }} />{t}</span>
               ))}
             </div>
             <div className="subtle tiny" style={{ textAlign: "center", opacity: 0.7, lineHeight: 1.5 }}>Tap a muscle for detail. Derived from your training recency and volume — not soreness sensors.</div>
@@ -189,12 +189,12 @@ export default function RecoveryPanel({ onGoWorkouts }: { onGoWorkouts?: () => v
           <div className="eyebrow" style={{ marginBottom: 8 }}>Recovery routines</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {[...routines].sort((a, b) => Number(b.recommended) - Number(a.recommended)).map((r) => (
-              <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: 12, borderRadius: 12, background: "rgba(255,255,255,0.03)", border: r.recommended ? "1px solid rgba(162,116,255,0.4)" : "1px solid rgba(255,255,255,0.06)" }}>
-                <span aria-hidden style={{ flex: "0 0 auto", fontSize: 10, fontWeight: 700, letterSpacing: 0.3, padding: "3px 7px", borderRadius: 6, background: "rgba(52,211,153,0.16)", color: "#7fe3b8" }}>RECOVERY</span>
+              <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: 12, borderRadius: 12, background: "var(--surface-2)", border: r.recommended ? "1px solid color-mix(in srgb, var(--ember) 40%, transparent)" : "1px solid var(--line)" }}>
+                <span aria-hidden style={{ flex: "0 0 auto", fontSize: 10, fontWeight: 700, letterSpacing: 0.3, padding: "3px 7px", borderRadius: 6, background: "color-mix(in srgb, var(--success) 16%, transparent)", color: "var(--success)" }}>RECOVERY</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                     <span style={{ fontWeight: 700, fontSize: 13 }}>{r.name}</span>
-                    {r.recommended ? <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", padding: "2px 7px", borderRadius: 999, background: "rgba(162,116,255,0.18)", color: "#c9b6ff" }}>Recommended</span> : null}
+                    {r.recommended ? <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", padding: "2px 7px", borderRadius: 999, background: "color-mix(in srgb, var(--ember) 18%, transparent)", color: "var(--ember)" }}>Recommended</span> : null}
                   </div>
                   <div className="subtle tiny">{r.item_count} move{r.item_count === 1 ? "" : "s"}{r.est_duration_mins ? ` · ${r.est_duration_mins}m` : ""}{r.focus ? ` · ${r.focus}` : ""}</div>
                 </div>
