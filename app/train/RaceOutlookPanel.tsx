@@ -9,7 +9,7 @@ import type { RaceGoal, RaceOutlookResp, PredLeg, PacingLeg, RaceFuel } from "..
 // (+open-water), tri = legs + transitions — with a confidence range, an even/negative-split pacing plan,
 // and Kai's honest read of the runway. Not grade-adjusted (no per-point course elevation).
 
-const GRAD = "linear-gradient(135deg,var(--ember),var(--ember-strong))";
+const GRAD = "var(--t-grad)";
 const SPORT: Record<string, { label: string; color: string }> = {
   swim: { label: "Swim", color: "#5aa9e0" },
   bike: { label: "Bike", color: "#e0a15a" },
