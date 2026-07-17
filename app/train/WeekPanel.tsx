@@ -9,7 +9,7 @@ import type { WeekDay, ComposeWorkout, ComposeStep, ComposeLoop, ComposeTarget }
 // deterministic guardrail layer that keeps it sound (a rest day, no stacked hard days, no hard-after-long).
 // The week persists so reopening shows the same plan; commit writes it into your schedule in one go.
 
-const GRAD = "linear-gradient(135deg,var(--ember),var(--ember-strong))";
+const GRAD = "var(--t-grad)";
 const EXAMPLES = ["Balanced 5-day week", "Easy base week, low intensity", "3 runs + 2 rides, one long day", "Beginner week, 4 days"];
 const ROLE_COLOR: Record<string, string> = {
   recovery: "var(--success)", easy: "var(--success)", endurance: "#6fb0d6", technique: "#6fb0d6",
