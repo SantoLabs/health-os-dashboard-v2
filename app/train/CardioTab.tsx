@@ -100,37 +100,37 @@ function CardioChart({ acts, sport }: { acts: CardioActivityLite[]; sport: strin
     <div className="card" style={{ marginBottom: 8 }}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
         {METRICS.map(([k, lbl]) => (
-          <button key={k} onClick={() => { setMetric(k); setHover(null); }} style={{ padding: "5px 10px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, background: metric === k ? "linear-gradient(135deg,#f0883e,#f0a03e)" : "rgba(255,255,255,0.05)", color: metric === k ? "#1a1206" : "#8a90a6" }}>{lbl}</button>
+          <button key={k} onClick={() => { setMetric(k); setHover(null); }} style={{ padding: "5px 10px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, background: metric === k ? "var(--t-grad)" : "var(--surface-2)", color: metric === k ? "#fff" : "var(--muted)" }}>{lbl}</button>
         ))}
       </div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 2 }}>
         <div className="tnum" style={{ fontSize: 26, fontWeight: 800 }}>{fmtMetric(total, metric)}</div>
-        {pct != null ? <span style={{ fontSize: 12, fontWeight: 700, color: pct >= 0 ? "#34d399" : "#fb7185" }}>{pct >= 0 ? "▲" : "▼"} {Math.abs(pct)}%</span> : null}
+        {pct != null ? <span style={{ fontSize: 12, fontWeight: 700, color: pct >= 0 ? "var(--success)" : "var(--danger)" }}>{pct >= 0 ? "▲" : "▼"} {Math.abs(pct)}%</span> : null}
       </div>
       <div className="subtle tiny" style={{ marginBottom: 6 }}>{cap(sport)} · {rdef[0]}{pct != null ? " · vs prior period" : ""}</div>
       <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block", touchAction: "none", cursor: "crosshair" }} onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={() => setHover(null)}>
-        <defs><linearGradient id="carea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f0883e" stopOpacity="0.35" /><stop offset="100%" stopColor="#f0883e" stopOpacity="0" /></linearGradient></defs>
+        <defs><linearGradient id="carea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--ember)" stopOpacity="0.35" /><stop offset="100%" stopColor="var(--ember)" stopOpacity="0" /></linearGradient></defs>
         {grid.map((g, i) => {
           const y = baseY - g * plotH;
           return (<g key={i}>
-            <line x1={x0} y1={y} x2={x0 + plotW} y2={y} stroke="rgba(255,255,255,0.07)" strokeWidth={1} />
-            <text x={W - padR + 5} y={y + 3} fill="#6b7080" fontSize={8}>{axisLabel(ymax * g, metric)}</text>
+            <line x1={x0} y1={y} x2={x0 + plotW} y2={y} stroke="var(--line)" strokeWidth={1} />
+            <text x={W - padR + 5} y={y + 3} fill="var(--muted)" fontSize={8}>{axisLabel(ymax * g, metric)}</text>
           </g>);
         })}
         <polygon points={areaPts} fill="url(#carea)" />
-        <polyline points={linePts} fill="none" stroke="#f0883e" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-        {bvals.map((v, i) => v > 0 ? <circle key={i} cx={X(i)} cy={Y(v)} r={hover === i ? 4 : 2.2} fill="#f0a03e" stroke="#0d0f16" strokeWidth={hover === i ? 1.5 : 0} /> : null)}
-        {xTickIdx.map((i) => <text key={"x" + i} x={X(i)} y={H - 6} fill="#6b7080" fontSize={8} textAnchor="middle">{xlabel(buckets[i])}</text>)}
+        <polyline points={linePts} fill="none" stroke="var(--ember)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        {bvals.map((v, i) => v > 0 ? <circle key={i} cx={X(i)} cy={Y(v)} r={hover === i ? 4 : 2.2} fill="var(--ember)" stroke="var(--surface)" strokeWidth={hover === i ? 1.5 : 0} /> : null)}
+        {xTickIdx.map((i) => <text key={"x" + i} x={X(i)} y={H - 6} fill="var(--muted)" fontSize={8} textAnchor="middle">{xlabel(buckets[i])}</text>)}
         {hover != null ? (
           <g>
-            <line x1={X(hover)} y1={padT} x2={X(hover)} y2={baseY} stroke="rgba(240,136,62,0.5)" strokeWidth={1} strokeDasharray="3 3" />
-            <text x={Math.max(x0 + 26, Math.min(X(hover), x0 + plotW - 26))} y={padT - 3} fill="#f0c088" fontSize={9} fontWeight={700} textAnchor="middle">{fmtMetric(bvals[hover], metric)} · {xlabel(buckets[hover])}</text>
+            <line x1={X(hover)} y1={padT} x2={X(hover)} y2={baseY} stroke="color-mix(in srgb, var(--ember) 50%, transparent)" strokeWidth={1} strokeDasharray="3 3" />
+            <text x={Math.max(x0 + 26, Math.min(X(hover), x0 + plotW - 26))} y={padT - 3} fill="var(--ember)" fontSize={9} fontWeight={700} textAnchor="middle">{fmtMetric(bvals[hover], metric)} · {xlabel(buckets[hover])}</text>
           </g>
         ) : null}
       </svg>
       <div style={{ display: "flex", gap: 4, marginTop: 8, flexWrap: "wrap", justifyContent: "center" }}>
         {RANGES.map(([k]) => (
-          <button key={k} onClick={() => { setRange(k); setHover(null); }} style={{ padding: "3px 10px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, background: range === k ? "rgba(240,136,62,0.18)" : "transparent", color: range === k ? "#f0a35e" : "#6b7080" }}>{k}</button>
+          <button key={k} onClick={() => { setRange(k); setHover(null); }} style={{ padding: "3px 10px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, background: range === k ? "color-mix(in srgb, var(--ember) 18%, transparent)" : "transparent", color: range === k ? "var(--ember)" : "var(--muted)" }}>{k}</button>
         ))}
       </div>
     </div>
@@ -152,9 +152,9 @@ function CardioList({ acts, sport, onOpen }: { acts: CardioActivityLite[]; sport
     <div>
       <div className="card" style={{ marginBottom: 8, padding: "8px 10px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <button aria-label="Older" disabled={monthIdx >= months.length - 1} onClick={() => setMonthIdx((i) => Math.min(months.length - 1, i + 1))} style={{ background: "none", border: "none", color: monthIdx >= months.length - 1 ? "rgba(255,255,255,0.2)" : "#f0a35e", fontSize: 22, cursor: monthIdx >= months.length - 1 ? "default" : "pointer", padding: "0 10px", lineHeight: 1 }}>‹</button>
+          <button aria-label="Older" disabled={monthIdx >= months.length - 1} onClick={() => setMonthIdx((i) => Math.min(months.length - 1, i + 1))} style={{ background: "none", border: "none", color: monthIdx >= months.length - 1 ? "var(--faint)" : "var(--ember)", fontSize: 22, cursor: monthIdx >= months.length - 1 ? "default" : "pointer", padding: "0 10px", lineHeight: 1 }}>‹</button>
           <div style={{ fontWeight: 700, fontSize: 13 }}>{monthLabel}</div>
-          <button aria-label="Newer" disabled={monthIdx <= 0} onClick={() => setMonthIdx((i) => Math.max(0, i - 1))} style={{ background: "none", border: "none", color: monthIdx <= 0 ? "rgba(255,255,255,0.2)" : "#f0a35e", fontSize: 22, cursor: monthIdx <= 0 ? "default" : "pointer", padding: "0 10px", lineHeight: 1 }}>›</button>
+          <button aria-label="Newer" disabled={monthIdx <= 0} onClick={() => setMonthIdx((i) => Math.max(0, i - 1))} style={{ background: "none", border: "none", color: monthIdx <= 0 ? "var(--faint)" : "var(--ember)", fontSize: 22, cursor: monthIdx <= 0 ? "default" : "pointer", padding: "0 10px", lineHeight: 1 }}>›</button>
         </div>
       </div>
       <div className="eyebrow" style={{ marginTop: 0 }}>{cap(sport)} sessions</div>
@@ -167,10 +167,10 @@ function CardioList({ acts, sport, onOpen }: { acts: CardioActivityLite[]; sport
               <div className="subtle tiny">{new Date(a.date + "T00:00:00").getDate()} {MONTHS[new Date(a.date + "T00:00:00").getMonth()]}{a.duration_mins != null ? ` · ${fmtHrMin(a.duration_mins)}` : ""}</div>
             </div>
             <div style={{ textAlign: "right" }}>
-              <div className="tnum" style={{ fontSize: 13, fontWeight: 600, color: "#c9cede" }}>{sport === "swimming" && a.avg_swolf != null ? `SWOLF ${Math.round(a.avg_swolf)}` : a.pace_min_km != null ? `${fmtPace(a.pace_min_km)}/km` : ""}</div>
+              <div className="tnum" style={{ fontSize: 13, fontWeight: 600, color: "var(--text-2)" }}>{sport === "swimming" && a.avg_swolf != null ? `SWOLF ${Math.round(a.avg_swolf)}` : a.pace_min_km != null ? `${fmtPace(a.pace_min_km)}/km` : ""}</div>
               {a.avg_hr != null ? <div className="subtle tiny tnum">{Math.round(a.avg_hr)} bpm</div> : null}
             </div>
-            <span style={{ color: "#6b7080", fontSize: 18, marginLeft: 2 }}>{"›"}</span>
+            <span style={{ color: "var(--muted)", fontSize: 18, marginLeft: 2 }}>{"›"}</span>
           </div>
         ))}
     </div>
@@ -230,7 +230,7 @@ function ZoneBar({ label, rows }: { label: string; rows: { range: string; secs: 
           return (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span className="tnum" style={{ width: 20, fontSize: 11, fontWeight: 700, color: r.color }}>Z{i + 1}</span>
-              <div style={{ flex: 1, height: 15, borderRadius: 5, background: "rgba(255,255,255,0.05)", overflow: "hidden" }}>
+              <div style={{ flex: 1, height: 15, borderRadius: 5, background: "var(--surface-2)", overflow: "hidden" }}>
                 <div style={{ width: `${pct}%`, height: "100%", background: r.color, minWidth: r.secs > 0 ? 3 : 0, borderRadius: 5 }} />
               </div>
               <span className="tnum subtle" style={{ width: 82, fontSize: 10, textAlign: "right" }}>{r.range}</span>
@@ -245,7 +245,7 @@ function ZoneBar({ label, rows }: { label: string; rows: { range: string; secs: 
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "9px 11px" }}>
+    <div style={{ background: "var(--surface-2)", borderRadius: 10, padding: "9px 11px" }}>
       <div className="subtle tiny" style={{ marginBottom: 2 }}>{label}</div>
       <div className="tnum" style={{ fontSize: 15, fontWeight: 700 }}>{value}</div>
     </div>
@@ -300,22 +300,22 @@ function RouteTrace({ poly }: { poly: string }) {
   const barPx = barM / metersPerPx;
 
   return (
-    <div className="card" style={{ padding: 0, overflow: "hidden", marginBottom: 8, background: "#0b0d13" }}>
+    <div className="card" style={{ padding: 0, overflow: "hidden", marginBottom: 8, background: "var(--surface-2)" }}>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block" }}>
         <defs>
           <filter id="rtglow" x="-30%" y="-30%" width="160%" height="160%">
             <feGaussianBlur stdDeviation="2.4" />
           </filter>
         </defs>
-        {[0.2, 0.4, 0.6, 0.8].map((f) => <line key={"v" + f} x1={W * f} y1={0} x2={W * f} y2={H} stroke="rgba(255,255,255,0.035)" strokeWidth={1} />)}
-        {[0.25, 0.5, 0.75].map((f) => <line key={"h" + f} x1={0} y1={H * f} x2={W} y2={H * f} stroke="rgba(255,255,255,0.035)" strokeWidth={1} />)}
-        <path d={dpath} fill="none" stroke="#f0883e" strokeWidth={5} opacity={0.35} filter="url(#rtglow)" strokeLinejoin="round" strokeLinecap="round" />
-        <path d={dpath} fill="none" stroke="#f0a03e" strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" />
-        <circle cx={PX(s[1])} cy={PY(s[0])} r={6} fill="none" stroke="#34d399" strokeWidth={1.5} opacity={0.5} />
-        <circle cx={PX(s[1])} cy={PY(s[0])} r={3.5} fill="#34d399" stroke="#0b0d13" strokeWidth={1.5} />
-        <circle cx={PX(e[1])} cy={PY(e[0])} r={3.5} fill="#fb7185" stroke="#0b0d13" strokeWidth={1.5} />
-        <line x1={14} y1={H - 14} x2={14 + barPx} y2={H - 14} stroke="rgba(255,255,255,0.45)" strokeWidth={2} strokeLinecap="round" />
-        <text x={14} y={H - 19} fill="rgba(255,255,255,0.55)" fontSize={9}>{barM >= 1000 ? `${barM / 1000} km` : `${barM} m`}</text>
+        {[0.2, 0.4, 0.6, 0.8].map((f) => <line key={"v" + f} x1={W * f} y1={0} x2={W * f} y2={H} stroke="var(--line)" strokeWidth={1} />)}
+        {[0.25, 0.5, 0.75].map((f) => <line key={"h" + f} x1={0} y1={H * f} x2={W} y2={H * f} stroke="var(--line)" strokeWidth={1} />)}
+        <path d={dpath} fill="none" stroke="var(--ember)" strokeWidth={5} opacity={0.35} filter="url(#rtglow)" strokeLinejoin="round" strokeLinecap="round" />
+        <path d={dpath} fill="none" stroke="var(--ember)" strokeWidth={3} strokeLinejoin="round" strokeLinecap="round" />
+        <circle cx={PX(s[1])} cy={PY(s[0])} r={6} fill="none" stroke="var(--success)" strokeWidth={1.5} opacity={0.5} />
+        <circle cx={PX(s[1])} cy={PY(s[0])} r={3.5} fill="var(--success)" stroke="var(--surface-2)" strokeWidth={1.5} />
+        <circle cx={PX(e[1])} cy={PY(e[0])} r={3.5} fill="var(--danger)" stroke="var(--surface-2)" strokeWidth={1.5} />
+        <line x1={14} y1={H - 14} x2={14 + barPx} y2={H - 14} stroke="var(--muted)" strokeWidth={2} strokeLinecap="round" />
+        <text x={14} y={H - 19} fill="var(--muted)" fontSize={9}>{barM >= 1000 ? `${barM / 1000} km` : `${barM} m`}</text>
       </svg>
     </div>
   );
@@ -325,7 +325,7 @@ export function CardioActivityDetail({ id, sport, onBack }: { id: string; sport:
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => { let a = true; cardioDetail(id).then((r) => a && setD(r)).catch((e) => a && setErr((e as Error).message)); return () => { a = false; }; }, [id]);
 
-  const back = <button onClick={onBack} style={{ background: "none", border: "none", color: "#f0a35e", cursor: "pointer", fontSize: 13, fontWeight: 600, padding: "4px 0" }}>{"‹"} Back</button>;
+  const back = <button onClick={onBack} style={{ background: "none", border: "none", color: "var(--ember)", cursor: "pointer", fontSize: 13, fontWeight: 600, padding: "4px 0" }}>{"‹"} Back</button>;
   if (err) return <div>{back}<div className="card error" style={{ marginTop: 8 }}><strong>Couldn&apos;t load</strong><div className="subtle">{err}</div></div></div>;
   if (!d) return <div>{back}<div className="muted center pad">Loading{"…"}</div></div>;
   const a = d.activity;
@@ -409,11 +409,11 @@ export function CardioActivityDetail({ id, sport, onBack }: { id: string; sport:
               const zi = hrZoneIndex(l.avg_hr, hz);
               const barPct = pace != null && pMax > pMin ? 100 - ((pace - pMin) / (pMax - pMin)) * 100 : 50;
               return (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: i < laps.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: i < laps.length - 1 ? "1px solid var(--line)" : "none" }}>
                   <span className="tnum subtle" style={{ width: 16, fontSize: 11 }}>{i + 1}</span>
                   <span className="tnum" style={{ width: 50, fontSize: 12, fontWeight: 600 }}>{isSwim ? (l.swolf != null ? `${Math.round(l.swolf)}` : "—") : fmtPaceS(pace)}</span>
-                  <div style={{ flex: 1, height: 6, background: "rgba(255,255,255,0.05)", borderRadius: 3, overflow: "hidden" }}>
-                    <div style={{ width: `${Math.max(4, barPct)}%`, height: "100%", background: zi >= 0 ? HRZ_COLORS[zi] : "#f0883e", borderRadius: 3 }} />
+                  <div style={{ flex: 1, height: 6, background: "var(--surface-2)", borderRadius: 3, overflow: "hidden" }}>
+                    <div style={{ width: `${Math.max(4, barPct)}%`, height: "100%", background: zi >= 0 ? HRZ_COLORS[zi] : "var(--ember)", borderRadius: 3 }} />
                   </div>
                   {l.elev_gain != null ? <span className="tnum subtle" style={{ width: 32, fontSize: 10, textAlign: "right" }}>{"↑"}{Math.round(l.elev_gain)}</span> : null}
                   {l.avg_hr != null ? <span className="tnum" style={{ width: 40, fontSize: 11, textAlign: "right", color: zi >= 0 ? HRZ_COLORS[zi] : "var(--muted)" }}>{Math.round(l.avg_hr)}</span> : null}
