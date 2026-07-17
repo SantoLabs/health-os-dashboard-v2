@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { coachDailyCard, type KaiDailyCard as Card } from "../lib/api";
 import { WhyChip } from "./KaiChat";
 
-const ACCENT = "#4f9cf9", ACCENT_LT = "#7fb0ff";
-const GREEN = "#46c79a", BLUE = "#5b9bff", AMBER = "#f3b14e";
-const H = "#f3f6fb", BODY = "#dbe3f0", SECOND = "#9fb2d0", FAINT = "#6e7891";
+const ACCENT = "var(--ember)", ACCENT_LT = "var(--ember-strong)";
+const GREEN = "var(--success)", AMBER = "var(--gold)";
+const H = "var(--text)", BODY = "var(--text)", SECOND = "var(--text-2)";
 
 function toneColor(tone?: string): string {
   if (tone === "positive") return GREEN;
@@ -17,7 +17,7 @@ function toneColor(tone?: string): string {
 
 function KaiMark({ size = 26 }: { size?: number }) {
   return (
-    <span style={{ width: size, height: size, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center", background: "radial-gradient(circle at 30% 26%, #86b8ff, #4f9cf9 52%, #2a6bd0)", flexShrink: 0 }}>
+    <span style={{ width: size, height: size, borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center", background: "radial-gradient(circle at 30% 26%, #e8956f, #d96f4e 52%, #b75a3c)", flexShrink: 0 }}>
       <svg width={size * 0.56} height={size * 0.56} viewBox="0 0 24 24" fill="none">
         <path d="M6 9c1.8-2.4 4.2-2.4 6 0s4.2 2.4 6 0" stroke="#fff" strokeWidth="2.3" strokeLinecap="round" />
         <path d="M6 14c1.8-2.4 4.2-2.4 6 0s4.2 2.4 6 0" stroke="#fff" strokeWidth="2.3" strokeLinecap="round" />
@@ -31,7 +31,7 @@ function Ring({ value, color }: { value: number; color: string }) {
   return (
     <span style={{ position: "relative", width: 44, height: 44, flexShrink: 0 }}>
       <svg width={44} height={44} viewBox="0 0 44 44" style={{ transform: "rotate(-90deg)" }}>
-        <circle cx={22} cy={22} r={r} fill="none" stroke="#1f2940" strokeWidth={4} />
+        <circle cx={22} cy={22} r={r} fill="none" stroke="var(--line-2)" strokeWidth={4} />
         <circle cx={22} cy={22} r={r} fill="none" stroke={color} strokeWidth={4} strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - pct)} />
       </svg>
       <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: H, fontVariantNumeric: "tabular-nums" }}>{Math.round(value)}</span>
@@ -71,8 +71,8 @@ export default function KaiDailyCard({ liveReadiness, scope }: { liveReadiness?:
     <section
       style={{
         borderRadius: 18, padding: 15, marginBottom: 4,
-        background: "linear-gradient(160deg, rgba(79,156,249,.10), rgba(79,156,249,.02))",
-        border: "1px solid rgba(79,156,249,.28)",
+        background: "linear-gradient(160deg, color-mix(in srgb, var(--ember) 12%, transparent), color-mix(in srgb, var(--ember) 3%, transparent))",
+        border: "1px solid color-mix(in srgb, var(--ember) 30%, transparent)",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 11 }}>
@@ -90,7 +90,7 @@ export default function KaiDailyCard({ liveReadiness, scope }: { liveReadiness?:
       </div>
 
       {card.streak && card.streak > 0 ? (
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10.5, fontWeight: 700, color: GREEN, background: "rgba(70,199,154,.12)", border: "1px solid rgba(70,199,154,.3)", borderRadius: 999, padding: "3px 9px", marginBottom: 9 }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10.5, fontWeight: 700, color: GREEN, background: "color-mix(in srgb, var(--success) 14%, transparent)", border: "1px solid color-mix(in srgb, var(--success) 32%, transparent)", borderRadius: 999, padding: "3px 9px", marginBottom: 9 }}>
           🔥 {card.streak}-day protein streak
         </div>
       ) : null}
@@ -99,7 +99,7 @@ export default function KaiDailyCard({ liveReadiness, scope }: { liveReadiness?:
       {card.body ? <div style={{ fontSize: 13, color: BODY, lineHeight: 1.5, marginBottom: card.lever ? 10 : 2 }}>{card.body}</div> : null}
 
       {card.lever ? (
-        <div style={{ display: "flex", gap: 9, alignItems: "flex-start", background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.06)", borderRadius: 12, padding: "9px 11px" }}>
+        <div style={{ display: "flex", gap: 9, alignItems: "flex-start", background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 12, padding: "9px 11px" }}>
           <span style={{ color: tc, fontSize: 14, lineHeight: 1.3, flexShrink: 0 }}>↳</span>
           <span style={{ fontSize: 12.5, color: BODY, lineHeight: 1.45 }}>{card.lever}</span>
         </div>
@@ -117,7 +117,7 @@ export default function KaiDailyCard({ liveReadiness, scope }: { liveReadiness?:
             <button
               key={i}
               onClick={() => go(ch)}
-              style={{ fontSize: 11.5, color: ACCENT_LT, background: "rgba(79,156,249,.10)", border: "1px solid rgba(79,156,249,.28)", borderRadius: 999, padding: "6px 11px", cursor: "pointer", fontFamily: "inherit" }}
+              style={{ fontSize: 11.5, fontWeight: 600, color: ACCENT_LT, background: "color-mix(in srgb, var(--ember) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--ember) 30%, transparent)", borderRadius: 999, padding: "6px 11px", cursor: "pointer", fontFamily: "inherit" }}
             >
               {ch}
             </button>
