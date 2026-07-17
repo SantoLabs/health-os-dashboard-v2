@@ -28,11 +28,11 @@ export const sportEmoji = (s: string): string => {
 
 // muscle-group → soft accent for lift row icons
 const MUSCLE_TINT: Record<string, string> = {
-  chest: "#ff6f5e", triceps: "#ffb547", biceps: "#a274ff", shoulders: "#3ec8e6",
-  quadriceps: "#6d8bff", hamstrings: "#34d6a4", glutes: "#ff6f5e", calves: "#8b919b",
-  lats: "#4a9bff", upper_back: "#4a9bff", abdominals: "#ffb547",
+  chest: "#d9704e", triceps: "#cc9a3d", biceps: "#b8734e", shoulders: "#5f9d8a",
+  quadriceps: "#c2544a", hamstrings: "#82a05a", glutes: "#d98a5a", calves: "#8a7f73",
+  lats: "#a07a4a", upper_back: "#a07a4a", abdominals: "#cba54d",
 };
-export const muscleTint = (m: string): string => MUSCLE_TINT[m] || "#8b919b";
+export const muscleTint = (m: string): string => MUSCLE_TINT[m] || "#8a7f73";
 
 // ---------- delta pill (▲ +4.5 · 30d) ----------
 export function Delta({ v, suffix, unit = "" }: { v: number | null | undefined; suffix?: string; unit?: string }) {
@@ -49,7 +49,7 @@ export function Delta({ v, suffix, unit = "" }: { v: number | null | undefined; 
 
 // ---------- sparkline / area line chart ----------
 export function Spark({
-  values, height = 130, color = "#6d8bff", target = null, area = true,
+  values, height = 130, color = "var(--ember)", target = null, area = true,
 }: { values: (number | null)[]; height?: number; color?: string; target?: number | null; area?: boolean }) {
   const W = 320, H = height, pad = 8;
   const n = values.length;
@@ -76,7 +76,7 @@ export function Spark({
       </defs>
       {area && <path d={areaPath} fill={`url(#${gid})`} />}
       {target != null && (
-        <line x1={pad} y1={ys(target)} x2={W - pad} y2={ys(target)} stroke="#ffb547" strokeWidth="1"
+        <line x1={pad} y1={ys(target)} x2={W - pad} y2={ys(target)} stroke="var(--gold)" strokeWidth="1"
           strokeDasharray="4 4" vectorEffect="non-scaling-stroke" opacity="0.75" />
       )}
       <path d={line} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"
