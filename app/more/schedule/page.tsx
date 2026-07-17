@@ -246,7 +246,7 @@ export default function SchedulePage() {
       focus: s.focus, distance_m: s.distance_m, is_rest_day: s.is_rest_day, notes: s.notes, ...over,
     };
   }
-); showToast("This week sent to your calendar \u2713"); }
+
 
   /* ---- form ---- */
   function openAdd(date = today) { setMode("add"); setDraft({ tkey: "run", session_type: "Run", activity: "", session_date: date, start_time: "07:00", planned_duration: 45, intensity: null, focus: null, distance_m: null }); setSheet("form"); }
