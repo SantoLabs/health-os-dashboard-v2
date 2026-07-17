@@ -9,13 +9,13 @@ import type { AdaptState, AdaptChange } from "../lib/api";
 // proposes the SMALLEST set of changes to your UPCOMING sessions only (ease / shorten / move / rest),
 // guardrail-checked — you accept or dismiss. It never rewrites the past and never auto-applies.
 
-const GRAD = "linear-gradient(135deg,#5f7dff,#a274ff)";
-const SEV: Record<string, string> = { high: "#e06a6a", med: "#e0b15a", low: "#8ab4ff" };
+const GRAD = "linear-gradient(135deg,var(--ember),var(--ember-strong))";
+const SEV: Record<string, string> = { high: "var(--danger)", med: "var(--gold)", low: "var(--ember)" };
 const ACTION: Record<string, { label: string; color: string }> = {
   ease: { label: "Ease", color: "#6fb0d6" },
-  shorten: { label: "Shorten", color: "#e0b15a" },
-  move: { label: "Move", color: "#a274ff" },
-  rest: { label: "Rest", color: "#6b7180" },
+  shorten: { label: "Shorten", color: "var(--gold)" },
+  move: { label: "Move", color: "var(--ember-strong)" },
+  rest: { label: "Rest", color: "var(--muted)" },
 };
 
 function cap(s?: string): string { return s ? s[0].toUpperCase() + s.slice(1) : ""; }
@@ -103,7 +103,7 @@ export default function AdaptPanel() {
       </div>
 
       {loading ? <div className="subtle tiny" style={{ marginTop: 12 }}>Reading your recent sessions and form…</div> : null}
-      {err ? <div className="tiny" style={{ marginTop: 12, color: "#ff8a8a" }}>{err} · <button className="trn-sub" onClick={load}>retry</button></div> : null}
+      {err ? <div className="tiny" style={{ marginTop: 12, color: "var(--danger)" }}>{err} · <button className="trn-sub" onClick={load}>retry</button></div> : null}
 
       {!loading && !draft && !done ? (
         <div style={{ marginTop: 12 }}>
@@ -111,7 +111,7 @@ export default function AdaptPanel() {
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {signals.map((s, i) => (
                 <div key={i} className="tiny" style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-                  <span style={{ width: 6, height: 6, borderRadius: 3, background: SEV[s.severity] || "#8ab4ff", flexShrink: 0, transform: "translateY(-1px)" }} />
+                  <span style={{ width: 6, height: 6, borderRadius: 3, background: SEV[s.severity] || "var(--ember)", flexShrink: 0, transform: "translateY(-1px)" }} />
                   <span style={{ opacity: 0.85 }}>{s.detail}</span>
                 </div>
               ))}
@@ -119,7 +119,7 @@ export default function AdaptPanel() {
           ) : (
             <div className="subtle tiny" style={{ opacity: 0.75 }}>Nothing looks off right now. You can still ask Kai to sanity-check the days ahead.</div>
           )}
-          {onTrack ? <div className="tiny" style={{ marginTop: 10, color: "#79e0a8" }}>✓ {onTrack}</div> : null}
+          {onTrack ? <div className="tiny" style={{ marginTop: 10, color: "var(--success)" }}>✓ {onTrack}</div> : null}
           <button
             disabled={busy}
             onClick={propose}
@@ -131,13 +131,13 @@ export default function AdaptPanel() {
       ) : null}
 
       {draft ? (
-        <div style={{ marginTop: 12, padding: 12, borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+        <div style={{ marginTop: 12, padding: 12, borderRadius: 12, background: "var(--surface-2)", border: "1px solid var(--line)" }}>
           {draft.summary ? <div className="subtle tiny" style={{ lineHeight: 1.5, fontStyle: "italic", marginBottom: 10 }}>“{draft.summary}”</div> : null}
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {draft.changes.map((c, i) => {
-              const a = ACTION[c.action] || { label: c.action, color: "#8a90a3" };
+              const a = ACTION[c.action] || { label: c.action, color: "var(--muted)" };
               return (
-                <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "6px 0", borderBottom: "1px solid var(--line)" }}>
                   <div className="tiny" style={{ width: 30, opacity: 0.6, fontWeight: 700 }}>{dow(c.from?.date)}</div>
                   <div style={{ width: 7, height: 7, borderRadius: 4, background: a.color, flexShrink: 0, transform: "translateY(1px)" }} />
                   <div style={{ flex: 1, fontSize: 13 }}>
@@ -149,7 +149,7 @@ export default function AdaptPanel() {
               );
             })}
           </div>
-          {draft.guard.map((r, j) => <div key={j} className="tiny" style={{ marginTop: 6, color: "#8ab4ff" }}>↺ {r}</div>)}
+          {draft.guard.map((r, j) => <div key={j} className="tiny" style={{ marginTop: 6, color: "var(--ember)" }}>↺ {r}</div>)}
 
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
             <button disabled={busy} onClick={apply} style={{ flex: 1, padding: 10, borderRadius: 10, border: "none", cursor: "pointer", color: "#fff", fontWeight: 700, fontSize: 12, background: GRAD }}>{busy ? "Applying…" : "Apply changes"}</button>
@@ -161,7 +161,7 @@ export default function AdaptPanel() {
 
       {done ? (
         <div style={{ marginTop: 12 }}>
-          <div className="tiny" style={{ color: "#79e0a8", fontWeight: 700 }}>✓ {done}</div>
+          <div className="tiny" style={{ color: "var(--success)", fontWeight: 700 }}>✓ {done}</div>
           <button className="trn-sub" style={{ marginTop: 10 }} onClick={() => { setDone(null); load(); }}>Check in again</button>
         </div>
       ) : null}
