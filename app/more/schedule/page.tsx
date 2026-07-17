@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { planWeek, planRange, planHistory, planPost } from "../../lib/api";
+import { planWeek, planRange, planPost } from "../../lib/api";
 import { Screen } from "../../components/Screen";
 
 /* ════════════════════ backend types (health-plan v4) ════════════════════ */
@@ -134,7 +134,7 @@ function eventToItem(e: EventItem): Item {
 }
 
 /* Only sessions the user has sent to the calendar (committed) or already completed show in
-   the Week/Month/Schedule views. AI suggestions (uncommitted) stay in the AI Coach Plan tab.
+   the Week/Month/Schedule views. Uncommitted sessions (e.g. a Kai plan not yet sent) are hidden here.
    Calendar events (Google sync, manual travel/race/social) are always real, so always shown. */
 function onCalendar(it: Item) { return it.kind === "event" || it.committed || it.status === "done"; }
 
@@ -162,24 +162,22 @@ const SCOPED_CSS = `
 `;
 
 /* ════════════════════ component ════════════════════ */
-type View = "coach" | "week" | "month" | "schedule" | "history";
+type View = "week" | "month" | "schedule";
 type Sheet = null | "form";
 type Drag = { id: string; sx: number; sy: number; dx: number; dy: number; moved: boolean; di: number; hour: number; min: number } | null;
 type Draft = Partial<Session> & { tkey?: TKey; end_time?: string | null };
 
 export default function SchedulePage() {
   const today = todayISO();
-  const [view, setView] = useState<View>("coach");
+  const [view, setView] = useState<View>("week");
   const [weekOffset, setWeekOffset] = useState(0);
   const [monthOffset, setMonthOffset] = useState(0);
   const [selDate, setSelDate] = useState(today);
-  const [histRange, setHistRange] = useState<"week" | "15" | "30">("week");
 
   const [week, setWeek] = useState<WeekResp | null>(null);
   const [weekErr, setWeekErr] = useState<string | null>(null);
   const [monthData, setMonthData] = useState<RangeResp | null>(null);
   const [agenda, setAgenda] = useState<RangeResp | null>(null);
-  const [history, setHistory] = useState<HistoryResp | null>(null);
 
   const [sheet, setSheet] = useState<Sheet>(null);
   const [mode, setMode] = useState<"add" | "edit">("add");
@@ -225,13 +223,11 @@ export default function SchedulePage() {
   }, [today]);
   useEffect(() => { if (view === "schedule" && !agenda) loadAgenda(); }, [view, agenda, loadAgenda]);
 
-  useEffect(() => { if (view === "history" && !history) planHistory<HistoryResp>().then(setHistory).catch(() => {}); }, [view, history]);
 
   const refreshAll = useCallback(() => {
     loadWeek(weekMon);
     if (view === "month") loadMonth(monthOffset);
     if (view === "schedule") loadAgenda();
-    setHistory(null);
   }, [loadWeek, weekMon, view, loadMonth, monthOffset, loadAgenda]);
 
   /* ---- actions ---- */
@@ -242,7 +238,6 @@ export default function SchedulePage() {
   }
   const toggleDone = (it: Item) => { act("complete", { id: it.id }); };
   const skipItem = (it: Item) => { act("skip", { id: it.id }); };
-  const pushRow = (it: Item) => { act("commit", { id: it.id }); showToast("Sent to your calendar \u2713"); };
 
   function sessionPayload(s: Session, over: Partial<Session>) {
     return {
@@ -251,13 +246,7 @@ export default function SchedulePage() {
       focus: s.focus, distance_m: s.distance_m, is_rest_day: s.is_rest_day, notes: s.notes, ...over,
     };
   }
-
-  async function regen() {
-    setBusy(true);
-    try { const d = await planPost<WeekResp & { ok: boolean; error?: string }>("generate", {}, weekMon); if (d.ok) { setWeek(d); showToast("Plan regenerated from your latest data ✨"); } else showToast(d.error || "Couldn't regenerate right now"); }
-    catch (e) { showToast((e as Error).message); } finally { setBusy(false); }
-  }
-  function commitWeek() { act("commit", { all: true }); showToast("This week sent to your calendar \u2713"); }
+); showToast("This week sent to your calendar \u2713"); }
 
   /* ---- form ---- */
   function openAdd(date = today) { setMode("add"); setDraft({ tkey: "run", session_type: "Run", activity: "", session_date: date, start_time: "07:00", planned_duration: 45, intensity: null, focus: null, distance_m: null }); setSheet("form"); }
@@ -342,9 +331,6 @@ export default function SchedulePage() {
     if (!week) return [] as Item[];
     return [...week.sessions.map(sessionToItem), ...week.events.map(eventToItem)];
   }, [week]);
-  const coachItems = (week?.sessions || []).map(sessionToItem).sort((a, b) => cmp(a.date, b.date) || (a.hour ?? 99) - (b.hour ?? 99));
-  const coachWork = coachItems.filter((x) => x.cat !== "rest");
-  const coachDone = coachWork.filter((x) => x.status === "done").length;
   const ctx = week?.context;
   const meetingConflict = useCallback((it: Item) => {
     if (it.hour == null) return false;
@@ -353,7 +339,7 @@ export default function SchedulePage() {
   }, [wItems]);
 
   /* ════════════════════ render ════════════════════ */
-  const tabs: [View, string][] = [["coach", "AI Coach Plan"], ["week", "Week"], ["month", "Month"], ["schedule", "Schedule"], ["history", "History"]];
+  const tabs: [View, string][] = [["week", "Week"], ["month", "Month"], ["schedule", "Schedule"]];
 
   return (
     <Screen title="Schedule">
@@ -370,13 +356,11 @@ export default function SchedulePage() {
         <button style={{ ...SS.iconAct, background: A, border: "none", color: "#fff", flex: "none" }} title="Add activity" onClick={() => openAdd(today)}>＋</button>
       </div>
 
-      {weekErr && view !== "history" && <div style={{ ...SS.card, borderColor: "#7f1d1d" }}><b>Couldn&apos;t load</b><div style={{ color: T3, fontSize: 12, marginTop: 4 }}>{weekErr}</div></div>}
+      {weekErr && <div style={{ ...SS.card, borderColor: "#7f1d1d" }}><b>Couldn&apos;t load</b><div style={{ color: T3, fontSize: 12, marginTop: 4 }}>{weekErr}</div></div>}
 
-      {view === "coach" && renderCoach()}
       {view === "week" && renderWeek()}
       {view === "month" && renderMonth()}
       {view === "schedule" && renderAgenda()}
-      {view === "history" && renderHistory()}
 
       {sheet && renderSheet()}
       {toast && (
@@ -387,86 +371,6 @@ export default function SchedulePage() {
   );
 
   /* ───────────── COACH ───────────── */
-  function renderCoach() {
-    if (!week) return <Loading />;
-    return (
-      <>
-        {ctx?.flag && ctx.flag_msg && (
-          <div style={{ display: "flex", gap: 9, alignItems: "flex-start", borderRadius: 12, padding: "11px 13px", marginBottom: 12, fontSize: 12.5, lineHeight: 1.45, border: "1px solid", ...(ctx.flag === "detrain" ? { background: hexA("#34D399", .1), borderColor: hexA("#34D399", .35), color: "#bbf7d0" } : { background: hexA("#FB7185", .1), borderColor: hexA("#FB7185", .4), color: "#fecdd3" }) }}>
-            <span style={{ fontSize: 15 }}>{ctx.flag === "detrain" ? "🌱" : "⚠️"}</span><span>{ctx.flag_msg}</span>
-          </div>
-        )}
-        <div style={{ ...SS.card, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 800 }}>This week</div>
-            <div style={{ color: T3, fontSize: 12, marginTop: 2 }}>{num(weekMon)} {monShort(weekMon)} – {num(addDays(weekMon, 6))} {monShort(addDays(weekMon, 6))} · {coachDone}/{coachWork.length} done</div>
-          </div>
-          <div style={{ textAlign: "right", color: T3, fontSize: 11.5 }}>
-            {ctx?.readiness != null && <div><span style={{ color: T1, fontWeight: 800, fontSize: 15 }}>{ctx.readiness}</span> readiness</div>}
-            {ctx?.acwr != null && <div style={{ marginTop: 2 }}>ACWR {ctx.acwr.toFixed(2)}</div>}
-          </div>
-        </div>
-        {week.week_focus && <div style={{ color: T2, fontSize: 12.5, margin: "0 2px 12px" }}>🎯 {week.week_focus}</div>}
-
-        {coachItems.some((x) => x.cat !== "rest" && !x.committed && x.status !== "done") && (
-          <div style={{ color: T3, fontSize: 11.5, margin: "0 2px 12px", lineHeight: 1.45 }}>These are AI suggestions. Tap 📤 to send a session to your calendar &mdash; only sent sessions show up in Week / Month / Schedule.</div>
-        )}
-        {coachItems.length === 0 ? (
-          <div style={{ ...SS.card, textAlign: "center", padding: "26px 16px" }}>
-            <div style={{ fontSize: 30 }}>🗓️</div>
-            <div style={{ fontWeight: 700, margin: "8px 0 4px" }}>No plan for this week yet</div>
-            <div style={{ color: T3, fontSize: 12 }}>Generate a microcycle tuned to your race phase, load and readiness.</div>
-          </div>
-        ) : coachItems.map((it) => coachRow(it))}
-
-        {coachItems.some((x) => x.cat !== "rest" && !x.committed && x.status !== "done") && (
-          <button onClick={commitWeek} style={{ width: "100%", marginTop: 4, padding: 13, borderRadius: 14, border: "none", background: A, color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>📤 Send this week to my calendar</button>
-        )}
-        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-          <button onClick={regen} disabled={busy} style={{ flex: 1, padding: 13, borderRadius: 14, border: "1px solid " + hexA(A, .5), background: hexA(A, .12), color: "#ddd6fe", fontWeight: 700, fontSize: 13.5, cursor: "pointer" }}>{busy ? "Building…" : coachItems.length ? "↻ Regenerate" : "✨ Generate week"}</button>
-          <button onClick={() => openAdd(today)} style={{ flex: "none", padding: "13px 16px", borderRadius: 14, border: "1px solid rgba(255,255,255,.1)", background: CARD2, color: T1, fontWeight: 700, fontSize: 13.5, cursor: "pointer" }}>＋ Add</button>
-        </div>
-        <div style={{ color: T4, fontSize: 11, textAlign: "center", marginTop: 10 }}>Committed and completed sessions stay put when you regenerate.</div>
-      </>
-    );
-  }
-
-  function coachRow(it: Item) {
-    const t = T[it.tkey]; const isToday = it.date === today; const done = it.status === "done"; const skip = it.status === "skipped";
-    const conflict = meetingConflict(it);
-    const meta = [it.hour != null ? fmtT(it.hour, it.min) : "", it.dur ? it.dur + "m" : "", it.effort || "", km(it.dist)].filter(Boolean).join(" · ");
-    return (
-      <div key={it.id} onClick={() => openEdit(it)} style={{ display: "flex", alignItems: "center", gap: 11, background: CARD, border: "1px solid " + (isToday ? hexA(A, .5) : "rgba(255,255,255,.06)"), borderLeft: isToday ? "3px solid " + A : "1px solid rgba(255,255,255,.06)", borderRadius: 14, padding: "12px 13px", marginBottom: 9, cursor: "pointer" }}>
-        <div style={{ textAlign: "center", minWidth: 34, flex: "none" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: isToday ? A : T2, textTransform: "uppercase" }}>{DOW[dowMon(it.date)]}</div>
-          <div style={{ fontSize: 10, color: T3, marginTop: 1 }}>{num(it.date)}</div>
-        </div>
-        <div style={{ width: 42, height: 42, flex: "none", borderRadius: 12, background: hexA(t.color, .13), border: "1px solid " + hexA(t.color, .28), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, opacity: skip ? .5 : 1 }}>{done ? "🎉" : t.emoji}</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: skip ? T4 : T1, textDecoration: skip ? "line-through" : "none" }}>{it.title}</span>
-            {it.intensity && !skip && <span style={{ fontSize: 11, fontWeight: 700, color: INT[it.intensity], border: "1px solid " + hexA(INT[it.intensity] || T3, .5), background: hexA(INT[it.intensity] || T3, .1), padding: "1px 8px", borderRadius: 7 }}>{it.intensity}</span>}
-            {it.committed && !done && <span style={{ fontSize: 10, fontWeight: 700, color: "#c4b5fd", border: "1px solid " + hexA(A, .5), borderRadius: 999, padding: "1px 7px" }}>committed</span>}
-            {conflict && <span style={{ fontSize: 10, fontWeight: 700, color: "#FB7185" }}>⚠ clashes with a meeting</span>}
-          </div>
-          <div style={{ color: T3, fontSize: 11.5, marginTop: 2 }}>{meta || (it.cat === "rest" ? "Recovery / mobility" : "")}</div>
-          {done && it.actual?.matched && (
-            <div style={{ marginTop: 7, fontSize: 11, color: "#a7f3d0", background: hexA("#34D399", .08), borderRadius: 8, padding: "6px 9px" }}>
-              ✅ Actual {it.actual.actual_min ?? "–"}m{it.actual.min_delta != null ? ` (${it.actual.min_delta >= 0 ? "+" : ""}${it.actual.min_delta})` : ""}{it.actual.avg_hr ? ` · avg HR ${it.actual.avg_hr}` : ""}{it.actual.training_effect ? ` · TE ${Number(it.actual.training_effect).toFixed(1)}` : ""}
-            </div>
-          )}
-        </div>
-        {it.cat !== "rest" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end", flex: "none" }}>
-            <button aria-label="done" onClick={(e) => { e.stopPropagation(); toggleDone(it); }} style={{ width: 24, height: 24, borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 800, color: "#fff", border: done ? "none" : "2px solid rgba(255,255,255,.18)", background: done ? A : "transparent" }}>{done ? "✓" : ""}</button>
-            <button aria-label="push" onClick={(e) => { e.stopPropagation(); pushRow(it); }} style={{ width: 24, height: 24, borderRadius: 8, cursor: "pointer", fontSize: 11, border: "1px solid " + (it.committed ? hexA("#34D399", .5) : "rgba(255,255,255,.12)"), background: it.committed ? hexA("#34D399", .12) : "transparent", color: it.committed ? "#34D399" : "#9696A6" }}>{it.committed ? "✓" : "📤"}</button>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  /* ───────────── WEEK (time grid + drag) ───────────── */
   function renderWeek() {
     if (!week) return <Loading />;
     const wDates = [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(weekMon, i));
@@ -506,7 +410,7 @@ export default function SchedulePage() {
         {blocks.length === 0 && unscheduled.length === 0 && allDay.length === 0 && meetings.length === 0 && (
           <div style={{ ...SS.card, textAlign: "center", padding: "20px 16px" }}>
             <div style={{ fontSize: 24 }}>🗓️</div>
-            <div style={{ color: T2, fontSize: 12.5, marginTop: 6, lineHeight: 1.5 }}>Nothing on your calendar this week yet. Send sessions from the <b style={{ color: T1 }}>AI Coach Plan</b> tab, or tap an empty slot below to add one.</div>
+            <div style={{ color: T2, fontSize: 12.5, marginTop: 6, lineHeight: 1.5 }}>Nothing on your calendar this week yet. Tap an empty slot below to add one, or send a session from Kai in the Coach tab.</div>
           </div>
         )}
         {/* week board: day header + all-day + grid share one horizontal scroll */}
@@ -654,7 +558,7 @@ export default function SchedulePage() {
           <button onClick={() => openAdd(today)} style={{ flex: 1, padding: 12, borderRadius: 14, border: "none", background: A, color: "#fff", fontWeight: 700, fontSize: 13.5, cursor: "pointer" }}>＋ Activity</button>
           <button onClick={() => { setMode("add"); setDraft({ tkey: "travel", session_type: "Travel", activity: "", session_date: today, start_time: null, planned_duration: 0, notes: "event:travel:allday" }); setSheet("form"); }} style={{ flex: 1, padding: 12, borderRadius: 14, border: "1px solid rgba(255,255,255,.1)", background: CARD2, color: T1, fontWeight: 700, fontSize: 13.5, cursor: "pointer" }}>✈️ Event</button>
         </div>
-        {gKeys.length === 0 && <div style={{ ...SS.card, textAlign: "center", padding: 24 }}><div style={{ fontSize: 28 }}>📭</div><div style={{ fontWeight: 700, margin: "6px 0 4px" }}>Nothing on your calendar</div><div style={{ color: T3, fontSize: 12 }}>Send sessions from the AI Coach Plan tab, or add an activity or event here.</div></div>}
+        {gKeys.length === 0 && <div style={{ ...SS.card, textAlign: "center", padding: 24 }}><div style={{ fontSize: 28 }}>📭</div><div style={{ fontWeight: 700, margin: "6px 0 4px" }}>Nothing on your calendar</div><div style={{ color: T3, fontSize: 12 }}>Add an activity or event here, or send a session from Kai in the Coach tab.</div></div>}
         {gKeys.map((gk) => {
           const end = addDays(gk, 6); const sameM = monShort(gk) === monShort(end);
           const range = sameM ? `${num(gk)}–${num(end)} ${monShort(gk)}` : `${num(gk)} ${monShort(gk)} – ${num(end)} ${monShort(end)}`;
@@ -688,66 +592,6 @@ export default function SchedulePage() {
   }
 
   /* ───────────── HISTORY ───────────── */
-  function renderHistory() {
-    if (!history) return <Loading />;
-    const w = histRange === "week" ? history.windows.week : histRange === "15" ? history.windows.d15 : history.windows.d30;
-    const maxMin = Math.max(60, ...history.weeks.map((x) => x.planned));
-    const pct = w.pct ?? 0;
-    return (
-      <>
-        <div style={{ display: "flex", gap: 4, padding: 3, background: CARD2, border: "1px solid rgba(255,255,255,.08)", borderRadius: 10, marginBottom: 12 }}>
-          {([["week", "This week"], ["15", "Last 15d"], ["30", "Last 30d"]] as ["week" | "15" | "30", string][]).map(([k, l]) => (
-            <button key={k} onClick={() => setHistRange(k)} style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: "none", cursor: "pointer", font: "700 12px 'Plus Jakarta Sans',sans-serif", ...(histRange === k ? { background: A, color: "#fff" } : { background: "transparent", color: T3 }) }}>{l}</button>
-          ))}
-        </div>
-        {w.planned === 0 ? (
-          <div style={{ ...SS.card, textAlign: "center", padding: "22px 16px" }}>
-            <div style={{ fontSize: 26 }}>🗓️</div>
-            <div style={{ fontWeight: 700, margin: "8px 0 4px" }}>Nothing planned {histRange === "week" ? "this week" : histRange === "15" ? "in the last 15 days" : "in the last 30 days"} yet</div>
-            <div style={{ color: T3, fontSize: 12, lineHeight: 1.5 }}>Send sessions to your calendar from the <b style={{ color: "#F4F4F7" }}>AI Coach Plan</b> tab — once they&apos;re on your calendar, your completion rate and minutes show up here.</div>
-          </div>
-        ) : (
-          <div style={{ ...SS.card, display: "flex", alignItems: "center", gap: 16 }}>
-            <div style={{ position: "relative", width: 60, height: 60, borderRadius: "50%", background: `conic-gradient(${A} 0% ${pct}%, rgba(255,255,255,.08) ${pct}% 100%)`, flex: "none", display: "grid", placeItems: "center" }}>
-              <div style={{ position: "absolute", inset: 7, borderRadius: "50%", background: CARD, display: "grid", placeItems: "center", fontSize: 14, fontWeight: 800 }}>{pct}%</div>
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 18, fontWeight: 800 }}>{w.completed} <span style={{ color: T3, fontSize: 14, fontWeight: 600 }}>/ {w.planned} sessions</span></div>
-              <div style={{ color: T3, fontSize: 12, marginTop: 2 }}>{w.completed_min} of {w.planned_min} planned minutes done</div>
-            </div>
-          </div>
-        )}
-        <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
-          <div style={{ flex: 1, background: CARD2, border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, padding: "11px 12px", textAlign: "center" }}><div style={{ fontSize: 20, fontWeight: 800, color: "#34D399" }}>{history.current_streak}🔥</div><div style={{ fontSize: 10, color: T3, marginTop: 2 }}>Current streak</div></div>
-          <div style={{ flex: 1, background: CARD2, border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, padding: "11px 12px", textAlign: "center" }}><div style={{ fontSize: 20, fontWeight: 800 }}>{history.best_streak}</div><div style={{ fontSize: 10, color: T3, marginTop: 2 }}>Best streak</div></div>
-        </div>
-        <div style={SS.card}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Planned vs completed · minutes / week</div>
-          {history.weeks.length === 0 ? <div style={{ color: T3, fontSize: 12 }}>No completed weeks yet.</div> : (
-            <>
-              <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 90 }}>
-                {history.weeks.map((x) => (
-                  <div key={x.week} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%" }} title={`${num(x.week)} ${monShort(x.week)} · ${x.completed}/${x.planned}m`}>
-                    <div style={{ width: "64%", position: "relative", height: "70px" }}>
-                      <div style={{ position: "absolute", bottom: 0, width: "100%", height: (x.planned / maxMin * 70) + "px", borderRadius: "4px 4px 0 0", background: "rgba(255,255,255,.1)" }} />
-                      <div style={{ position: "absolute", bottom: 0, width: "100%", height: (x.completed / maxMin * 70) + "px", borderRadius: "4px 4px 0 0", background: A }} />
-                    </div>
-                    <span style={{ fontSize: 9, color: T3, marginTop: 5, whiteSpace: "nowrap" }}>{num(x.week)} {monShort(x.week)}</span>
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: "flex", gap: 14, marginTop: 10, fontSize: 11, color: T3 }}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><i style={{ width: 8, height: 8, borderRadius: 2, background: A, display: "inline-block" }} /> Completed</span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><i style={{ width: 8, height: 8, borderRadius: 2, background: "rgba(255,255,255,.1)", display: "inline-block" }} /> Planned</span>
-              </div>
-            </>
-          )}
-        </div>
-      </>
-    );
-  }
-
-  /* ───────────── SHEETS ───────────── */
   function renderSheet() {
     return (
       <div onClick={closeSheet} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 1500, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
@@ -834,7 +678,7 @@ export default function SchedulePage() {
           <button onClick={toggleDraftDone} style={{ width: "100%", padding: 14, borderRadius: 14, cursor: "pointer", font: "700 14px 'Plus Jakarta Sans',sans-serif", marginTop: 14, border: "1px solid " + (draft.completed ? "transparent" : hexA("#34D399", .4)), background: draft.completed ? "#34D399" : hexA("#34D399", .1), color: draft.completed ? "#06281c" : "#34D399" }}>{draft.completed ? "✓ Completed — tap to undo" : "Mark as completed 🎉"}</button>
         )}
         {mode === "edit" && draft.id && !isEvent && draft.committed && (
-          <button onClick={async () => { if (!draft.id) return; const _m = monOf(draft.session_date || today); await planPost("uncommit", { id: draft.id }, _m); closeSheet(); await loadWeek(_m); refreshAll(); showToast("Removed from calendar — back in your AI plan"); }} style={{ width: "100%", padding: 13, borderRadius: 14, cursor: "pointer", fontWeight: 700, fontSize: 13.5, marginTop: 8, border: "1px solid rgba(255,255,255,.14)", background: CARD2, color: T2 }}>↩ Remove from calendar</button>
+          <button onClick={async () => { if (!draft.id) return; const _m = monOf(draft.session_date || today); await planPost("uncommit", { id: draft.id }, _m); closeSheet(); await loadWeek(_m); refreshAll(); showToast("Removed from calendar"); }} style={{ width: "100%", padding: 13, borderRadius: 14, cursor: "pointer", fontWeight: 700, fontSize: 13.5, marginTop: 8, border: "1px solid rgba(255,255,255,.14)", background: CARD2, color: T2 }}>↩ Remove from calendar</button>
         )}
         <button onClick={saveDraft} disabled={busy || !draft.session_date} style={{ width: "100%", border: "none", color: "#fff", font: "700 15px 'Plus Jakarta Sans',sans-serif", padding: 15, borderRadius: 14, cursor: "pointer", background: A, marginTop: 8 }}>{busy ? "Saving…" : mode === "edit" ? "Save changes" : isEvent ? "Add event" : "Add to plan"}</button>
         {mode === "edit" && draft.id && (
