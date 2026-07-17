@@ -164,7 +164,6 @@ const SCOPED_CSS = `
 /* ════════════════════ component ════════════════════ */
 type View = "week" | "month" | "schedule";
 type Sheet = null | "form";
-type Drag = { id: string; sx: number; sy: number; dx: number; dy: number; moved: boolean; di: number; hour: number; min: number } | null;
 type Draft = Partial<Session> & { tkey?: TKey; end_time?: string | null };
 
 export default function SchedulePage() {
@@ -184,7 +183,6 @@ export default function SchedulePage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [drag, setDrag] = useState<Drag>(null);
 
   const weekMon = addDays(monOf(today), weekOffset * 7);
 
@@ -301,30 +299,6 @@ export default function SchedulePage() {
     if (!draft?.id) return; await planPost("skip", { id: draft.id }, weekMon); closeSheet(); refreshAll(); showToast(draft.skipped ? "Restored to plan" : "Marked as skipped");
   }
 
-  /* ---- drag (week grid) ---- */
-  useEffect(() => {
-    if (!drag) return;
-    const mv = (e: PointerEvent) => setDrag((d) => d ? { ...d, dx: e.clientX - d.sx, dy: e.clientY - d.sy, moved: d.moved || Math.hypot(e.clientX - d.sx, e.clientY - d.sy) > 4 } : d);
-    const up = () => {
-      setDrag((d) => {
-        if (!d) return null;
-        const it = (week?.sessions || []).map(sessionToItem).find((x) => x.id === d.id);
-        if (!d.moved || !it || !it.session) { if (it) openEdit(it); return null; }
-        const colW = 92, hourH = 44;
-        const nd = Math.min(6, Math.max(0, Math.round((d.di * colW + d.dx) / colW)));
-        const nh = Math.min(20, Math.max(6, Math.round(((d.hour - 6) * hourH + (d.min / 60) * hourH + d.dy) / hourH) + 6));
-        const newDate = addDays(weekMon, nd);
-        planPost<WeekResp>("session_save", sessionPayload(it.session, { session_date: newDate, start_time: fmtT(nh, 0) }), monOf(newDate))
-          .then(() => { loadWeek(weekMon); showToast("Moved · " + DOW[nd] + " " + num(newDate) + " " + fmtT(nh, 0)); })
-          .catch(() => loadWeek(weekMon));
-        return null;
-      });
-    };
-    window.addEventListener("pointermove", mv);
-    window.addEventListener("pointerup", up);
-    return () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drag, week, weekMon]);
 
   /* ════════════════════ derived ════════════════════ */
   const wItems = useMemo(() => {
@@ -374,17 +348,10 @@ export default function SchedulePage() {
   function renderWeek() {
     if (!week) return <Loading />;
     const wDates = [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(weekMon, i));
-    const inWk = (d: string) => d >= wDates[0] && d <= wDates[6];
-    const hours: number[] = []; for (let h = 6; h <= 20; h++) hours.push(h);
-    const gridW = 7 * 92, hourH = 44;
-    const blocks = wItems.filter((b) => inWk(b.date) && !b.allDay && b.hour != null && b.cat !== "meeting" && b.cat !== "rest" && onCalendar(b));
-    const meetings = wItems.filter((b) => inWk(b.date) && b.cat === "meeting" && b.hour != null);
-    const allDay = wItems.filter((b) => inWk(b.date) && b.allDay && onCalendar(b));
-    const unscheduled = wItems.filter((b) => inWk(b.date) && b.kind === "session" && b.hour == null && b.cat !== "rest" && onCalendar(b));
-    const showNow = inWk(today);
-    const n = istNow(); const nowTop = (n.getHours() - 6) * hourH + (n.getMinutes() / 60) * hourH;
+    const unscheduled = wItems.filter((b) => b.date >= wDates[0] && b.date <= wDates[6] && b.kind === "session" && b.hour == null && !b.allDay && b.cat !== "rest" && onCalendar(b));
+    const rowItems = (d: string) => wItems.filter((b) => b.date === d && b.cat !== "rest" && onCalendar(b) && !(b.kind === "session" && b.hour == null && !b.allDay)).sort((a, b) => (Number(b.allDay) - Number(a.allDay)) || ((a.hour ?? 99) - (b.hour ?? 99)));
     const weekLabel = weekOffset === 0 ? "This week" : weekOffset < 0 ? Math.abs(weekOffset) + "w ago" : "In " + weekOffset + "w";
-
+    const chipTxt = (c: string) => `color-mix(in srgb, ${c} 68%, var(--text))`;
     return (
       <>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
@@ -401,79 +368,38 @@ export default function SchedulePage() {
             <div style={{ fontSize: 11, color: T3, marginBottom: 7 }}>Unscheduled — tap to set a time</div>
             <div className="hscroll">
               {unscheduled.map((b) => { const t = T[b.tkey]; return (
-                <button key={b.id} onClick={() => openEdit(b)} style={{ ...chipStyle(false), background: hexA(t.color, .16), border: "1px solid " + hexA(t.color, .4), color: T1 }}>{t.emoji} {b.title}</button>
+                <button key={b.id} onClick={() => openEdit(b)} style={{ display: "inline-flex", alignItems: "center", gap: 6, flex: "none", background: hexA(t.color, .14), border: "1px solid " + hexA(t.color, .3), borderRadius: 999, padding: "6px 12px", cursor: "pointer", font: "inherit", color: chipTxt(t.color), fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}>{t.emoji} {b.title}</button>
               ); })}
             </div>
           </div>
         )}
 
-        {blocks.length === 0 && unscheduled.length === 0 && allDay.length === 0 && meetings.length === 0 && (
-          <div style={{ ...SS.card, textAlign: "center", padding: "20px 16px" }}>
-            <div style={{ fontSize: 24 }}>🗓️</div>
-            <div style={{ color: T2, fontSize: 12.5, marginTop: 6, lineHeight: 1.5 }}>Nothing on your calendar this week yet. Tap an empty slot below to add one, or send a session from Kai in the Coach tab.</div>
-          </div>
-        )}
-        {/* week board: day header + all-day + grid share one horizontal scroll */}
-        <div className="schd-grid-scroll" style={{ marginTop: 6 }}>
-        <div style={{ width: 34 + gridW }}>
-        {/* day header */}
-        <div style={{ display: "flex", paddingLeft: 34 }}>
-          {wDates.map((dt, i) => { const isT = dt === today; return (
-            <div key={dt} style={{ width: 92, textAlign: "center" }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: isT ? A : T3, textTransform: "uppercase" }}>{DOW[i]}</div>
-              <div style={isT ? { fontSize: 13, fontWeight: 800, color: "#fff", background: A, width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "2px auto 0" } : { fontSize: 13, fontWeight: 700, color: T2, marginTop: 2 }}>{num(dt)}</div>
+        <div style={{ ...SS.card, padding: "2px 12px" }}>
+          {wDates.map((dt, i) => { const isT = dt === today; const items = rowItems(dt); return (
+            <div key={dt} style={{ display: "flex", gap: 10, padding: "10px 0", alignItems: "flex-start", borderTop: i === 0 ? "none" : "1px solid var(--line)" }}>
+              <div style={{ width: 34, flex: "none", textAlign: "center" }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: isT ? A : T3, letterSpacing: ".05em" }}>{DOW[i]}</div>
+                <div style={isT ? { width: 26, height: 26, margin: "2px auto 0", borderRadius: 999, background: A, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800 } : { fontSize: 15, fontWeight: 700, color: T1, marginTop: 2 }}>{num(dt)}</div>
+              </div>
+              <div style={{ flex: 1, minWidth: 0, display: "flex", gap: 7, flexWrap: "wrap", alignItems: "center" }}>
+                {items.map((b) => { const t = T[b.tkey]; const done = b.status === "done"; const skip = b.status === "skipped"; const meta = b.dist ? km(b.dist) : b.allDay ? "" : b.hour != null ? fmtT(b.hour, b.min) : ""; return (
+                  <button key={b.id} onClick={() => openEdit(b)} style={{ display: "inline-flex", alignItems: "center", gap: 6, maxWidth: "100%", background: hexA(t.color, .14), border: "1px solid " + hexA(t.color, .3), borderRadius: 999, padding: "6px 12px", cursor: "pointer", font: "inherit", opacity: skip ? .6 : 1 }}>
+                    <span style={{ fontSize: 11.5, fontWeight: 700, color: chipTxt(t.color), whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textDecoration: skip ? "line-through" : "none" }}>{done ? "🎉 " : t.emoji + " "}{b.title}</span>
+                    {meta && <span style={{ fontSize: 10.5, fontWeight: 600, color: T3, flex: "none" }}>{meta}</span>}
+                  </button>
+                ); })}
+                <button onClick={() => openAdd(dt)} style={{ display: "inline-flex", alignItems: "center", gap: 5, border: "1.5px dashed var(--line-2)", borderRadius: 999, padding: "6px 12px", background: "transparent", cursor: "pointer", font: "inherit" }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: T3, lineHeight: 1 }}>＋</span>
+                  <span style={{ fontSize: 11.5, fontWeight: 700, color: T3 }}>Plan</span>
+                </button>
+              </div>
             </div>
           ); })}
         </div>
-
-        {/* all-day strip */}
-        {allDay.length > 0 && (
-          <div style={{ display: "flex", paddingLeft: 34, marginTop: 4, position: "relative", height: 20 }}>
-            {allDay.map((b) => { const t = T[b.tkey]; const di = wDates.indexOf(b.date); return (
-              <div key={b.id} onClick={() => openEdit(b)} style={{ position: "absolute", left: 34 + di * 92 + 3, top: 0, width: 86, height: 18, background: hexA(t.color, .22), border: "1px solid " + hexA(t.color, .4), borderRadius: 6, padding: "0 5px", fontSize: 9, fontWeight: 700, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", cursor: "pointer" }}>{t.emoji} {b.title}</div>
-            ); })}
-          </div>
-        )}
-
-        {/* time grid */}
-          <div style={{ position: "relative", width: 34 + gridW, height: hours.length * hourH, marginTop: 6 }}>
-            {/* hour rows + labels */}
-            {hours.map((h, i) => (
-              <div key={h} style={{ position: "absolute", left: 0, top: i * hourH, width: 34 + gridW, height: hourH, borderTop: "1px solid var(--line)" }}>
-                <span style={{ position: "absolute", left: 0, top: -7, fontSize: 9, color: T4, width: 30, textAlign: "right" }}>{fmtHour(h)}</span>
-              </div>
-            ))}
-            {/* day columns */}
-            {wDates.map((dt, i) => { const isT = dt === today; return (
-              <div key={dt} style={{ position: "absolute", left: 34 + i * 92, top: 0, width: 92, height: hours.length * hourH, borderLeft: "1px solid var(--line)", background: isT ? "color-mix(in srgb, var(--ember) 5%, transparent)" : "transparent" }} onClick={(e) => { if (e.target === e.currentTarget) { const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect(); const hh = Math.min(20, Math.max(6, 6 + Math.floor((e.clientY - rect.top) / hourH))); openAddAt(dt, hh); } }} />
-            ); })}
-            {/* synced meetings (read-only) */}
-            {meetings.map((m) => { const di = wDates.indexOf(m.date); const top = (m.hour! - 6) * hourH + (m.min / 60) * hourH; const h = Math.max((m.dur / 60) * hourH, 26); return (
-              <div key={m.id} style={{ position: "absolute", left: 34 + di * 92 + 3, top, width: 86, height: h, background: "var(--surface-2)", border: "1px solid var(--line-2)", borderLeft: "3px solid var(--muted)", borderRadius: 8, padding: "4px 6px", overflow: "hidden", zIndex: 4 }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: "var(--text-2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.title}</div>
-                <div style={{ fontSize: 8, color: "var(--muted)" }}>🔵 Google</div>
-              </div>
-            ); })}
-            {/* draggable workout blocks */}
-            {blocks.map((b) => { const t = T[b.tkey]; const di = wDates.indexOf(b.date); const isDrag = drag && drag.id === b.id && drag.moved; const done = b.status === "done"; const skip = b.status === "skipped"; const top = (b.hour! - 6) * hourH + (b.min / 60) * hourH; const h = Math.max((b.dur / 60) * hourH, 30); return (
-              <div key={b.id} onPointerDown={(e) => { e.preventDefault(); setDrag({ id: b.id, sx: e.clientX, sy: e.clientY, dx: 0, dy: 0, moved: false, di, hour: b.hour!, min: b.min }); }}
-                style={{ position: "absolute", left: 34 + di * 92 + 3, top, width: 86, height: h, background: hexA(t.color, skip ? .07 : .18), border: "1px solid " + hexA(t.color, .45), borderLeft: "3px solid " + t.color, borderRadius: 8, padding: "4px 6px", cursor: "grab", touchAction: "none", overflow: "hidden", display: "flex", flexDirection: "column", gap: 1, opacity: skip ? .6 : 1, zIndex: isDrag ? 50 : 6, transform: isDrag ? `translate(${drag!.dx}px,${drag!.dy}px)` : "none", boxShadow: isDrag ? "0 14px 32px rgba(0,0,0,.55)" : "none" }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: skip ? "var(--muted)" : T1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textDecoration: skip ? "line-through" : "none" }}>{done ? "🎉 " : t.emoji + " "}{b.title}</div>
-                <div style={{ fontSize: 9, color: hexA(t.color, .95) }}>{fmtT(b.hour!, b.min)}</div>
-              </div>
-            ); })}
-            {/* now line */}
-            {showNow && nowTop >= 0 && nowTop <= hours.length * hourH && (
-              <div style={{ position: "absolute", left: 34, width: gridW, top: nowTop, height: 0, borderTop: "2px solid var(--danger)", zIndex: 8, boxShadow: "0 0 8px color-mix(in srgb, var(--danger) 50%, transparent)" }} />
-            )}
-          </div>
-        </div>
-        </div>
-        <div style={{ color: T4, fontSize: 11, textAlign: "center", marginTop: 10 }}>Drag a block to reschedule · tap an empty slot to add · meetings are read-only.</div>
+        <div style={{ color: T4, fontSize: 11, textAlign: "center", marginTop: 10 }}>Tap ＋ Plan to add · tap a chip to edit.</div>
       </>
     );
   }
-  function openAddAt(date: string, hour: number) { setMode("add"); setDraft({ tkey: "run", session_type: "Run", activity: "", session_date: date, start_time: fmtT(hour, 0), planned_duration: 45, intensity: null, focus: null, distance_m: null }); setSheet("form"); }
 
   /* ───────────── MONTH ───────────── */
   function renderMonth() {
@@ -566,7 +492,7 @@ export default function SchedulePage() {
           if (prevMon !== -1 && gMon !== prevMon) banner = MON_L[gMon] + " " + parse(gk).getFullYear(); prevMon = gMon;
           return (
             <div key={gk}>
-              {banner && <div style={{ margin: "18px -2px 8px", height: 64, borderRadius: 16, background: "var(--t-grad)", display: "flex", alignItems: "flex-end", padding: 14, fontSize: 18, fontWeight: 800, color: "#fff" }}>{banner}</div>}
+              {banner && <div style={{ margin: "18px -2px 8px", height: 64, borderRadius: 16, background: "linear-gradient(120deg, var(--ember), var(--ember-strong))", display: "flex", alignItems: "flex-end", padding: 14, fontSize: 18, fontWeight: 800, color: "#fff" }}>{banner}</div>}
               <div style={{ color: T3, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", margin: "4px 2px 8px" }}>{range}</div>
               {groups.get(gk)!.map((dk) => { const isT = dk === today; return (
                 <div key={dk} style={{ display: "flex", gap: 10, marginBottom: 10 }}>
