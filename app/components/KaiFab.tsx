@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { coachSend, coachVision, type KaiMessage } from "../lib/api";
 import {
   KaiMark, MessageRow, useVoiceInput, CameraButton, type PickedImage,
-  PAGE, SURF, INPUTBG, BORDER, BORDER_STRONG,
+  PAGE, SURF, BORDER,
   H, BODY, SECOND, MUTED, FAINT, ACCENT, ACCENT_LT,
 } from "./KaiChat";
 
@@ -31,6 +31,13 @@ const CTX: Record<string, Ctx> = {
 };
 function ctxFor(path: string): Ctx { return CTX[path] || GENERIC; }
 
+// Draggable Messenger-style chat head: floats over everything, snaps to the
+// nearest edge on release, remembers where you left it, and a tap opens Kai.
+const FAB_SIZE = 54;
+const FAB_MARGIN = 14;
+const FAB_KEY = "kai_fab_pos";
+type FabPos = { side: "left" | "right"; top: number };
+
 export default function KaiFab() {
   const path = usePathname() || "/";
   const router = useRouter();
@@ -44,6 +51,9 @@ export default function KaiFab() {
   const endRef = useRef<HTMLDivElement>(null);
   const voice = useVoiceInput((t) => setInput((cur) => (cur ? cur.trim() + " " : "") + t));
   const [img, setImg] = useState<PickedImage | null>(null);
+  const [fabPos, setFabPos] = useState<FabPos | null>(null);
+  const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
+  const dragRef = useRef<{ sx: number; sy: number; moved: boolean } | null>(null);
 
   const ctx = ctxFor(path);
 
@@ -71,6 +81,17 @@ export default function KaiFab() {
   // Fire a seeded prompt (e.g. a tapped Today chip) once the sheet is open.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (open && pendingSeed) { const s = pendingSeed; setPendingSeed(null); send(s); } }, [open, pendingSeed]);
+  // Restore the chat head where the user last left it (clamped to the viewport).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const h = window.innerHeight;
+    const clamp = (t: number) => Math.max(56, Math.min(h - FAB_SIZE - FAB_MARGIN, t));
+    try {
+      const raw = localStorage.getItem(FAB_KEY);
+      if (raw) { const p = JSON.parse(raw) as FabPos; setFabPos({ side: p.side === "left" ? "left" : "right", top: clamp(p.top) }); return; }
+    } catch { /* ignore */ }
+    setFabPos({ side: "right", top: clamp(h - 76 - FAB_SIZE - FAB_MARGIN) });
+  }, []);
 
   // Don't show the FAB on the full Ask tab (it would be redundant there).
   if (path === "/more/ask") return null;
@@ -92,20 +113,57 @@ export default function KaiFab() {
   function updateMsg(m: KaiMessage) { setMessages((arr) => arr.map((x) => (x.id === m.id ? m : x))); }
   function openFullChat() { setOpen(false); router.push("/more/ask"); }
 
+  // ---- chat-head drag (pointer = touch + mouse) ----
+  function fabDown(e: ReactPointerEvent<HTMLButtonElement>) {
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    dragRef.current = { sx: e.clientX, sy: e.clientY, moved: false };
+  }
+  function fabMove(e: ReactPointerEvent<HTMLButtonElement>) {
+    const d = dragRef.current; if (!d) return;
+    if (!d.moved && (Math.abs(e.clientX - d.sx) > 6 || Math.abs(e.clientY - d.sy) > 6)) d.moved = true;
+    if (d.moved) setDrag({ x: e.clientX - FAB_SIZE / 2, y: e.clientY - FAB_SIZE / 2 });
+  }
+  function fabUp(e: ReactPointerEvent<HTMLButtonElement>) {
+    const d = dragRef.current; dragRef.current = null;
+    if (!d) return;
+    if (!d.moved) { setDrag(null); setOpen(true); return; } // a tap opens Kai
+    const w = window.innerWidth, h = window.innerHeight;
+    const side: "left" | "right" = e.clientX < w / 2 ? "left" : "right";
+    const top = Math.max(56, Math.min(h - FAB_SIZE - FAB_MARGIN, e.clientY - FAB_SIZE / 2));
+    const next: FabPos = { side, top };
+    setFabPos(next); setDrag(null);
+    try { localStorage.setItem(FAB_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+  }
+
+  const fabStyle: CSSProperties = drag
+    ? { left: drag.x, top: drag.y }
+    : fabPos
+      ? (fabPos.side === "left" ? { left: FAB_MARGIN, top: fabPos.top } : { right: FAB_MARGIN, top: fabPos.top })
+      : { right: 16, bottom: "calc(76px + env(safe-area-inset-bottom, 0px))" };
+  const canSend = !!(input.trim() || img) && !busy;
+
   return (
     <>
-      {/* Floating action button */}
+      {/* Floating, draggable chat head (Messenger-style) */}
       {!open && (
         <button
           type="button"
-          aria-label="Ask Kai"
+          aria-label="Ask Kai — drag to move"
           className="app-fab"
-          onClick={() => setOpen(true)}
+          onPointerDown={fabDown}
+          onPointerMove={fabMove}
+          onPointerUp={fabUp}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(true); } }}
           style={{
-            position: "fixed", right: "max(16px, calc(50vw - 224px))", bottom: "calc(72px + env(safe-area-inset-bottom, 0px))",
-            width: 54, height: 54, borderRadius: "50%", border: "none", cursor: "pointer", zIndex: 60,
+            position: "fixed", ...fabStyle,
+            width: 54, height: 54, borderRadius: "50%", border: "none", zIndex: 60,
+            cursor: drag ? "grabbing" : "grab", touchAction: "none", userSelect: "none",
             background: "radial-gradient(circle at 30% 26%, #e8956f, #d96f4e 52%, #b75a3c)",
-            boxShadow: "0 6px 20px rgba(217,111,78,.45), 0 2px 6px rgba(0,0,0,.25)",
+            boxShadow: drag
+              ? "0 14px 34px rgba(217,111,78,.5), 0 4px 12px rgba(0,0,0,.32)"
+              : "0 6px 20px rgba(217,111,78,.45), 0 2px 6px rgba(0,0,0,.25)",
+            transform: drag ? "scale(1.06)" : "scale(1)",
+            transition: drag ? "none" : "left .2s ease, right .2s ease, top .2s ease, transform .12s, box-shadow .15s",
             display: "flex", alignItems: "center", justifyContent: "center",
           }}
         >
@@ -166,35 +224,46 @@ export default function KaiFab() {
               <div ref={endRef} />
             </div>
 
-            {/* Input */}
-            <div style={{ padding: "12px 15px calc(14px + env(safe-area-inset-bottom, 0px))", borderTop: "1px solid " + BORDER }}>
+            {/* Composer — 1b floating glass dock */}
+            <div style={{ padding: "10px 12px calc(12px + env(safe-area-inset-bottom, 0px))" }}>
               {img ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8, background: SURF, border: "1px solid " + BORDER, borderRadius: 12, padding: 7 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 9, background: SURF, border: "1px solid " + BORDER, borderRadius: 14, padding: 7 }}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={img.preview} alt="attached" style={{ width: 38, height: 38, borderRadius: 8, objectFit: "cover" }} />
                   <span style={{ flex: 1, fontSize: 12, color: SECOND }}>Photo attached</span>
                   <button onClick={() => setImg(null)} aria-label="Remove photo" style={{ background: "none", border: "none", color: FAINT, fontSize: 18, cursor: "pointer", lineHeight: 1, padding: "0 4px" }}>×</button>
                 </div>
               ) : null}
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 7, alignItems: "center", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 999, padding: 6, boxShadow: "0 8px 24px rgba(0,0,0,.10), 0 1px 3px rgba(0,0,0,.05)" }}>
                 <CameraButton onImage={setImg} disabled={busy} />
                 <input
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") send(input); }}
                   placeholder={img ? "Add a note (optional)\u2026" : ctx.label ? `Ask about ${ctx.label}\u2026` : "Ask Kai\u2026"}
-                  style={{ flex: 1, background: INPUTBG, border: "1px solid " + BORDER_STRONG, borderRadius: 12, padding: "11px 13px", color: H, fontSize: 14, outline: "none" }}
+                  style={{ flex: 1, minWidth: 0, background: "transparent", border: "none", padding: "8px 4px", color: H, fontSize: 14, outline: "none" }}
                 />
                 {voice.supported ? (
                   <button onClick={voice.toggle} aria-label="Voice input"
-                    style={{ width: 44, height: 44, borderRadius: 12, border: "1px solid " + BORDER_STRONG, background: voice.listening ? ACCENT : INPUTBG, color: voice.listening ? "var(--on-ember)" : SECOND, fontSize: 16, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{voice.listening ? "\u25A0" : "\uD83C\uDFA4"}</button>
+                    style={{ width: 40, height: 40, borderRadius: "50%", border: "none", background: voice.listening ? ACCENT : "var(--surface-2)", color: voice.listening ? "var(--on-ember)" : "var(--text-2)", cursor: "pointer", flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                    {voice.listening ? (
+                      <span style={{ width: 12, height: 12, borderRadius: 3, background: "var(--on-ember)" }} />
+                    ) : (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" /><path d="M19 10v1a7 7 0 0 1-14 0v-1" /><line x1="12" y1="19" x2="12" y2="22" /></svg>
+                    )}
+                  </button>
                 ) : null}
                 <button
                   onClick={() => send(input)}
-                  disabled={busy || (!input.trim() && !img)}
+                  disabled={!canSend}
                   aria-label="Send"
-                  style={{ width: 44, height: 44, borderRadius: 12, border: "none", background: ACCENT, color: "var(--on-ember)", fontSize: 17, fontWeight: 800, cursor: busy || (!input.trim() && !img) ? "default" : "pointer", opacity: busy || (!input.trim() && !img) ? 0.5 : 1, flexShrink: 0 }}
-                >↑</button>
+                  style={{ width: 42, height: 42, borderRadius: "50%", border: "none", flexShrink: 0, cursor: canSend ? "pointer" : "default",
+                    background: canSend ? "radial-gradient(circle at 30% 26%, #e8956f, #d96f4e 52%, #b75a3c)" : "var(--surface-2)",
+                    color: canSend ? "var(--on-ember)" : "var(--faint)",
+                    boxShadow: canSend ? "0 3px 10px rgba(217,111,78,.4)" : "none",
+                    display: "inline-flex", alignItems: "center", justifyContent: "center", transition: "background .15s, box-shadow .15s" }}>
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="20" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></svg>
+                </button>
               </div>
             </div>
           </div>
