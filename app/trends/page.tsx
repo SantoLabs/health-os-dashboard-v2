@@ -78,9 +78,9 @@ function InteractiveChart({ pts, color, band, fmt }: {
       {act && (
         <g>
           <line x1={X(act.i)} y1={padTop - 6} x2={X(act.i)} y2={H - padBot} stroke={color} strokeWidth={1} opacity={0.5} strokeDasharray="3 3" />
-          <circle cx={X(act.i)} cy={Y(act.v)} r={4.5} fill={color} stroke="#0b0f17" strokeWidth={1.5} />
-          <rect x={tipX - 32} y={0} width={64} height={15} rx={4} fill="#0b0f17" opacity={0.9} />
-          <text x={tipX} y={11} textAnchor="middle" fontSize={10} fontWeight={700} fill={color}>{fmt(act.v)}</text>
+          <circle cx={X(act.i)} cy={Y(act.v)} r={4.5} fill={color} stroke="var(--surface)" strokeWidth={1.5} />
+          <rect x={tipX - 32} y={0} width={64} height={15} rx={4} fill="var(--inverse-surface)" opacity={0.92} />
+          <text x={tipX} y={11} textAnchor="middle" fontSize={10} fontWeight={700} fill="var(--on-inverse)">{fmt(act.v)}</text>
           <text x={tipX} y={H - 4} textAnchor="middle" fontSize={9} fill="var(--muted)">{fmtDate(act.date)}</text>
         </g>
       )}
