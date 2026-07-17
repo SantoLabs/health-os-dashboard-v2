@@ -85,6 +85,7 @@ const MON_L = ["January", "February", "March", "April", "May", "June", "July", "
 function monShort(s: string) { return MON_S[parse(s).getMonth()]; }
 function cmp(a: string, b: string) { return a < b ? -1 : a > b ? 1 : 0; }
 function hexA(h: string, a: number) { h = h.replace("#", ""); const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16); return `rgba(${r},${g},${b},${a})`; }
+function chipTxt(c: string) { return `color-mix(in srgb, ${c} 68%, var(--text))`; }
 function fmtT(h: number, m: number) { return pad(h) + ":" + pad(m || 0); }                  // 24h (prototype default)
 function fmtHour(h: number) { return pad(h) + ":00"; }
 function km(m: number | null | undefined) { return m ? (m / 1000).toFixed(m % 1000 === 0 ? 0 : 1) + " km" : ""; }
@@ -162,7 +163,7 @@ const SCOPED_CSS = `
 `;
 
 /* ════════════════════ component ════════════════════ */
-type View = "week" | "month" | "schedule";
+type View = "week" | "day" | "month" | "schedule";
 type Sheet = null | "form";
 type Draft = Partial<Session> & { tkey?: TKey; end_time?: string | null };
 
@@ -206,6 +207,7 @@ export default function SchedulePage() {
     try { setWeek(await planWeek<WeekResp>(ws)); } catch (e) { setWeekErr((e as Error).message); }
   }, []);
   useEffect(() => { loadWeek(weekMon); }, [weekMon, loadWeek]);
+  useEffect(() => { if (view === "day") { const wo = Math.round((parse(monOf(selDate)).getTime() - parse(monOf(today)).getTime()) / 6.048e8); if (wo !== weekOffset) setWeekOffset(wo); } }, [view, selDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadMonth = useCallback(async (anchorMonthOffset: number) => {
     const base = new Date(2000, 0, 1); base.setFullYear(parse(today).getFullYear(), parse(today).getMonth() + anchorMonthOffset, 1);
@@ -313,7 +315,7 @@ export default function SchedulePage() {
   }, [wItems]);
 
   /* ════════════════════ render ════════════════════ */
-  const tabs: [View, string][] = [["week", "Week"], ["month", "Month"], ["schedule", "Schedule"]];
+  const tabs: [View, string][] = [["week", "Week"], ["day", "Day"], ["month", "Month"], ["schedule", "Schedule"]];
 
   return (
     <Screen title="Schedule">
@@ -327,12 +329,13 @@ export default function SchedulePage() {
           <button key={k} onClick={() => setView(k)} style={{ padding: "9px 15px", borderRadius: 11, border: "none", cursor: "pointer", font: "700 13px 'Plus Jakarta Sans',sans-serif", flex: "none", ...(view === k ? { background: A, color: "#fff", boxShadow: "0 4px 12px " + "color-mix(in srgb, var(--ember) 40%, transparent)" } : { background: CARD2, color: T3 }) }}>{label}</button>
         ))}
       </div>
-        <button style={{ ...SS.iconAct, background: A, border: "none", color: "#fff", flex: "none" }} title="Add activity" onClick={() => openAdd(today)}>＋</button>
+        <button style={{ ...SS.iconAct, background: A, border: "none", color: "#fff", flex: "none" }} title="Add activity" onClick={() => openAdd(view === "day" ? selDate : today)}>＋</button>
       </div>
 
       {weekErr && <div style={{ ...SS.card, borderColor: "var(--danger)" }}><b>Couldn&apos;t load</b><div style={{ color: T3, fontSize: 12, marginTop: 4 }}>{weekErr}</div></div>}
 
       {view === "week" && renderWeek()}
+      {view === "day" && renderDay()}
       {view === "month" && renderMonth()}
       {view === "schedule" && renderAgenda()}
 
@@ -351,7 +354,6 @@ export default function SchedulePage() {
     const unscheduled = wItems.filter((b) => b.date >= wDates[0] && b.date <= wDates[6] && b.kind === "session" && b.hour == null && !b.allDay && b.cat !== "rest" && onCalendar(b));
     const rowItems = (d: string) => wItems.filter((b) => b.date === d && b.cat !== "rest" && onCalendar(b) && !(b.kind === "session" && b.hour == null && !b.allDay)).sort((a, b) => (Number(b.allDay) - Number(a.allDay)) || ((a.hour ?? 99) - (b.hour ?? 99)));
     const weekLabel = weekOffset === 0 ? "This week" : weekOffset < 0 ? Math.abs(weekOffset) + "w ago" : "In " + weekOffset + "w";
-    const chipTxt = (c: string) => `color-mix(in srgb, ${c} 68%, var(--text))`;
     return (
       <>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
@@ -397,6 +399,77 @@ export default function SchedulePage() {
           ); })}
         </div>
         <div style={{ color: T4, fontSize: 11, textAlign: "center", marginTop: 10 }}>Tap ＋ Plan to add · tap a chip to edit.</div>
+      </>
+    );
+  }
+
+  function renderDay() {
+    if (!week) return <Loading />;
+    const items = wItems.filter((b) => b.date === selDate && b.cat !== "rest" && onCalendar(b));
+    const allDay = items.filter((b) => b.allDay);
+    const unscheduled = items.filter((b) => b.kind === "session" && b.hour == null && !b.allDay);
+    const timed = items.filter((b) => !b.allDay && b.hour != null).sort((a, b) => (((a.hour ?? 0) - (b.hour ?? 0)) || ((a.min ?? 0) - (b.min ?? 0))));
+    const ends = timed.map((b) => (b.hour ?? 0) + Math.max(1, Math.ceil((((b.min ?? 0) + (b.dur ?? 45)) / 60))));
+    const H0 = Math.min(6, ...timed.map((b) => b.hour ?? 6));
+    const H1 = Math.max(21, ...ends);
+    const hours: number[] = []; for (let h = H0; h <= H1; h++) hours.push(h);
+    const hourH = 54;
+    const now = istNow(); const showNow = selDate === today && now.getHours() >= H0 && now.getHours() <= H1;
+    const nowTop = 8 + (now.getHours() - H0) * hourH + (now.getMinutes() / 60) * hourH;
+    const rel = selDate === today ? "Today" : selDate === addDays(today, 1) ? "Tomorrow" : selDate === addDays(today, -1) ? "Yesterday" : DOW[dowMon(selDate)];
+    return (
+      <>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <button style={SS.navBtn} onClick={() => setSelDate(addDays(selDate, -1))}>‹</button>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 15, fontWeight: 800 }}>{DOW[dowMon(selDate)]} {num(selDate)} {monShort(selDate)}</div>
+            <div style={{ fontSize: 11.5, color: T3, marginTop: 1 }}>{rel}{selDate !== today && <button onClick={() => setSelDate(today)} style={{ background: "none", border: 0, color: A, cursor: "pointer", fontWeight: 700, marginLeft: 8, fontSize: 11.5 }}>Today</button>}</div>
+          </div>
+          <button style={SS.navBtn} onClick={() => setSelDate(addDays(selDate, 1))}>›</button>
+        </div>
+
+        {allDay.length > 0 && (
+          <div style={{ ...SS.card, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 14px" }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: T3, letterSpacing: ".05em" }}>ALL DAY</div>
+            {allDay.map((b) => { const t = T[b.tkey]; return (
+              <button key={b.id} onClick={() => openEdit(b)} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: hexA(t.color, .14), border: "1px solid " + hexA(t.color, .3), borderRadius: 999, padding: "6px 12px", cursor: "pointer", font: "inherit", color: chipTxt(t.color), fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}>{t.emoji} {b.title}</button>
+            ); })}
+          </div>
+        )}
+
+        {unscheduled.length > 0 && (
+          <div style={{ ...SS.card, padding: "10px 12px" }}>
+            <div style={{ fontSize: 11, color: T3, marginBottom: 7 }}>Unscheduled — tap to set a time</div>
+            <div className="hscroll">
+              {unscheduled.map((b) => { const t = T[b.tkey]; return (
+                <button key={b.id} onClick={() => openEdit(b)} style={{ display: "inline-flex", alignItems: "center", gap: 6, flex: "none", background: hexA(t.color, .14), border: "1px solid " + hexA(t.color, .3), borderRadius: 999, padding: "6px 12px", cursor: "pointer", font: "inherit", color: chipTxt(t.color), fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}>{t.emoji} {b.title}</button>
+              ); })}
+            </div>
+          </div>
+        )}
+
+        <div style={{ ...SS.card, position: "relative", height: hours.length * hourH + 16, padding: "8px 12px", overflow: "hidden" }}>
+          {hours.map((h, i) => (
+            <div key={h} style={{ position: "absolute", left: 12, right: 12, top: 8 + i * hourH, display: "flex", alignItems: "flex-start", gap: 10 }}>
+              <div style={{ width: 40, fontSize: 10, color: T4, textAlign: "right", transform: "translateY(-5px)", flex: "none" }}>{fmtHour(h)}</div>
+              <div style={{ flex: 1, borderTop: "1px solid var(--line)" }} />
+            </div>
+          ))}
+          {timed.map((b) => { const t = T[b.tkey]; const isMeet = b.cat === "meeting"; const done = b.status === "done"; const skip = b.status === "skipped"; const top = 8 + ((b.hour ?? 0) - H0) * hourH + ((b.min ?? 0) / 60) * hourH; const ht = Math.max(((b.dur ?? 45) / 60) * hourH, 34); const em = (b.hour ?? 0) * 60 + (b.min ?? 0) + (b.dur ?? 0); const col = isMeet ? "var(--muted)" : t.color; return (
+            <div key={b.id} onClick={() => openEdit(b)} style={{ position: "absolute", left: 62, right: 12, top, height: ht, background: isMeet ? "var(--surface-2)" : hexA(t.color, .14), border: "1px solid " + (isMeet ? "var(--line-2)" : hexA(t.color, .3)), borderLeft: "3px solid " + col, borderRadius: 10, padding: "6px 12px", cursor: "pointer", overflow: "hidden", opacity: skip ? .6 : 1, zIndex: 5 }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: isMeet ? "var(--text-2)" : chipTxt(t.color), whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textDecoration: skip ? "line-through" : "none" }}>{done ? "🎉 " : t.emoji + " "}{b.title}</div>
+              <div style={{ fontSize: 10.5, color: T3, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtT(b.hour ?? 0, b.min ?? 0)}{b.dur ? " – " + fmtT(Math.floor(em / 60) % 24, em % 60) : ""}{b.dist ? " · " + km(b.dist) : ""}{isMeet ? " · Google" : ""}</div>
+            </div>
+          ); })}
+          {showNow && (
+            <div style={{ position: "absolute", left: 50, right: 12, top: nowTop, display: "flex", alignItems: "center", zIndex: 8 }}>
+              <div style={{ width: 8, height: 8, borderRadius: 999, background: "var(--ember)", flex: "none" }} />
+              <div style={{ flex: 1, height: 2, background: "var(--ember)" }} />
+              <div style={{ fontSize: 9.5, fontWeight: 800, color: "var(--ember-strong)", background: "color-mix(in srgb, var(--ember) 16%, transparent)", borderRadius: 999, padding: "2px 7px", marginLeft: 4, flex: "none" }}>{fmtT(now.getHours(), now.getMinutes())}</div>
+            </div>
+          )}
+        </div>
+        <div style={{ color: T4, fontSize: 11, textAlign: "center", marginTop: 10 }}>Tap a block to edit · use ＋ to add.</div>
       </>
     );
   }
