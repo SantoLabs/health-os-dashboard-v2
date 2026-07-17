@@ -257,8 +257,8 @@ function GoalsTab() {
                       <div className="subtle tiny">This deletes it for good — it can&apos;t be restored.</div>
                     </div>
                     <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexShrink: 0 }}>
-                      <button onClick={() => { setConfirmPurge(null); runAct("goal_purge", g.id); }} disabled={busy} style={{ background: "#ef4444", border: "none", color: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Yes, delete</button>
-                      <button onClick={() => setConfirmPurge(null)} disabled={busy} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.18)", color: "var(--muted)", borderRadius: 8, padding: "5px 11px", fontSize: 12, cursor: "pointer" }}>No</button>
+                      <button onClick={() => { setConfirmPurge(null); runAct("goal_purge", g.id); }} disabled={busy} style={{ background: "var(--danger)", border: "none", color: "#fff", borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Yes, delete</button>
+                      <button onClick={() => setConfirmPurge(null)} disabled={busy} style={{ background: "transparent", border: "1px solid var(--line)", color: "var(--muted)", borderRadius: 8, padding: "5px 11px", fontSize: 12, cursor: "pointer" }}>No</button>
                     </div>
                   </div>
                 ) : (
@@ -270,7 +270,7 @@ function GoalsTab() {
                     </div>
                     <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexShrink: 0 }}>
                       <button className="btn-add" onClick={() => runAct("goal_restore", g.id)} disabled={busy}>↺ Restore</button>
-                      <button onClick={() => setConfirmPurge(g.id)} disabled={busy} style={{ background: "transparent", border: "1px solid rgba(248,113,113,0.4)", color: "#f87171", borderRadius: 999, padding: "4px 12px", fontSize: 13, cursor: "pointer" }}>🗑 Remove</button>
+                      <button onClick={() => setConfirmPurge(g.id)} disabled={busy} style={{ background: "transparent", border: "1px solid color-mix(in srgb, var(--danger) 40%, transparent)", color: "var(--danger)", borderRadius: 999, padding: "4px 12px", fontSize: 13, cursor: "pointer" }}>🗑 Remove</button>
                     </div>
                   </div>
                 )}
@@ -302,14 +302,14 @@ function PBRow({ rec }: { rec: TrnPbRec }) {
       <button onClick={() => rest.length && setOpen((o) => !o)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "13px 15px", background: "none", border: "none", color: "inherit", cursor: rest.length ? "pointer" : "default", textAlign: "left", font: "inherit" }}>
         <span style={{ fontSize: 22, flex: "none", filter: "drop-shadow(0 0 7px rgba(245,197,66,0.55))" }}>🥇</span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 600, color: "#c8cde0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{rec.label}</div>
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{rec.label}</div>
           <div className="tnum" style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.2 }}>{gold.primary}</div>
           <div className="subtle tiny">{gold.secondary ? `${gold.secondary} · ` : ""}{gold.date_label}</div>
         </div>
-        {rest.length > 0 && <span style={{ color: "#6b7080", fontSize: 12, flex: "none" }}>{open ? "▲" : "▼"}</span>}
+        {rest.length > 0 && <span style={{ color: "var(--muted)", fontSize: 12, flex: "none" }}>{open ? "▲" : "▼"}</span>}
       </button>
       {open && rest.map((e) => (
-        <div key={e.rnk} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 15px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+        <div key={e.rnk} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 15px", borderTop: "1px solid var(--line)" }}>
           <span style={{ fontSize: 17, flex: "none" }}>{MEDAL[e.rnk - 1] || "🎖"}</span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="tnum" style={{ fontSize: 15, fontWeight: 700 }}>{e.primary}</div>
@@ -337,16 +337,16 @@ function BadgeHex({ b, earned }: { b: TrnBadge; earned: boolean }) {
   return (
     <div style={{ width: "33.333%", display: "flex", flexDirection: "column", alignItems: "center", gap: 5, padding: "6px 3px 12px" }}>
       <div style={{ position: "relative", width: 76, height: 84 }}>
-        <div style={{ position: "absolute", inset: 0, clipPath: HEX_CLIP, background: earned ? `linear-gradient(150deg, ${c1}, ${c2})` : "rgba(255,255,255,0.05)" }} />
-        <div style={{ position: "absolute", inset: 3, clipPath: HEX_CLIP, background: earned ? "rgba(0,0,0,0.14)" : "rgba(18,20,30,0.92)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ position: "absolute", inset: 0, clipPath: HEX_CLIP, background: earned ? `linear-gradient(150deg, ${c1}, ${c2})` : "var(--surface-2)" }} />
+        <div style={{ position: "absolute", inset: 3, clipPath: HEX_CLIP, background: earned ? "rgba(0,0,0,0.14)" : "var(--surface-2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <span style={{ fontSize: 27, opacity: earned ? 1 : 0.32, filter: earned ? "none" : "grayscale(1)" }}>{earned ? b.icon : "🔒"}</span>
         </div>
-        {earned && b.seen === false && <span style={{ position: "absolute", top: -3, right: 2, background: "linear-gradient(135deg,#5f7dff,#a274ff)", color: "#fff", fontSize: 8, fontWeight: 800, letterSpacing: "0.04em", padding: "2px 5px", borderRadius: 999, boxShadow: "0 2px 6px rgba(0,0,0,0.4)" }}>NEW</span>}
+        {earned && b.seen === false && <span style={{ position: "absolute", top: -3, right: 2, background: "var(--t-grad)", color: "#fff", fontSize: 8, fontWeight: 800, letterSpacing: "0.04em", padding: "2px 5px", borderRadius: 999, boxShadow: "0 2px 6px rgba(0,0,0,0.4)" }}>NEW</span>}
       </div>
-      <div style={{ fontSize: 10.5, fontWeight: 700, textAlign: "center", lineHeight: 1.2, color: earned ? "#e7e9f2" : "#7c8296", minHeight: 25 }}>{b.title}</div>
+      <div style={{ fontSize: 10.5, fontWeight: 700, textAlign: "center", lineHeight: 1.2, color: earned ? "var(--text)" : "var(--muted)", minHeight: 25 }}>{b.title}</div>
       {earned
         ? <div className="subtle" style={{ fontSize: 9, opacity: 0.7 }}>{badgeDate(b.earned_on)}</div>
-        : <div style={{ width: "68%", height: 3, borderRadius: 2, background: "rgba(255,255,255,0.09)", overflow: "hidden" }}><div style={{ width: `${Math.round(prog * 100)}%`, height: "100%", background: c2, borderRadius: 2 }} /></div>}
+        : <div style={{ width: "68%", height: 3, borderRadius: 2, background: "var(--line-2)", overflow: "hidden" }}><div style={{ width: `${Math.round(prog * 100)}%`, height: "100%", background: c2, borderRadius: 2 }} /></div>}
     </div>
   );
 }
@@ -390,16 +390,16 @@ function History({ prs }: { prs: TrnPrs }) {
           <div>
             <div style={{ display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none", padding: "2px 0 10px", WebkitOverflowScrolling: "touch" }}>
               {prs.sports.map((s) => (
-                <button key={s.key} onClick={() => setSport(s.key)} style={{ flex: "0 0 auto", display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 13px", borderRadius: 999, border: `1px solid ${sportKey === s.key ? "rgba(162,116,255,0.6)" : "rgba(255,255,255,0.1)"}`, background: sportKey === s.key ? "linear-gradient(135deg,rgba(95,125,255,0.28),rgba(162,116,255,0.28))" : "rgba(255,255,255,0.04)", color: sportKey === s.key ? "#fff" : "#9198ad", cursor: "pointer", font: "inherit", fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }}>
+                <button key={s.key} onClick={() => setSport(s.key)} style={{ flex: "0 0 auto", display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 13px", borderRadius: 999, border: `1px solid ${sportKey === s.key ? "color-mix(in srgb, var(--ember) 55%, transparent)" : "var(--line)"}`, background: sportKey === s.key ? "var(--t-grad)" : "var(--surface-2)", color: sportKey === s.key ? "#fff" : "var(--muted)", cursor: "pointer", font: "inherit", fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }}>
                   <span>{s.emoji}</span>{s.label}
                 </button>
               ))}
             </div>
 
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
-              <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,0.05)", borderRadius: 999, padding: 2 }}>
+              <div style={{ display: "flex", gap: 2, background: "var(--surface-2)", borderRadius: 999, padding: 2 }}>
                 {PB_PERIODS.map((p) => (
-                  <button key={p.key} onClick={() => setPeriod(p.key)} style={{ padding: "5px 13px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 11.5, fontWeight: 700, background: period === p.key ? "linear-gradient(135deg,#5f7dff,#a274ff)" : "transparent", color: period === p.key ? "#fff" : "#8a90a6" }}>{p.label}</button>
+                  <button key={p.key} onClick={() => setPeriod(p.key)} style={{ padding: "5px 13px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 11.5, fontWeight: 700, background: period === p.key ? "var(--t-grad)" : "transparent", color: period === p.key ? "#fff" : "var(--muted)" }}>{p.label}</button>
                 ))}
               </div>
             </div>
@@ -464,15 +464,15 @@ function Body({ p }: { p: TrnProgress }) {
         <div className="trn-cell good"><div className="v tnum">{b?.lean_mass_kg != null ? b.lean_mass_kg.toFixed(1) : "—"}</div><div className="l">lean kg</div></div>
       </div>
       <div style={{ display: "flex", justifyContent: "center", margin: "10px 0" }}>
-        <div style={{ display: "flex", gap: 3, background: "rgba(255,255,255,0.05)", borderRadius: 999, padding: 3 }}>
+        <div style={{ display: "flex", gap: 3, background: "var(--surface-2)", borderRadius: 999, padding: 3 }}>
           {RANGES.map((r) => (
-            <button key={r} onClick={() => setRange(r)} style={{ padding: "5px 14px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, background: range === r ? "linear-gradient(135deg,#5f7dff,#a274ff)" : "transparent", color: range === r ? "#fff" : "#8a90a6" }}>{r}</button>
+            <button key={r} onClick={() => setRange(r)} style={{ padding: "5px 14px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, background: range === r ? "var(--t-grad)" : "transparent", color: range === r ? "#fff" : "var(--muted)" }}>{r}</button>
           ))}
         </div>
       </div>
-      {graph("Weight · kg", (x) => x.weight_kg, "#6d8bff", "kg")}
-      {graph("Body fat · %", (x) => x.body_fat_pct, "#ffb547", "%")}
-      {graph("Lean mass · kg", (x) => x.lean_mass_kg, "#34d6a4", "kg")}
+      {graph("Weight · kg", (x) => x.weight_kg, "var(--ember)", "kg")}
+      {graph("Body fat · %", (x) => x.body_fat_pct, "var(--gold)", "%")}
+      {graph("Lean mass · kg", (x) => x.lean_mass_kg, "var(--success)", "kg")}
       {b?.date && <div className="subtle tiny center">Last measured {dShort(b.date)}</div>}
     </div>
   );
@@ -577,7 +577,7 @@ function buildCells(from: string, to: string, str: StrengthSession[], car: Cardi
 function Chip({ c, onTap }: { c: Cell; onTap: (c: Cell) => void }) {
   const s = SPORT[c.sport];
   return (
-    <button onClick={() => onTap(c)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 9px", borderRadius: 10, background: c.planned ? hexA(s.color, 0.05) : hexA(s.color, 0.16), border: `1px ${c.planned ? "dashed" : "solid"} ${hexA(s.color, c.planned ? 0.45 : 0.5)}`, color: c.planned ? hexA(s.color, 0.85) : "#eef", cursor: "pointer", font: "inherit", fontSize: 12, fontWeight: 600, textAlign: "left" }}>
+    <button onClick={() => onTap(c)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 9px", borderRadius: 10, background: c.planned ? hexA(s.color, 0.05) : hexA(s.color, 0.16), border: `1px ${c.planned ? "dashed" : "solid"} ${hexA(s.color, c.planned ? 0.45 : 0.5)}`, color: c.planned ? hexA(s.color, 0.85) : "var(--text)", cursor: "pointer", font: "inherit", fontSize: 12, fontWeight: 600, textAlign: "left" }}>
       <span style={{ fontSize: 13 }}>{s.emoji}</span>
       <span>{c.label}</span>
       {c.stat ? <span className="tnum" style={{ opacity: 0.85, fontWeight: 500 }}>{c.stat}</span> : null}
@@ -593,17 +593,17 @@ function WeekGrid({ start, cells, today, onTap, onDate }: { start: string; cells
         const isToday = d === today;
         const past = d < today;
         return (
-          <div key={d} style={{ display: "flex", gap: 10, padding: "8px", alignItems: "flex-start", borderTop: i === 0 ? "none" : "1px solid rgba(255,255,255,0.05)" }}>
+          <div key={d} style={{ display: "flex", gap: 10, padding: "8px", alignItems: "flex-start", borderTop: i === 0 ? "none" : "1px solid var(--line)" }}>
             <div style={{ width: 40, flex: "none", textAlign: "center" }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: isToday ? "#a274ff" : "#8a90a6" }}>{DOW[i]}</div>
-              <div className="tnum" style={{ fontSize: 15, fontWeight: 700, color: isToday ? "#fff" : "#c9cede" }}>{dnum(d)}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: isToday ? "var(--ember)" : "var(--muted)" }}>{DOW[i]}</div>
+              <div className="tnum" style={{ fontSize: 15, fontWeight: 700, color: isToday ? "var(--text)" : "var(--text-2)" }}>{dnum(d)}</div>
             </div>
             <div style={{ flex: 1, minWidth: 0, display: "flex", flexWrap: "wrap", gap: 6, paddingTop: 2, alignItems: "center", minHeight: 22 }}>
               {cs.length > 0
                 ? cs.map((c) => <Chip key={c.key} c={c} onTap={onTap} />)
                 : past
-                  ? <span style={{ fontSize: 13, color: "#6b7080" }}>⭐ Rest</span>
-                  : <button onClick={() => onDate(d)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 10, background: "transparent", border: "1px dashed rgba(255,255,255,0.14)", color: "#7a8194", cursor: "pointer", font: "inherit", fontSize: 12, fontWeight: 600 }}>＋ Plan</button>}
+                  ? <span style={{ fontSize: 13, color: "var(--muted)" }}>⭐ Rest</span>
+                  : <button onClick={() => onDate(d)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 10, background: "transparent", border: "1px dashed var(--line)", color: "var(--muted)", cursor: "pointer", font: "inherit", fontSize: 12, fontWeight: 600 }}>＋ Plan</button>}
             </div>
           </div>
         );
@@ -618,7 +618,7 @@ function MonthGrid({ start, cells, today, onDay }: { start: string; cells: Map<s
   return (
     <div className="card" style={{ padding: "8px 6px" }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2, marginBottom: 4 }}>
-        {DOW.map((d) => <div key={d} style={{ textAlign: "center", fontSize: 10, fontWeight: 700, color: "#6b7080" }}>{d[0]}</div>)}
+        {DOW.map((d) => <div key={d} style={{ textAlign: "center", fontSize: 10, fontWeight: 700, color: "var(--muted)" }}>{d[0]}</div>)}
       </div>
       {Array.from({ length: 6 }, (_, w) => w).map((w) => (
         <div key={w} style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2 }}>
@@ -628,8 +628,8 @@ function MonthGrid({ start, cells, today, onDay }: { start: string; cells: Map<s
             const isToday = d === today;
             const tappable = cs.length > 0 || d >= today;
             return (
-              <button key={d} onClick={() => tappable && onDay(d)} style={{ aspectRatio: "1", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "4px 0 0", borderRadius: 8, border: isToday ? "1px solid #a274ff" : "1px solid transparent", background: inMonth ? "rgba(255,255,255,0.02)" : "transparent", cursor: tappable ? "pointer" : "default", opacity: inMonth ? 1 : 0.3, font: "inherit" }}>
-                <span className="tnum" style={{ fontSize: 11, fontWeight: 600, color: isToday ? "#fff" : "#9aa0b0" }}>{dnum(d)}</span>
+              <button key={d} onClick={() => tappable && onDay(d)} style={{ aspectRatio: "1", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "4px 0 0", borderRadius: 8, border: isToday ? "1px solid var(--ember)" : "1px solid transparent", background: inMonth ? "var(--surface-2)" : "transparent", cursor: tappable ? "pointer" : "default", opacity: inMonth ? 1 : 0.3, font: "inherit" }}>
+                <span className="tnum" style={{ fontSize: 11, fontWeight: 600, color: isToday ? "var(--ember)" : "var(--muted)" }}>{dnum(d)}</span>
                 <span style={{ display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "center" }}>
                   {cs.slice(0, 4).map((c) => <span key={c.key} style={{ width: 5, height: 5, borderRadius: 999, background: SPORT[c.sport].color, opacity: c.planned ? 0.45 : 1 }} />)}
                 </span>
@@ -662,10 +662,10 @@ function SportBlocks({ from, to, str, car }: { from: string; to: string; str: St
         return (
           <div key={b.sport} style={{ flex: "0 0 auto", minWidth: 92, background: hexA(s.color, 0.07), border: `1px solid ${hexA(s.color, 0.18)}`, borderRadius: 14, padding: "10px 12px", textAlign: "center" }}>
             <div style={{ fontSize: 16, lineHeight: 1 }}>{s.emoji}</div>
-            <div className="tnum" style={{ marginTop: 5, fontWeight: 800, fontSize: vfont, color: "#f4f4f7", letterSpacing: "-0.4px", lineHeight: 1.1, whiteSpace: "nowrap" }}>
-              {val}<span style={{ fontSize: 10.5, fontWeight: 700, color: "#9aa0b0", marginLeft: 2 }}>{unit}</span>
+            <div className="tnum" style={{ marginTop: 5, fontWeight: 800, fontSize: vfont, color: "var(--text)", letterSpacing: "-0.4px", lineHeight: 1.1, whiteSpace: "nowrap" }}>
+              {val}<span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", marginLeft: 2 }}>{unit}</span>
             </div>
-            <div style={{ marginTop: 3, fontSize: 12, fontWeight: 600, color: "#c9cede", whiteSpace: "nowrap" }}>{s.label}</div>
+            <div style={{ marginTop: 3, fontSize: 12, fontWeight: 600, color: "var(--text-2)", whiteSpace: "nowrap" }}>{s.label}</div>
             <div className="subtle tiny" style={{ whiteSpace: "nowrap" }}>{b.sessions} session{b.sessions === 1 ? "" : "s"}</div>
           </div>
         );
@@ -695,7 +695,7 @@ function StrengthSessionDetail({ s, onBack }: { s: StrengthSession; onBack: () =
             <div className="subtle tiny" style={{ textTransform: "capitalize" }}>{e.muscle_group.replace(/_/g, " ")}</div>
           </div>
           <div className="subtle tiny tnum">{e.sets} sets{e.volume ? ` · ${Math.round(e.volume).toLocaleString("en-US")} kg` : ""}</div>
-          <span style={{ color: "#6b7080", fontSize: 16 }}>›</span>
+          <span style={{ color: "var(--muted)", fontSize: 16 }}>›</span>
         </button>
       ))}
     </div>
@@ -714,7 +714,7 @@ function DaySheet({ date, cells, today, onTap, onDate, onClose }: { date: string
       <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: "100%", maxWidth: 480, margin: 0, borderRadius: "18px 18px 0 0", padding: 16, maxHeight: "70vh", overflowY: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <div style={{ fontWeight: 800, fontSize: 15 }}>{DOW[(dt.getDay() + 6) % 7]} {dt.getDate()} {MON[dt.getMonth()]}</div>
-          <button onClick={onClose} aria-label="Close" style={{ background: "none", border: "none", color: "#8a90a6", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>
+          <button onClick={onClose} aria-label="Close" style={{ background: "none", border: "none", color: "var(--muted)", fontSize: 22, cursor: "pointer", lineHeight: 1 }}>×</button>
         </div>
         {cs.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: past ? 0 : 12 }}>
@@ -723,7 +723,7 @@ function DaySheet({ date, cells, today, onTap, onDate, onClose }: { date: string
         )}
         {cs.length === 0 && past && <div className="subtle tiny">⭐ Rest day</div>}
         {!past && (
-          <button onClick={() => { onClose(); onDate(date); }} style={{ width: "100%", padding: "11px", borderRadius: 12, background: "transparent", border: "1px dashed rgba(255,255,255,0.18)", color: "#c9b6ff", cursor: "pointer", font: "inherit", fontSize: 13, fontWeight: 700 }}>＋ Add or edit in calendar</button>
+          <button onClick={() => { onClose(); onDate(date); }} style={{ width: "100%", padding: "11px", borderRadius: 12, background: "transparent", border: "1px dashed var(--line)", color: "var(--ember)", cursor: "pointer", font: "inherit", fontSize: 13, fontWeight: 700 }}>＋ Add or edit in calendar</button>
         )}
       </div>
     </div>
@@ -776,17 +776,17 @@ function Summary() {
     <div>
       {/* 1 · filter */}
       <div style={{ display: "flex", justifyContent: "center", margin: "4px 0 10px" }}>
-        <div style={{ display: "flex", gap: 3, background: "rgba(255,255,255,0.05)", borderRadius: 999, padding: 3 }}>
+        <div style={{ display: "flex", gap: 3, background: "var(--surface-2)", borderRadius: 999, padding: 3 }}>
           {(["Week", "Month"] as const).map((m) => (
-            <button key={m} onClick={() => { setMode(m); setOff(0); }} style={{ padding: "6px 18px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: 700, background: mode === m ? "linear-gradient(135deg,#5f7dff,#a274ff)" : "transparent", color: mode === m ? "#fff" : "#8a90a6" }}>{m}</button>
+            <button key={m} onClick={() => { setMode(m); setOff(0); }} style={{ padding: "6px 18px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: 700, background: mode === m ? "var(--t-grad)" : "transparent", color: mode === m ? "#fff" : "var(--muted)" }}>{m}</button>
           ))}
         </div>
       </div>
 
       <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", marginBottom: 10 }}>
-        <button aria-label="Older" onClick={() => setOff((o) => Math.min(o + 1, 104))} style={{ background: "none", border: "none", color: "#c9b6ff", fontSize: 18, cursor: "pointer", padding: "0 12px", lineHeight: 1 }}>◀</button>
+        <button aria-label="Older" onClick={() => setOff((o) => Math.min(o + 1, 104))} style={{ background: "none", border: "none", color: "var(--ember)", fontSize: 18, cursor: "pointer", padding: "0 12px", lineHeight: 1 }}>◀</button>
         <div style={{ fontWeight: 700, fontSize: 13 }}>{label}</div>
-        <button aria-label="Newer" disabled={off <= -4} onClick={() => setOff((o) => Math.max(o - 1, -4))} style={{ background: "none", border: "none", color: off <= -4 ? "rgba(255,255,255,0.2)" : "#c9b6ff", fontSize: 18, cursor: off <= -4 ? "default" : "pointer", padding: "0 12px", lineHeight: 1 }}>▶</button>
+        <button aria-label="Newer" disabled={off <= -4} onClick={() => setOff((o) => Math.max(o - 1, -4))} style={{ background: "none", border: "none", color: off <= -4 ? "var(--faint)" : "var(--ember)", fontSize: 18, cursor: off <= -4 ? "default" : "pointer", padding: "0 12px", lineHeight: 1 }}>▶</button>
       </div>
 
       {loading ? <div className="muted center pad">Loading…</div> : (
