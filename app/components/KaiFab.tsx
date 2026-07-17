@@ -40,6 +40,7 @@ export default function KaiFab() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [pendingSeed, setPendingSeed] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const voice = useVoiceInput((t) => setInput((cur) => (cur ? cur.trim() + " " : "") + t));
   const [img, setImg] = useState<PickedImage | null>(null);
@@ -52,7 +53,13 @@ export default function KaiFab() {
   useEffect(() => { setOpen(false); }, [path]);
   useEffect(() => {
     function onKaiOpen(e: Event) {
-      const d = ((e as CustomEvent).detail || {}) as { thread_id?: string; message?: KaiMessage };
+      const d = ((e as CustomEvent).detail || {}) as { thread_id?: string; message?: KaiMessage; seed?: string };
+      // Seeded open: start a fresh thread and auto-ask the tapped prompt.
+      if (d.seed) {
+        setThreadId(null); setMessages([]); setErr(null); setInput(""); setImg(null);
+        setOpen(true); setPendingSeed(d.seed);
+        return;
+      }
       if (d.thread_id) setThreadId(d.thread_id);
       setMessages(d.message ? [d.message] : []);
       setErr(null); setInput(""); setImg(null); setOpen(true);
@@ -61,6 +68,9 @@ export default function KaiFab() {
     return () => window.removeEventListener("kai:open", onKaiOpen as EventListener);
   }, []);
   useEffect(() => { if (open) endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, busy, open]);
+  // Fire a seeded prompt (e.g. a tapped Today chip) once the sheet is open.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (open && pendingSeed) { const s = pendingSeed; setPendingSeed(null); send(s); } }, [open, pendingSeed]);
 
   // Don't show the FAB on the full Ask tab (it would be redundant there).
   if (path === "/more/ask") return null;
@@ -123,7 +133,7 @@ export default function KaiFab() {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 800, color: H, display: "flex", alignItems: "center", gap: 7 }}>
                   Kai
-                  {ctx.label ? <span style={{ fontSize: 10.5, fontWeight: 700, color: ACCENT_LT, background: "rgba(79,156,249,.12)", border: "1px solid rgba(79,156,249,.28)", borderRadius: 999, padding: "2px 8px" }}>on {ctx.label}</span> : null}
+                  {ctx.label ? <span style={{ fontSize: 10.5, fontWeight: 700, color: ACCENT_LT, background: "rgba(217,111,78,.12)", border: "1px solid rgba(217,111,78,.28)", borderRadius: 999, padding: "2px 8px" }}>on {ctx.label}</span> : null}
                 </div>
                 <button onClick={openFullChat} style={{ fontSize: 11, color: SECOND, background: "none", border: "none", padding: 0, cursor: "pointer" }}>Open full chat &amp; history →</button>
               </div>
@@ -139,7 +149,7 @@ export default function KaiFab() {
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {ctx.chips.map((c, i) => (
-                      <button key={i} onClick={() => send(c)} style={{ textAlign: "left", fontSize: 13, color: ACCENT_LT, background: "rgba(79,156,249,.08)", border: "1px solid rgba(79,156,249,.24)", borderRadius: 12, padding: "10px 13px", cursor: "pointer", fontFamily: "inherit" }}>{c}</button>
+                      <button key={i} onClick={() => send(c)} style={{ textAlign: "left", fontSize: 13, color: ACCENT_LT, background: "rgba(217,111,78,.08)", border: "1px solid rgba(217,111,78,.24)", borderRadius: 12, padding: "10px 13px", cursor: "pointer", fontFamily: "inherit" }}>{c}</button>
                     ))}
                   </div>
                 </div>
@@ -177,13 +187,13 @@ export default function KaiFab() {
                 />
                 {voice.supported ? (
                   <button onClick={voice.toggle} aria-label="Voice input"
-                    style={{ width: 44, height: 44, borderRadius: 12, border: "1px solid " + BORDER_STRONG, background: voice.listening ? ACCENT : INPUTBG, color: voice.listening ? "#0c1422" : SECOND, fontSize: 16, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{voice.listening ? "\u25A0" : "\uD83C\uDFA4"}</button>
+                    style={{ width: 44, height: 44, borderRadius: 12, border: "1px solid " + BORDER_STRONG, background: voice.listening ? ACCENT : INPUTBG, color: voice.listening ? "var(--on-ember)" : SECOND, fontSize: 16, fontWeight: 800, cursor: "pointer", flexShrink: 0 }}>{voice.listening ? "\u25A0" : "\uD83C\uDFA4"}</button>
                 ) : null}
                 <button
                   onClick={() => send(input)}
                   disabled={busy || (!input.trim() && !img)}
                   aria-label="Send"
-                  style={{ width: 44, height: 44, borderRadius: 12, border: "none", background: ACCENT, color: "#0c1422", fontSize: 17, fontWeight: 800, cursor: busy || (!input.trim() && !img) ? "default" : "pointer", opacity: busy || (!input.trim() && !img) ? 0.5 : 1, flexShrink: 0 }}
+                  style={{ width: 44, height: 44, borderRadius: 12, border: "none", background: ACCENT, color: "var(--on-ember)", fontSize: 17, fontWeight: 800, cursor: busy || (!input.trim() && !img) ? "default" : "pointer", opacity: busy || (!input.trim() && !img) ? 0.5 : 1, flexShrink: 0 }}
                 >↑</button>
               </div>
             </div>
