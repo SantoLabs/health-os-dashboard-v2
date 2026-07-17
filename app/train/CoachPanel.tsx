@@ -107,10 +107,10 @@ export default function CoachPanel() {
             <div className="tiny subtle" style={{ marginBottom: 6, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase" }}>On your calendar</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {locked.map((s) => (
-                <div key={s.id} style={{ padding: "10px 12px", borderRadius: 12, background: "rgba(121,224,168,0.06)", border: "1px solid rgba(121,224,168,0.18)" }}>
+                <div key={s.id} style={{ padding: "10px 12px", borderRadius: 12, background: "color-mix(in srgb, var(--success) 8%, transparent)", border: "1px solid color-mix(in srgb, var(--success) 22%, transparent)" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
                     <div style={{ fontWeight: 700, fontSize: 13 }}>{fmtDay(s.session_date)} · {s.is_rest_day ? "Rest" : s.session_type}</div>
-                    <div className="tiny" style={{ whiteSpace: "nowrap", fontWeight: 700, color: s.completed ? "#79e0a8" : "#8ab4ff" }}>{s.completed ? "✓ Done" : "✓ On calendar"}</div>
+                    <div className="tiny" style={{ whiteSpace: "nowrap", fontWeight: 700, color: s.completed ? "var(--success)" : "var(--ember)" }}>{s.completed ? "✓ Done" : "✓ On calendar"}</div>
                   </div>
                   {!s.is_rest_day ? <div className="tiny" style={{ marginTop: 2, opacity: 0.75 }}>{s.activity}{s.planned_duration ? ` · ${s.planned_duration}m` : ""}{s.intensity ? ` · ${s.intensity}` : ""}</div> : null}
                   <div className="tiny" style={{ marginTop: 2, opacity: 0.5 }}>{fmtDate(s.session_date)}</div>
@@ -121,7 +121,7 @@ export default function CoachPanel() {
         ) : null}
 
         {loading ? <div className="subtle tiny" style={{ marginTop: 12 }}>Kai is reading your recovery, load and race calendar…</div> : null}
-        {err ? <div className="tiny" style={{ marginTop: 12, color: "#ff8a8a" }}>{err} · <button className="trn-sub" onClick={load}>retry</button></div> : null}
+        {err ? <div className="tiny" style={{ marginTop: 12, color: "var(--danger)" }}>{err} · <button className="trn-sub" onClick={load}>retry</button></div> : null}
         {!loading && !err && proposals.length === 0 ? (
           <div className="subtle tiny" style={{ marginTop: 12 }}>{locked.length > 0 ? "That's your plan for the days ahead — nothing else to add right now." : "Everything ahead this week is already set. Check back after your next session."}</div>
         ) : null}
@@ -135,8 +135,8 @@ export default function CoachPanel() {
                 const adapting = busyId === p.id && declineFor === p.id;
                 const flags = p.validator || [];
                 return (
-                  <div key={p.id || i} style={{ padding: 12, borderRadius: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                    {wasSwapped ? <div className="tiny" style={{ marginBottom: 6, color: "#8ab4ff", fontWeight: 700 }}>↺ Kai swapped this in</div> : null}
+                  <div key={p.id || i} style={{ padding: 12, borderRadius: 12, background: "var(--surface-2)", border: "1px solid var(--line)" }}>
+                    {wasSwapped ? <div className="tiny" style={{ marginBottom: 6, color: "var(--ember)", fontWeight: 700 }}>↺ Kai swapped this in</div> : null}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
                       <div style={{ fontWeight: 700, fontSize: 13 }}>{fmtDay(p.session_date)} · {p.is_rest_day ? "Rest" : p.session_type}</div>
                       <div className="tiny" style={{ opacity: 0.55, whiteSpace: "nowrap" }}>
@@ -146,7 +146,7 @@ export default function CoachPanel() {
                     <div style={{ fontSize: 13, marginTop: 4 }}>{p.activity}</div>
                     {p.rationale ? <div className="subtle tiny" style={{ marginTop: 6, lineHeight: 1.5, fontStyle: "italic" }}>“{p.rationale}”</div> : null}
                     {flags.map((f, j) => (
-                      <div key={j} className="tiny" style={{ marginTop: 6, color: f.severity === "warn" ? "#ffca7a" : "#8ab4ff" }}>⚠ {f.message}</div>
+                      <div key={j} className="tiny" style={{ marginTop: 6, color: f.severity === "warn" ? "var(--gold)" : "var(--ember)" }}>⚠ {f.message}</div>
                     ))}
 
                     {declineFor === p.id ? (
@@ -158,7 +158,7 @@ export default function CoachPanel() {
                           placeholder="e.g. I'm doing a swim instead of the bike today"
                           rows={2}
                           disabled={adapting}
-                          style={{ width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,0.04)", color: "inherit", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: 8, fontSize: 13, resize: "vertical", fontFamily: "inherit" }}
+                          style={{ width: "100%", boxSizing: "border-box", background: "var(--surface-2)", color: "inherit", border: "1px solid var(--line)", borderRadius: 8, padding: 8, fontSize: 13, resize: "vertical", fontFamily: "inherit" }}
                         />
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
                           {REASON_HINTS.map((rz) => (
@@ -166,7 +166,7 @@ export default function CoachPanel() {
                           ))}
                         </div>
                         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                          <button disabled={adapting} onClick={() => decline(p, declineText.trim())} style={{ flex: 1, padding: 10, borderRadius: 10, border: "none", cursor: "pointer", color: "#fff", fontWeight: 700, fontSize: 12, background: "linear-gradient(135deg,#5f7dff,#a274ff)" }}>
+                          <button disabled={adapting} onClick={() => decline(p, declineText.trim())} style={{ flex: 1, padding: 10, borderRadius: 10, border: "none", cursor: "pointer", color: "#fff", fontWeight: 700, fontSize: 12, background: "linear-gradient(135deg,var(--ember),var(--ember-strong))" }}>
                             {adapting ? "Kai's swapping…" : "Send & swap"}
                           </button>
                           <button disabled={adapting} onClick={() => { setDeclineFor(null); setDeclineText(""); }} className="trn-sub" style={{ flex: 1 }}>Cancel</button>
@@ -174,7 +174,7 @@ export default function CoachPanel() {
                       </div>
                     ) : (
                       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                        <button disabled={busyId === p.id} onClick={() => accept(p)} style={{ flex: 1, padding: 10, borderRadius: 10, border: "none", cursor: "pointer", color: "#fff", fontWeight: 700, fontSize: 12, background: "linear-gradient(135deg,#5f7dff,#a274ff)" }}>
+                        <button disabled={busyId === p.id} onClick={() => accept(p)} style={{ flex: 1, padding: 10, borderRadius: 10, border: "none", cursor: "pointer", color: "#fff", fontWeight: 700, fontSize: 12, background: "linear-gradient(135deg,var(--ember),var(--ember-strong))" }}>
                           {busyId === p.id ? "Adding…" : (p.is_rest_day ? "Accept rest" : "Add to plan")}
                         </button>
                         <button disabled={busyId === p.id} onClick={() => openDecline(p)} className="trn-sub" style={{ flex: 1 }}>Not today</button>
