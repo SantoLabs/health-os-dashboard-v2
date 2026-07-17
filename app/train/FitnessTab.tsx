@@ -17,10 +17,10 @@ const paceKm = (s: number) => `${Math.floor(s / 60)}:${pad2(Math.round(s % 60))}
 const pace100 = (s: number) => `${Math.floor(s / 60)}:${pad2(Math.round(s % 60))}/100m`;
 
 function formStatus(tsb: number): { label: string; color: string } {
-  if (tsb > 5) return { label: "Fresh", color: "#39d98a" };
-  if (tsb >= -10) return { label: "Neutral", color: "#8b919b" };
-  if (tsb >= -30) return { label: "Tired", color: "#ffb547" };
-  return { label: "Very tired", color: "#ff6b6b" };
+  if (tsb > 5) return { label: "Fresh", color: "var(--success)" };
+  if (tsb >= -10) return { label: "Neutral", color: "var(--muted)" };
+  if (tsb >= -30) return { label: "Tired", color: "var(--gold)" };
+  return { label: "Very tired", color: "var(--danger)" };
 }
 
 function PmcChart({ pts }: { pts: TrnLoadPoint[] }) {
@@ -87,7 +87,7 @@ export default function FitnessTab() {
 
   const thCell = (icon: string, label: string, val: string, src?: string) => (
     <div key={label} style={{ flex: "1 1 45%", minWidth: 132, display: "flex", alignItems: "center",
-      justifyContent: "space-between", padding: "8px 10px", background: "rgba(255,255,255,0.03)", borderRadius: 10 }}>
+      justifyContent: "space-between", padding: "8px 10px", background: "var(--surface-2)", borderRadius: 10 }}>
       <span className="subtle tiny">{icon} {label}</span>
       <span style={{ display: "flex", alignItems: "center" }}><b>{val}</b>{srcBadge(src)}</span>
     </div>
