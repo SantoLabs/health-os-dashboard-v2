@@ -281,10 +281,10 @@ html, body {
 
 /* ===================== Training revamp v2 ===================== */
 .trainv2 {
-  --t-indigo:#6d8bff; --t-violet:#a274ff;
-  --t-grad:linear-gradient(135deg,#5f7dff,#a274ff);
-  --t-green:#34d6a4; --t-amber:#ffb547; --t-coral:#ff6f5e; --t-cyan:#3ec8e6;
-  --t-surf2:#1c1f26; --t-surf3:#23272f; --t-line2:rgba(255,255,255,.14);
+  --t-indigo:var(--ember); --t-violet:var(--ember-strong);
+  --t-grad:linear-gradient(135deg,var(--ember),var(--ember-strong));
+  --t-green:var(--success); --t-amber:var(--gold); --t-coral:var(--danger); --t-cyan:#3ec8e6;
+  --t-surf2:var(--surface-2); --t-surf3:var(--surface-3); --t-line2:var(--line-2);
   --z1:#5b6573; --z2:#4a9bff; --z3:#34d6a4; --z4:#ffb547; --z5:#ff5e5e;
 }
 .tnum { font-variant-numeric: tabular-nums; letter-spacing:-.01em; }
@@ -292,7 +292,7 @@ html, body {
 /* primary 4-pill nav */
 .trn-pills { display:flex; gap:6px; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:4px; margin-bottom:14px; }
 .trn-pill { flex:1; text-align:center; font-size:12px; font-weight:600; color:var(--muted); padding:9px 4px; border-radius:10px; cursor:pointer; border:none; background:none; white-space:nowrap; }
-.trn-pill.on { background:var(--t-grad); color:#fff; box-shadow:0 4px 14px -4px rgba(108,139,255,.6); }
+.trn-pill.on { background:var(--t-grad); color:#fff; box-shadow:0 4px 14px -4px rgba(217,111,78,.5); }
 
 /* secondary sub-pills */
 .trn-subs { display:flex; gap:7px; margin-bottom:14px; flex-wrap:wrap; }
@@ -311,8 +311,8 @@ html, body {
 .trn-hero-num { font-size:40px; font-weight:800; line-height:1.05; margin-top:4px; }
 .trn-hero-num small { font-size:16px; font-weight:600; color:var(--muted); margin-left:5px; }
 .trn-delta { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:700; padding:3px 8px; border-radius:999px; vertical-align:middle; margin-left:8px; }
-.trn-delta.up { color:var(--t-green); background:rgba(52,214,164,.12); border:1px solid rgba(52,214,164,.3); }
-.trn-delta.down { color:var(--t-coral); background:rgba(255,111,94,.12); border:1px solid rgba(255,111,94,.3); }
+.trn-delta.up { color:var(--t-green); background:color-mix(in srgb, var(--success) 14%, transparent); border:1px solid color-mix(in srgb, var(--success) 32%, transparent); }
+.trn-delta.down { color:var(--t-coral); background:color-mix(in srgb, var(--danger) 14%, transparent); border:1px solid color-mix(in srgb, var(--danger) 32%, transparent); }
 .trn-delta.flat { color:var(--muted); background:var(--t-surf2); border:1px solid var(--line); }
 .trn-hero-sub { font-size:12px; color:var(--t-green); font-weight:600; margin-top:7px; }
 
@@ -320,7 +320,7 @@ html, body {
 .trn-chart { width:100%; margin-top:10px; display:block; }
 .trn-range { display:flex; gap:6px; margin-top:10px; }
 .trn-range button { font-size:11px; font-weight:600; color:var(--muted); padding:5px 12px; border-radius:999px; background:var(--t-surf2); border:1px solid var(--line); cursor:pointer; }
-.trn-range button.on { color:var(--t-indigo); background:rgba(109,139,255,.16); border-color:rgba(109,139,255,.5); }
+.trn-range button.on { color:var(--t-indigo); background:color-mix(in srgb, var(--ember) 16%, transparent); border-color:color-mix(in srgb, var(--ember) 50%, transparent); }
 
 /* 4-up stat grid */
 .trn-statgrid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:12px; }
@@ -338,7 +338,7 @@ html, body {
 .trn-zlegend i { width:9px; height:9px; border-radius:2px; display:inline-block; }
 
 /* continue card */
-.trn-continue { display:flex; align-items:center; gap:13px; padding:15px; border-radius:16px; background:linear-gradient(135deg, rgba(95,125,255,.16), rgba(162,116,255,.10)); border:1px solid rgba(140,130,255,.35); cursor:pointer; margin-bottom:14px; width:100%; text-align:left; color:var(--text); }
+.trn-continue { display:flex; align-items:center; gap:13px; padding:15px; border-radius:16px; background:linear-gradient(135deg, color-mix(in srgb, var(--ember) 16%, transparent), color-mix(in srgb, var(--ember-strong) 10%, transparent)); border:1px solid color-mix(in srgb, var(--ember) 30%, transparent); cursor:pointer; margin-bottom:14px; width:100%; text-align:left; color:var(--text); }
 .trn-continue .play { width:38px; height:38px; border-radius:50%; background:var(--t-grad); display:flex; align-items:center; justify-content:center; flex:none; }
 .trn-continue .t { font-size:14px; font-weight:700; }
 .trn-continue .s { font-size:11.5px; color:var(--muted); margin-top:2px; }
@@ -366,13 +366,13 @@ html, body {
 .trn-srow .d { color:var(--muted); font-size:11.5px; }
 
 /* race hero */
-.trn-race { border-radius:16px; padding:16px; background:linear-gradient(150deg, rgba(95,125,255,.16), rgba(162,116,255,.06)); border:1px solid rgba(140,130,255,.32); margin-bottom:12px; }
+.trn-race { border-radius:16px; padding:16px; background:linear-gradient(150deg, color-mix(in srgb, var(--ember) 16%, transparent), color-mix(in srgb, var(--ember-strong) 6%, transparent)); border:1px solid color-mix(in srgb, var(--ember) 30%, transparent); margin-bottom:12px; }
 .trn-race .top { display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--muted); }
 .trn-race .nm { font-size:18px; font-weight:800; margin-top:9px; }
 .trn-race .meta { font-size:11.5px; color:var(--muted); margin-top:3px; }
 .trn-race .days { font-size:40px; font-weight:800; line-height:1; margin-top:11px; }
 .trn-race .days small { font-size:14px; font-weight:600; color:var(--muted); margin-left:7px; }
-.trn-race .track { height:6px; background:rgba(255,255,255,.08); border-radius:999px; overflow:hidden; margin-top:13px; }
+.trn-race .track { height:6px; background:var(--line-2); border-radius:999px; overflow:hidden; margin-top:13px; }
 .trn-race .track i { display:block; height:100%; background:var(--t-grad); border-radius:999px; }
 
 /* goal rows */
@@ -382,7 +382,7 @@ html, body {
 .trn-goal .tt { font-size:13px; font-weight:600; }
 .trn-goal .dt { font-size:10.5px; color:var(--muted); margin-top:1px; }
 .trn-gstatus { font-size:9.5px; font-weight:700; padding:3px 8px; border-radius:999px; white-space:nowrap; flex:none; }
-.trn-gstatus.ip { color:var(--t-green); background:rgba(52,214,164,.12); }
+.trn-gstatus.ip { color:var(--t-green); background:color-mix(in srgb, var(--success) 14%, transparent); }
 .trn-gstatus.ns { color:var(--muted); background:var(--t-surf2); }
 
 /* achievements timeline */
@@ -393,14 +393,14 @@ html, body {
 .trn-ach .body { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:11px 13px; margin-bottom:10px; flex:1; display:flex; align-items:center; gap:10px; }
 .trn-ach .tt { font-size:13px; font-weight:600; }
 .trn-ach .dd { font-size:10.5px; color:var(--muted); margin-top:2px; }
-.trn-prbadge { font-size:9.5px; font-weight:700; color:var(--t-amber); background:rgba(255,181,71,.12); border:1px solid rgba(255,181,71,.3); border-radius:999px; padding:3px 8px; white-space:nowrap; flex:none; }
+.trn-prbadge { font-size:9.5px; font-weight:700; color:var(--t-amber); background:color-mix(in srgb, var(--gold) 14%, transparent); border:1px solid color-mix(in srgb, var(--gold) 30%, transparent); border-radius:999px; padding:3px 8px; white-space:nowrap; flex:none; }
 
 /* adherence (static this phase) */
 .trn-adh-days { display:flex; gap:5px; margin-top:12px; }
 .trn-adh-day { flex:1; text-align:center; }
 .trn-adh-box { height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:13px; color:#fff; font-weight:700; }
-.trn-adh-box.done { background:rgba(52,214,164,.9); }
-.trn-adh-box.miss { background:rgba(255,111,94,.85); }
+.trn-adh-box.done { background:var(--success); }
+.trn-adh-box.miss { background:var(--danger); }
 .trn-adh-box.resl { background:var(--t-grad); }
 .trn-adh-box.none { background:var(--t-surf2); border:1px solid var(--line); }
 .trn-adh-day .dl { font-size:9px; color:var(--muted); margin-top:3px; }
@@ -409,7 +409,7 @@ html, body {
 .trn-adh-legend i { width:9px; height:9px; border-radius:2px; display:inline-block; }
 
 /* phase-2 hint chip */
-.trn-soon { font-size:10px; font-weight:700; color:var(--t-amber); background:rgba(255,181,71,.1); border:1px solid rgba(255,181,71,.28); border-radius:999px; padding:3px 9px; display:inline-block; }
+.trn-soon { font-size:10px; font-weight:700; color:var(--t-amber); background:color-mix(in srgb, var(--gold) 12%, transparent); border:1px solid color-mix(in srgb, var(--gold) 28%, transparent); border-radius:999px; padding:3px 9px; display:inline-block; }
 
 /* section label (scoped) */
 .trainv2 .eyebrow { font-size:10.5px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--muted); margin:16px 2px 9px; display:block; }
