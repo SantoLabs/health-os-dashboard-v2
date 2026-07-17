@@ -13,9 +13,9 @@ import ExerciseDetail from "./ExerciseDetail";
 type View = "home" | "log" | "celebrate" | "build";
 type PlanToday = { id: string; session_type: string; activity: string; session_date: string; committed: boolean; completed: boolean; skipped: boolean; is_rest_day: boolean };
 
-const ACCENT = "linear-gradient(135deg,#5f7dff,#a274ff)";
+const ACCENT = "var(--t-grad)";
 const btn = (bg: string): React.CSSProperties => ({ padding: 10, borderRadius: 10, border: "none", cursor: "pointer", color: "#fff", fontWeight: 700, fontSize: 12, background: bg });
-const inp: React.CSSProperties = { width: 50, textAlign: "center", background: "rgba(255,255,255,0.05)", color: "inherit", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "7px 4px", fontSize: 14, fontVariantNumeric: "tabular-nums" };
+const inp: React.CSSProperties = { width: 50, textAlign: "center", background: "var(--surface-2)", color: "inherit", border: "1px solid var(--line)", borderRadius: 8, padding: "7px 4px", fontSize: 14, fontVariantNumeric: "tabular-nums" };
 const todayISO = () => new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().split("T")[0];
 const isStrength = (t?: string) => /strength/i.test(t || "");
 const isTemp = (id: string) => id.startsWith("temp:");
@@ -50,7 +50,7 @@ function ttPayload(tt: string | undefined, v: { kg: string; reps: string; secs: 
 }
 function DetailOverlay({ title, onClose }: { title: string; onClose: () => void }) {
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 400, background: "#0b0d12", overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
+    <div style={{ position: "fixed", inset: 0, zIndex: 400, background: "var(--bg)", overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
       <div style={{ maxWidth: 480, margin: "0 auto", padding: 14 }}>
         <ExerciseDetail title={title} onBack={onClose} />
       </div>
@@ -120,7 +120,7 @@ function ExercisePicker({ onPick, onPickMany, placeholder }: { onPick: (e: { nam
     reset();
   };
   const filterBtn = (label: string, val: string | null, key: "type" | "equipment" | "muscle") => (
-    <button className="trn-sub" style={{ padding: "5px 10px", fontSize: 11, border: val ? "1px solid rgba(162,116,255,0.6)" : undefined }} onClick={() => setSheet(sheet === key ? null : key)}>{val ? `${label}: ${val}` : label} ▾</button>
+    <button className="trn-sub" style={{ padding: "5px 10px", fontSize: 11, border: val ? "1px solid color-mix(in srgb, var(--ember) 55%, transparent)" : undefined }} onClick={() => setSheet(sheet === key ? null : key)}>{val ? `${label}: ${val}` : label} ▾</button>
   );
   const sheetOpts = sheet === "type" ? TYPE_OPTS.map((t) => t.v) : sheet === "equipment" ? (facets?.equipment || []) : sheet === "muscle" ? (facets?.muscle || []) : [];
   const applySheet = (v: string) => {
@@ -134,7 +134,7 @@ function ExercisePicker({ onPick, onPickMany, placeholder }: { onPick: (e: { nam
     <div style={{ position: "relative" }}>
       <div style={{ display: "flex", gap: 6 }}>
         <input value={q} onChange={(e) => setQ(e.target.value)} onFocus={() => setOpen(true)} placeholder={placeholder || "Search exercises…"}
-          style={{ flex: 1, background: "rgba(255,255,255,0.05)", color: "inherit", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "8px 10px", fontSize: 13, fontFamily: "inherit" }} />
+          style={{ flex: 1, background: "var(--surface-2)", color: "inherit", border: "1px solid var(--line)", borderRadius: 8, padding: "8px 10px", fontSize: 13, fontFamily: "inherit" }} />
         {q.trim() && !listItems.some((o) => o.name.toLowerCase() === q.trim().toLowerCase()) ? <button className="trn-sub" onClick={() => commit([{ name: q.trim(), muscle_group: "" }])}>Add</button> : null}
       </div>
       {open ? (
@@ -146,11 +146,11 @@ function ExercisePicker({ onPick, onPickMany, placeholder }: { onPick: (e: { nam
             {(fType || fEquip || fMuscle) ? <button className="subtle tiny" style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: "2px 4px" }} onClick={() => { setFType(null); setFEquip(null); setFMuscle(null); }}>Clear</button> : null}
           </div>
           {sheet ? (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: 8, background: "rgba(255,255,255,0.03)", borderRadius: 8 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, padding: 8, background: "var(--surface-2)", borderRadius: 8 }}>
               {sheetOpts.length ? sheetOpts.map((o) => {
                 const on = (sheet === "type" && fType === o) || (sheet === "equipment" && fEquip === o) || (sheet === "muscle" && fMuscle === o);
                 const lbl = sheet === "type" ? (TYPE_OPTS.find((t) => t.v === o)?.label || o) : o;
-                return <button key={o} onClick={() => applySheet(o)} style={{ padding: "5px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600, cursor: "pointer", border: on ? "1px solid rgba(162,116,255,0.6)" : "1px solid rgba(255,255,255,0.12)", background: on ? "rgba(162,116,255,0.18)" : "rgba(255,255,255,0.04)", color: "inherit", textTransform: "capitalize" }}>{lbl}</button>;
+                return <button key={o} onClick={() => applySheet(o)} style={{ padding: "5px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600, cursor: "pointer", border: on ? "1px solid color-mix(in srgb, var(--ember) 55%, transparent)" : "1px solid var(--line)", background: on ? "color-mix(in srgb, var(--ember) 18%, transparent)" : "var(--surface-2)", color: "inherit", textTransform: "capitalize" }}>{lbl}</button>;
               }) : <span className="subtle tiny">No options</span>}
             </div>
           ) : null}
@@ -160,8 +160,8 @@ function ExercisePicker({ onPick, onPickMany, placeholder }: { onPick: (e: { nam
               {listItems.map((o) => {
                 const on = isSel(o.name);
                 return (
-                  <button key={o.name} onClick={() => toggleSel(o)} style={{ display: "flex", alignItems: "center", gap: 8, textAlign: "left", padding: "8px 10px", borderRadius: 8, cursor: "pointer", border: on ? "1px solid rgba(162,116,255,0.6)" : "1px solid rgba(255,255,255,0.08)", background: on ? "rgba(162,116,255,0.14)" : "rgba(255,255,255,0.03)", color: "inherit" }}>
-                    <span style={{ flex: "0 0 auto", width: 18, height: 18, borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, background: on ? ACCENT : "rgba(255,255,255,0.08)", color: "#fff" }}>{on ? "✓" : ""}</span>
+                  <button key={o.name} onClick={() => toggleSel(o)} style={{ display: "flex", alignItems: "center", gap: 8, textAlign: "left", padding: "8px 10px", borderRadius: 8, cursor: "pointer", border: on ? "1px solid color-mix(in srgb, var(--ember) 55%, transparent)" : "1px solid var(--line)", background: on ? "color-mix(in srgb, var(--ember) 14%, transparent)" : "var(--surface-2)", color: "inherit" }}>
+                    <span style={{ flex: "0 0 auto", width: 18, height: 18, borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, background: on ? ACCENT : "var(--surface-2)", color: "#fff" }}>{on ? "✓" : ""}</span>
                     <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600 }}>{o.name}</span>
                     {o.muscle_group ? <span className="subtle tiny" style={{ textTransform: "capitalize" }}>{o.muscle_group}</span> : null}
                   </button>
@@ -565,14 +565,14 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
   }
 
   if (editSessionId && (loading || !bundle?.session)) {
-    return <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "#0b0d12", display: "flex", alignItems: "center", justifyContent: "center" }}><div className="muted">Loading&hellip;</div></div>;
+    return <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center" }}><div className="muted">Loading&hellip;</div></div>;
   }
 
   // ---------------- CELEBRATE ----------------
   if (view === "celebrate" && celebrate) {
     const s = celebrate.summary;
     return (
-      <div className="card" style={{ background: "linear-gradient(160deg,rgba(95,125,255,0.12),rgba(162,116,255,0.06))", border: "1px solid rgba(162,116,255,0.25)" }}>
+      <div className="card" style={{ background: "linear-gradient(160deg,color-mix(in srgb, var(--ember) 12%, transparent),color-mix(in srgb, var(--ember) 6%, transparent))", border: "1px solid color-mix(in srgb, var(--ember) 25%, transparent)" }}>
         <div style={{ fontSize: 22, fontWeight: 800 }}>Workout complete 💪</div>
         <div className="subtle tiny" style={{ marginTop: 2 }}>{celebrate.title || "Session logged"}</div>
         <div className="trn-statgrid" style={{ gridTemplateColumns: "repeat(4,1fr)", marginTop: 12 }}>
@@ -584,7 +584,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
         {celebrate.prs.length > 0 ? (
           <div style={{ marginTop: 12 }}>
             {celebrate.prs.map((p, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 12, background: "rgba(255,202,122,0.1)", border: "1px solid rgba(255,202,122,0.3)", marginBottom: 6 }}>
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 12, background: "color-mix(in srgb, var(--gold) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--gold) 30%, transparent)", marginBottom: 6 }}>
                 <span style={{ fontSize: 18 }}>🏆</span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: 13 }}>New {p.type} PR — {p.exercise}</div>
@@ -597,7 +597,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
         <button onClick={() => { setCelebrate(null); setRoutinePrompt(null); setView("home"); loadHome(); }} style={{ ...btn(ACCENT), width: "100%", marginTop: 14, padding: 12 }}>Done</button>
         {routinePrompt ? (
           <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-            <div style={{ width: "100%", maxWidth: 360, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: 18 }}>
+            <div style={{ width: "100%", maxWidth: 360, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 14, padding: 18 }}>
               {routinePrompt.kind === "update" ? (
                 <>
                   <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>You changed this routine</div>
@@ -609,7 +609,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
               ) : (
                 <>
                   <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 10 }}>Save as routine?</div>
-                  <input autoFocus value={routineName} onChange={(e) => setRoutineName(e.target.value)} placeholder="Routine name" style={{ width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,0.05)", color: "inherit", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 8, padding: "9px 11px", fontSize: 14, fontFamily: "inherit", marginBottom: 12 }} />
+                  <input autoFocus value={routineName} onChange={(e) => setRoutineName(e.target.value)} placeholder="Routine name" style={{ width: "100%", boxSizing: "border-box", background: "var(--surface-2)", color: "inherit", border: "1px solid var(--line)", borderRadius: 8, padding: "9px 11px", fontSize: 14, fontFamily: "inherit", marginBottom: 12 }} />
                   <button disabled={promptBusy || !routineName.trim()} onClick={doSaveRoutine} style={{ ...btn(ACCENT), width: "100%", padding: 11, marginBottom: 8, opacity: routineName.trim() ? 1 : 0.5 }}>{promptBusy ? "Saving…" : "Save routine"}</button>
                   <button disabled={promptBusy} onClick={() => setRoutinePrompt(null)} className="trn-sub" style={{ width: "100%", padding: 11 }}>Not now</button>
                 </>
@@ -636,27 +636,27 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
     const restRemain = restEnd ? Math.max(0, Math.ceil((restEnd - Date.now()) / 1000)) : 0;
     const resting = restRemain > 0;
     const upNext = (() => { for (const g of groups) { const gi = g.sets.findIndex((x) => !x.completed && !isTemp(x.id)); if (gi >= 0) return { name: g.name, n: gi + 1 }; } return null; })();
-    const SS_COLORS = ["#a274ff", "#79e0a8", "#5f9dff", "#ffb454", "#ff6f9e", "#4fd1c5"];
+    const SS_COLORS = ["#d9704e", "#cc9a3d", "#5f9d8a", "#c2544a", "#d98a5a", "#a07a4a"];
     const ssColor = (v: number | null | undefined) => (v == null ? null : SS_COLORS[((v % SS_COLORS.length) + SS_COLORS.length) % SS_COLORS.length]);
 
     return (
-      <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "#0b0d12", display: "flex", flexDirection: "column" }}>
-        <div style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", background: "#0b0d12" }}>
+      <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "var(--bg)", display: "flex", flexDirection: "column" }}>
+        <div style={{ borderBottom: "1px solid var(--line)", background: "var(--bg)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", width: "100%", maxWidth: 480, margin: "0 auto" }}>
-            <button onClick={() => { if (editSessionId) { onExitEdit?.(); } else { setView("home"); loadHome(); } }} aria-label="Back" style={{ width: 34, height: 34, borderRadius: 9, flex: "0 0 auto", cursor: "pointer", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff", fontSize: 20, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
+            <button onClick={() => { if (editSessionId) { onExitEdit?.(); } else { setView("home"); loadHome(); } }} aria-label="Back" style={{ width: 34, height: 34, borderRadius: 9, flex: "0 0 auto", cursor: "pointer", background: "var(--surface-2)", border: "1px solid var(--line)", color: "#fff", fontSize: 20, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
             {titleEdit !== null ? (
-              <input autoFocus value={titleEdit} onChange={(e) => setTitleEdit(e.target.value)} onBlur={saveTitle} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} style={{ flex: 1, minWidth: 0, background: "rgba(255,255,255,0.06)", color: "inherit", border: "1px solid rgba(255,255,255,0.18)", borderRadius: 8, padding: "7px 10px", fontSize: 15, fontWeight: 800, fontFamily: "inherit" }} />
+              <input autoFocus value={titleEdit} onChange={(e) => setTitleEdit(e.target.value)} onBlur={saveTitle} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} style={{ flex: 1, minWidth: 0, background: "var(--surface-2)", color: "inherit", border: "1px solid var(--line)", borderRadius: 8, padding: "7px 10px", fontSize: 15, fontWeight: 800, fontFamily: "inherit" }} />
             ) : (
               <button onClick={() => setTitleEdit(sessTitle)} style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", cursor: "text", color: "inherit", fontSize: 15, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", padding: 0 }}>{sessTitle}<span className="subtle" style={{ fontSize: 12, marginLeft: 6, fontWeight: 400 }}>✎</span></button>
             )}
-            <button onClick={() => { if (editSessionId) { doDone(); return; } const un = (bundle.sets || []).filter((x) => !x.completed && !isTemp(x.id)).length; if (done === 0) { setFinishConfirm({ type: "empty", n: 0 }); } else if (un > 0) { setFinishConfirm({ type: "partial", n: un }); } else { setFinishing(true); } }} style={btn("rgba(121,224,168,0.9)")} disabled={busy}>{editSessionId ? "Done" : "Finish"}</button>
+            <button onClick={() => { if (editSessionId) { doDone(); return; } const un = (bundle.sets || []).filter((x) => !x.completed && !isTemp(x.id)).length; if (done === 0) { setFinishConfirm({ type: "empty", n: 0 }); } else if (un > 0) { setFinishConfirm({ type: "partial", n: un }); } else { setFinishing(true); } }} style={btn("color-mix(in srgb, var(--success) 90%, transparent)")} disabled={busy}>{editSessionId ? "Done" : "Finish"}</button>
             <div style={{ position: "relative", flex: "0 0 auto" }}>
-              <button onClick={() => setMenuOpen((o) => !o)} aria-label="More" style={{ width: 34, height: 34, borderRadius: 9, cursor: "pointer", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.12)", color: "#fff", fontSize: 18, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>⋯</button>
+              <button onClick={() => setMenuOpen((o) => !o)} aria-label="More" style={{ width: 34, height: 34, borderRadius: 9, cursor: "pointer", background: "var(--surface-2)", border: "1px solid var(--line)", color: "#fff", fontSize: 18, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>⋯</button>
               {menuOpen ? (
                 <>
                   <div onClick={() => setMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 410 }} />
-                  <div style={{ position: "absolute", top: 40, right: 0, zIndex: 411, minWidth: 160, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: 6, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
-                    <button onClick={() => { setMenuOpen(false); setDiscarding(true); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "#ff8a8a", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>{editSessionId ? "Delete workout" : "Discard workout"}</button>
+                  <div style={{ position: "absolute", top: 40, right: 0, zIndex: 411, minWidth: 160, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 10, padding: 6, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
+                    <button onClick={() => { setMenuOpen(false); setDiscarding(true); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "var(--danger)", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>{editSessionId ? "Delete workout" : "Discard workout"}</button>
                   </div>
                 </>
               ) : null}
@@ -666,7 +666,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
         <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", padding: 14, width: "100%", maxWidth: 480, margin: "0 auto" }}>
 
         <div className="trn-statgrid" style={{ gridTemplateColumns: "repeat(3,1fr)", marginTop: 12 }}>
-          <div className="trn-cell"><div className="v tnum" style={{ color: "#8ab4ff" }}>{editSessionId ? (bundle.session.duration_mins != null ? bundle.session.duration_mins + "m" : "—") : fmtClock(bundle.session.started_at)}</div><div className="l">duration</div></div>
+          <div className="trn-cell"><div className="v tnum" style={{ color: "var(--ember)" }}>{editSessionId ? (bundle.session.duration_mins != null ? bundle.session.duration_mins + "m" : "—") : fmtClock(bundle.session.started_at)}</div><div className="l">duration</div></div>
           <div className="trn-cell"><div className="v tnum" style={{ fontSize: 15 }}>{fmtVolume(liveVol)}</div><div className="l">volume</div></div>
           <div className="trn-cell"><div className="v tnum">{done}</div><div className="l">sets</div></div>
         </div>
@@ -678,18 +678,18 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
             const prevList: WkPrevSet[] = prevMap[g.name] || [];
             const sc = ssColor(g.ssg);
             return (
-              <div key={g.idx} data-gidx={gi} style={{ padding: 12, borderRadius: 12, background: dragG !== null && overG === gi ? "rgba(162,116,255,0.14)" : "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderLeft: sc ? `3px solid ${sc}` : "1px solid rgba(255,255,255,0.06)", opacity: dragG === gi ? 0.55 : 1 }}>
+              <div key={g.idx} data-gidx={gi} style={{ padding: 12, borderRadius: 12, background: dragG !== null && overG === gi ? "color-mix(in srgb, var(--ember) 14%, transparent)" : "var(--surface-2)", border: "1px solid var(--line)", borderLeft: sc ? `3px solid ${sc}` : "1px solid var(--line)", opacity: dragG === gi ? 0.55 : 1 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <span onPointerDown={(e) => { setDragG(gi); setOverG(gi); (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); }} onPointerMove={(e) => { if (dragG === null) return; const el = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest("[data-gidx]") as HTMLElement | null; if (el && el.dataset.gidx != null) setOverG(Number(el.dataset.gidx)); }} onPointerUp={(e) => { (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId); if (dragG !== null && overG !== null) moveGroup(dragG, overG); setDragG(null); setOverG(null); }} style={{ cursor: "grab", touchAction: "none", userSelect: "none", color: "var(--muted)", fontSize: 15, padding: "0 2px", flex: "0 0 auto" }} aria-label="Drag to reorder">⠿</span>
                   <button onClick={() => setDetail(g.name)} style={{ flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit", textAlign: "left", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 5 }}>{g.name}<span className="subtle" style={{ fontSize: 11, fontWeight: 400 }}>ⓘ</span>{g.muscle ? <span className="subtle tiny" style={{ fontWeight: 400 }}> · {g.muscle}</span> : null}</button>
                   {sc ? <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.4, textTransform: "uppercase", color: sc, border: `1px solid ${sc}`, borderRadius: 5, padding: "1px 5px", flex: "0 0 auto" }}>Superset</span> : null}
                   <div style={{ position: "relative", flex: "0 0 auto" }}>
-                    <button aria-label="Exercise options" onClick={() => setExMenu(exMenu === g.idx ? null : g.idx)} style={{ width: 26, height: 26, borderRadius: 7, cursor: "pointer", background: "none", border: "none", color: "#8a90a6", fontSize: 16, lineHeight: 1 }}>⋯</button>
+                    <button aria-label="Exercise options" onClick={() => setExMenu(exMenu === g.idx ? null : g.idx)} style={{ width: 26, height: 26, borderRadius: 7, cursor: "pointer", background: "none", border: "none", color: "var(--muted)", fontSize: 16, lineHeight: 1 }}>⋯</button>
                     {exMenu === g.idx ? (<>
                       <div onClick={() => setExMenu(null)} style={{ position: "fixed", inset: 0, zIndex: 420 }} />
-                      <div style={{ position: "absolute", top: 28, right: 0, zIndex: 421, minWidth: 168, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: 6, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
-                        <button onClick={() => { setExMenu(null); setSsPick(groups.filter((x) => x.ssg != null && x.ssg === g.ssg && x.idx !== g.idx).map((x) => x.idx)); setSsFor(g.idx); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "#e6e9f2", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Add to superset</button>
-                        {g.ssg != null ? <button onClick={() => { setExMenu(null); ungroup(g.idx); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "#ff8a8a", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Remove from superset</button> : null}
+                      <div style={{ position: "absolute", top: 28, right: 0, zIndex: 421, minWidth: 168, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 10, padding: 6, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
+                        <button onClick={() => { setExMenu(null); setSsPick(groups.filter((x) => x.ssg != null && x.ssg === g.ssg && x.idx !== g.idx).map((x) => x.idx)); setSsFor(g.idx); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "var(--text)", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Add to superset</button>
+                        {g.ssg != null ? <button onClick={() => { setExMenu(null); ungroup(g.idx); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "var(--danger)", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Remove from superset</button> : null}
                       </div>
                     </>) : null}
                   </div>
@@ -712,34 +712,34 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
                         <span className="tnum subtle" style={{ width: 16, fontSize: 12 }}>{si + 1}</span>
                         <span onClick={() => { if (pv) setInputs((m) => ({ ...m, [s.id]: { ...emptyInput(), kg: pv.weight_kg != null ? String(pv.weight_kg) : "", reps: pv.reps != null ? String(pv.reps) : "" } })); }} className="tnum" style={{ width: 52, fontSize: 12, opacity: 0.55, cursor: pv ? "pointer" : "default", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{prevTxt}</span>
                         {g.tt === "weight_reps" ? (<>
-                          <input inputMode="decimal" value={v.kg} placeholder={kgPh} onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, kg: e.target.value } }))} onBlur={() => commitEdit(s)} style={{ ...inp, fontWeight: v.kg ? 700 : 400, background: s.completed ? "rgba(121,224,168,0.10)" : (inp.background as string) }} />
+                          <input inputMode="decimal" value={v.kg} placeholder={kgPh} onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, kg: e.target.value } }))} onBlur={() => commitEdit(s)} style={{ ...inp, fontWeight: v.kg ? 700 : 400, background: s.completed ? "color-mix(in srgb, var(--success) 10%, transparent)" : (inp.background as string) }} />
                           <span className="subtle" style={{ fontSize: 12, width: 10, textAlign: "center" }}>×</span>
-                          <input inputMode="numeric" value={v.reps} placeholder={repsPh} onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, reps: e.target.value } }))} onBlur={() => commitEdit(s)} style={{ ...inp, fontWeight: v.reps ? 700 : 400, background: s.completed ? "rgba(121,224,168,0.10)" : (inp.background as string) }} />
+                          <input inputMode="numeric" value={v.reps} placeholder={repsPh} onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, reps: e.target.value } }))} onBlur={() => commitEdit(s)} style={{ ...inp, fontWeight: v.reps ? 700 : 400, background: s.completed ? "color-mix(in srgb, var(--success) 10%, transparent)" : (inp.background as string) }} />
                         </>) : g.tt === "reps" ? (
-                          <input inputMode="numeric" value={v.reps} placeholder={repsPh} onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, reps: e.target.value } }))} onBlur={() => commitEdit(s)} style={{ ...inp, width: 60, fontWeight: v.reps ? 700 : 400, background: s.completed ? "rgba(121,224,168,0.10)" : (inp.background as string) }} />
+                          <input inputMode="numeric" value={v.reps} placeholder={repsPh} onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, reps: e.target.value } }))} onBlur={() => commitEdit(s)} style={{ ...inp, width: 60, fontWeight: v.reps ? 700 : 400, background: s.completed ? "color-mix(in srgb, var(--success) 10%, transparent)" : (inp.background as string) }} />
                         ) : g.tt === "time" ? (() => {
                           const running = liveTimer?.id === s.id;
                           const base = Number(v.secs || 0);
                           const shown = base + (running ? Math.max(0, Math.floor((Date.now() - (liveTimer as { startedAt: number }).startedAt) / 1000)) : 0);
                           return (<>
-                            <button aria-label={running ? "pause timer" : "start timer"} onClick={() => (running ? pauseTimer(s) : startTimer(s.id))} style={{ width: 30, height: 30, borderRadius: "50%", flex: "0 0 auto", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "2px solid #4f8cff", color: "#8ab4ff", padding: 0 }}>
+                            <button aria-label={running ? "pause timer" : "start timer"} onClick={() => (running ? pauseTimer(s) : startTimer(s.id))} style={{ width: 30, height: 30, borderRadius: "50%", flex: "0 0 auto", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "2px solid var(--ember)", color: "var(--ember)", padding: 0 }}>
                               {running ? (<span style={{ display: "flex", gap: 2 }}><span style={{ width: 3, height: 11, background: "currentColor", borderRadius: 1 }} /><span style={{ width: 3, height: 11, background: "currentColor", borderRadius: 1 }} /></span>) : (<span style={{ width: 0, height: 0, borderTop: "5px solid transparent", borderBottom: "5px solid transparent", borderLeft: "8px solid currentColor", marginLeft: 2 }} />)}
                             </button>
                             {editSecs === s.id ? (
                               <input autoFocus inputMode="text" defaultValue={base ? fmtSecs(base) : ""} placeholder="m:ss" onBlur={(e) => { const n = e.target.value.trim() === "" ? "" : String(parseMMSS(e.target.value)); setInputs((m) => ({ ...m, [s.id]: { ...(m[s.id] || emptyInput()), secs: n } })); setEditSecs(null); if (s.completed) { const dv = n === "" ? null : Number(n); patchSets((list) => list.map((x) => (x.id === s.id ? { ...x, duration_s: dv } : x))); wkEditSet({ id: s.id, duration_s: dv }).catch(() => {}); } }} style={{ ...inp, width: 72, textAlign: "left", fontWeight: 700 }} />
                             ) : (
-                              <button onClick={() => { if (!running) setEditSecs(s.id); }} style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", cursor: running ? "default" : "text", padding: "0 8px", color: running ? "#8ab4ff" : (shown ? "#e6e9f2" : "#6b7180"), fontSize: 21, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{fmtSecs(shown)}</button>
+                              <button onClick={() => { if (!running) setEditSecs(s.id); }} style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", cursor: running ? "default" : "text", padding: "0 8px", color: running ? "var(--ember)" : (shown ? "var(--text)" : "var(--muted)"), fontSize: 21, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{fmtSecs(shown)}</button>
                             )}
                           </>);
                         })() : (
-                          <input inputMode="decimal" value={v.dist} placeholder="m" onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, dist: e.target.value } }))} onBlur={() => commitEdit(s)} style={{ ...inp, width: 80, fontWeight: v.dist ? 700 : 400, background: s.completed ? "rgba(121,224,168,0.10)" : (inp.background as string) }} />
+                          <input inputMode="decimal" value={v.dist} placeholder="m" onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, dist: e.target.value } }))} onBlur={() => commitEdit(s)} style={{ ...inp, width: 80, fontWeight: v.dist ? 700 : 400, background: s.completed ? "color-mix(in srgb, var(--success) 10%, transparent)" : (inp.background as string) }} />
                         )}
                         <button aria-label="complete set" onClick={() => toggleComplete(s)} disabled={temp}
-                          style={{ marginLeft: "auto", width: 30, height: 30, borderRadius: 8, cursor: temp ? "default" : "pointer", flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 15, color: s.completed ? "#04110a" : "#8a90a6", background: s.completed ? "#79e0a8" : "rgba(255,255,255,0.05)", border: s.completed ? "none" : "1px solid rgba(255,255,255,0.18)" }}>
+                          style={{ marginLeft: "auto", width: 30, height: 30, borderRadius: 8, cursor: temp ? "default" : "pointer", flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 15, color: s.completed ? "#04110a" : "var(--muted)", background: s.completed ? "var(--success)" : "var(--surface-2)", border: s.completed ? "none" : "1px solid var(--line)" }}>
                           {s.completed ? "✓" : ""}
                         </button>
                         <button aria-label="delete set" onClick={() => deleteSetRow(s)} disabled={temp}
-                          style={{ width: 24, height: 30, borderRadius: 8, cursor: temp ? "default" : "pointer", flex: "0 0 auto", background: "none", border: "none", color: "rgba(255,138,138,0.7)", fontSize: 13 }}>✕</button>
+                          style={{ width: 24, height: 30, borderRadius: 8, cursor: temp ? "default" : "pointer", flex: "0 0 auto", background: "none", border: "none", color: "color-mix(in srgb, var(--danger) 70%, transparent)", fontSize: 13 }}>✕</button>
                       </div>
                     );
                   })}
@@ -757,7 +757,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
 
         {finishConfirm ? (
           <div onClick={() => setFinishConfirm(null)} style={{ position: "fixed", inset: 0, zIndex: 430, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 340, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: 18 }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 340, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 14, padding: 18 }}>
               {finishConfirm.type === "empty" ? (
                 <>
                   <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>You haven&apos;t logged any values.</div>
@@ -768,8 +768,8 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
                   <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{finishConfirm.n} exercise set{finishConfirm.n > 1 ? "s" : ""} without logging</div>
                   <div className="subtle tiny" style={{ marginBottom: 14 }}>They won&apos;t be saved. Finish without them?</div>
                   <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={() => setFinishConfirm(null)} style={{ flex: 1, padding: 11, borderRadius: 10, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.05)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>No</button>
-                    <button onClick={() => { setFinishConfirm(null); setFinishing(true); }} style={{ ...btn("rgba(121,224,168,0.9)"), flex: 1, padding: 11 }}>Yes</button>
+                    <button onClick={() => setFinishConfirm(null)} style={{ flex: 1, padding: 11, borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface-2)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>No</button>
+                    <button onClick={() => { setFinishConfirm(null); setFinishing(true); }} style={{ ...btn("color-mix(in srgb, var(--success) 90%, transparent)"), flex: 1, padding: 11 }}>Yes</button>
                   </div>
                 </>
               )}
@@ -778,7 +778,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
         ) : null}
         {finishing ? (
           <div onClick={() => !busy && setFinishing(false)} style={{ position: "fixed", inset: 0, zIndex: 430, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 340, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: 18 }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 340, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 14, padding: 18 }}>
               <div className="tiny" style={{ fontWeight: 700, marginBottom: 3 }}>How hard did the session feel?</div>
               <div className="subtle tiny" style={{ marginBottom: 12 }}>1 = very easy · 10 = all-out</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -791,23 +791,23 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
         ) : null}
 
         </div>
-        <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", background: "#0b0d12", padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, width: "100%", maxWidth: 480, margin: "0 auto" }}>
+        <div style={{ borderTop: "1px solid var(--line)", background: "var(--bg)", padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, width: "100%", maxWidth: 480, margin: "0 auto" }}>
           {resting ? (
             <>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="tnum" style={{ fontSize: 19, fontWeight: 800, color: "#8ab4ff" }}>Rest {fmtSecs(restRemain)}</div>
-                <div style={{ height: 4, borderRadius: 3, background: "rgba(255,255,255,0.08)", marginTop: 5, overflow: "hidden" }}>
+                <div className="tnum" style={{ fontSize: 19, fontWeight: 800, color: "var(--ember)" }}>Rest {fmtSecs(restRemain)}</div>
+                <div style={{ height: 4, borderRadius: 3, background: "var(--surface-2)", marginTop: 5, overflow: "hidden" }}>
                   <div style={{ height: "100%", width: `${Math.min(100, (restRemain / restLen) * 100)}%`, background: ACCENT }} />
                 </div>
               </div>
               <button onClick={() => bumpRest(-15)} className="trn-sub" aria-label="minus 15 seconds" style={{ padding: "7px 9px", fontVariantNumeric: "tabular-nums" }}>−15</button>
               <button onClick={() => bumpRest(15)} className="trn-sub" aria-label="plus 15 seconds" style={{ padding: "7px 9px", fontVariantNumeric: "tabular-nums" }}>+15</button>
-              <button onClick={() => setRestEnd(null)} style={btn("rgba(121,224,168,0.9)")}>Skip</button>
+              <button onClick={() => setRestEnd(null)} style={btn("color-mix(in srgb, var(--success) 90%, transparent)")}>Skip</button>
             </>
           ) : (
             <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-              <div className="tiny" style={{ minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "#8a90a6" }}>
-                {upNext ? <span>Up next · <span style={{ color: "#cdd3e6", fontWeight: 700 }}>{upNext.name}</span> · set {upNext.n}</span> : "Last set — nice work 💪"}
+              <div className="tiny" style={{ minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "var(--muted)" }}>
+                {upNext ? <span>Up next · <span style={{ color: "var(--text-2)", fontWeight: 700 }}>{upNext.name}</span> · set {upNext.n}</span> : "Last set — nice work 💪"}
               </div>
               <button onClick={() => setRestPickerOpen(true)} className="subtle tiny tnum" style={{ flex: "0 0 auto", background: "none", border: "none", cursor: "pointer", color: "inherit", padding: 0 }}>rest {restLen > 0 ? fmtSecs(restLen) : "off"} ✎</button>
             </div>
@@ -816,10 +816,10 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
         {detail ? <DetailOverlay title={detail} onClose={() => setDetail(null)} /> : null}
         {discarding ? (
           <div onClick={() => !busy && setDiscarding(false)} style={{ position: "fixed", inset: 0, zIndex: 430, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 340, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: 16 }}>
-              <div className="tiny" style={{ color: "#ff8a8a", marginBottom: 12, fontWeight: 600 }}>Discard this workout? It won&apos;t be saved and can&apos;t be undone.</div>
+            <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 340, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 14, padding: 16 }}>
+              <div className="tiny" style={{ color: "var(--danger)", marginBottom: 12, fontWeight: 600 }}>Discard this workout? It won&apos;t be saved and can&apos;t be undone.</div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button disabled={busy} onClick={doDiscard} style={{ ...btn("rgba(255,111,94,0.9)"), flex: 1, padding: 10 }}>{busy ? "Discarding…" : "Discard"}</button>
+                <button disabled={busy} onClick={doDiscard} style={{ ...btn("color-mix(in srgb, var(--danger) 90%, transparent)"), flex: 1, padding: 10 }}>{busy ? "Discarding…" : "Discard"}</button>
                 <button disabled={busy} onClick={() => setDiscarding(false)} className="trn-sub" style={{ flex: 1 }}>Cancel</button>
               </div>
             </div>
@@ -827,7 +827,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
         ) : null}
         {restPickerOpen ? (
           <div onClick={() => setRestPickerOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 430, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end" }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, margin: "0 auto", maxHeight: "60vh", overflowY: "auto", background: "#12151d", borderTopLeftRadius: 16, borderTopRightRadius: 16, borderTop: "1px solid rgba(255,255,255,0.1)", padding: 14 }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, margin: "0 auto", maxHeight: "60vh", overflowY: "auto", background: "var(--surface)", borderTopLeftRadius: 16, borderTopRightRadius: 16, borderTop: "1px solid var(--line)", padding: 14 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                 <div style={{ fontWeight: 800, fontSize: 15 }}>Rest timer</div>
                 <button onClick={() => setRestPickerOpen(false)} className="trn-sub" style={{ padding: "4px 12px" }}>Done</button>
@@ -848,23 +848,23 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
           const col = ssColor(grp) || SS_COLORS[0];
           return (
             <div onClick={() => { setSsFor(null); setSsPick([]); }} style={{ position: "fixed", inset: 0, zIndex: 460, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-              <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, maxHeight: "75vh", background: "#12151d", borderTopLeftRadius: 16, borderTopRightRadius: 16, border: "1px solid rgba(255,255,255,0.12)", display: "flex", flexDirection: "column" }}>
-                <div style={{ padding: "14px 16px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+              <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, maxHeight: "75vh", background: "var(--surface)", borderTopLeftRadius: 16, borderTopRightRadius: 16, border: "1px solid var(--line)", display: "flex", flexDirection: "column" }}>
+                <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)" }}>
                   <div style={{ fontSize: 15, fontWeight: 800 }}>Superset with {forG?.name}</div>
                   <div className="subtle tiny" style={{ marginTop: 2 }}>Pick the exercises to group together.</div>
                 </div>
                 <div style={{ flex: 1, overflowY: "auto", padding: 8 }}>
                   {others.length === 0 ? <div className="subtle tiny" style={{ padding: 10 }}>Add another exercise first.</div> : others.map((x) => { const on = ssPick.includes(x.idx); return (
-                    <button key={x.idx} onClick={() => setSsPick((p) => (on ? p.filter((i) => i !== x.idx) : [...p, x.idx]))} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 10px", background: "none", border: "none", borderBottom: "1px solid rgba(255,255,255,0.05)", cursor: "pointer", color: "#fff", textAlign: "left" }}>
-                      <span style={{ width: 20, height: 20, borderRadius: 6, flex: "0 0 auto", border: on ? "none" : "1px solid rgba(255,255,255,0.3)", background: on ? col : "transparent", color: "#04110a", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>{on ? "✓" : ""}</span>
+                    <button key={x.idx} onClick={() => setSsPick((p) => (on ? p.filter((i) => i !== x.idx) : [...p, x.idx]))} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 10px", background: "none", border: "none", borderBottom: "1px solid var(--line)", cursor: "pointer", color: "#fff", textAlign: "left" }}>
+                      <span style={{ width: 20, height: 20, borderRadius: 6, flex: "0 0 auto", border: on ? "none" : "1px solid var(--line)", background: on ? col : "transparent", color: "#04110a", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>{on ? "✓" : ""}</span>
                       <span style={{ fontSize: 14, fontWeight: 600, flex: 1, minWidth: 0 }}>{x.name}</span>
                       {x.ssg != null && x.ssg !== existing ? <span className="subtle tiny" style={{ flex: "0 0 auto" }}>in another</span> : null}
                     </button>
                   ); })}
                 </div>
-                <div style={{ padding: 12, borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", gap: 8 }}>
-                  <button onClick={() => { setSsFor(null); setSsPick([]); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.05)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Cancel</button>
-                  <button disabled={ssPick.length === 0} onClick={() => { groupTogether(ssFor, ssPick); setSsFor(null); setSsPick([]); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "none", background: ssPick.length ? col : "rgba(255,255,255,0.12)", color: ssPick.length ? "#04110a" : "#8a90a6", fontWeight: 800, fontSize: 13, cursor: ssPick.length ? "pointer" : "default" }}>{existing != null ? "Update superset" : "Create superset"}</button>
+                <div style={{ padding: 12, borderTop: "1px solid var(--line)", display: "flex", gap: 8 }}>
+                  <button onClick={() => { setSsFor(null); setSsPick([]); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface-2)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                  <button disabled={ssPick.length === 0} onClick={() => { groupTogether(ssFor, ssPick); setSsFor(null); setSsPick([]); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "none", background: ssPick.length ? col : "var(--surface-2)", color: ssPick.length ? "#04110a" : "var(--muted)", fontWeight: 800, fontSize: 13, cursor: ssPick.length ? "pointer" : "default" }}>{existing != null ? "Update superset" : "Create superset"}</button>
                 </div>
               </div>
             </div>
@@ -924,17 +924,17 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
                 <div key={r.id} className="card" style={{ padding: 12, minHeight: 96, display: "flex", flexDirection: "column", justifyContent: "space-between", cursor: locked ? "default" : "pointer", opacity: locked ? 0.6 : 1 }} onClick={() => { if (!locked) startFrom({ routine_id: r.id }); }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                     {recoveryIds.has(r.id)
-                    ? <span aria-hidden style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3, padding: "3px 7px", borderRadius: 6, background: "rgba(52,211,153,0.16)", color: "#7fe3b8" }}>RECOVERY</span>
-                    : <span aria-hidden style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3, padding: "3px 7px", borderRadius: 6, background: "rgba(162,116,255,0.16)", color: "#c9b6ff" }}>LIFT</span>}
+                    ? <span aria-hidden style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3, padding: "3px 7px", borderRadius: 6, background: "color-mix(in srgb, var(--success) 16%, transparent)", color: "var(--success)" }}>RECOVERY</span>
+                    : <span aria-hidden style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.3, padding: "3px 7px", borderRadius: 6, background: "color-mix(in srgb, var(--ember) 16%, transparent)", color: "var(--ember)" }}>LIFT</span>}
                     <div style={{ position: "relative" }} onClick={(e) => e.stopPropagation()}>
                       <button aria-label="Routine options" className="subtle" style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", padding: 2, fontSize: 16, lineHeight: 1, opacity: 0.7 }} onClick={(e) => { e.stopPropagation(); setRoutineMenu(routineMenu === r.id ? null : r.id); }}>⋯</button>
                       {routineMenu === r.id ? (
                         <>
                           <div onClick={(e) => { e.stopPropagation(); setRoutineMenu(null); }} style={{ position: "fixed", inset: 0, zIndex: 420 }} />
-                          <div style={{ position: "absolute", top: 24, right: 0, zIndex: 421, minWidth: 150, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: 6, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
-                            <button onClick={(e) => { e.stopPropagation(); setRoutineMenu(null); setBuildId(r.id); setView("build"); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "#e6e9f2", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Edit</button>
-                            <button onClick={(e) => { e.stopPropagation(); setRoutineMenu(null); setDupPrompt({ id: r.id, name: `${r.name} (copy)` }); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "#e6e9f2", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Duplicate</button>
-                            <button onClick={(e) => { e.stopPropagation(); setRoutineMenu(null); setDelConfirm(r.id); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "#ff8a8a", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Delete</button>
+                          <div style={{ position: "absolute", top: 24, right: 0, zIndex: 421, minWidth: 150, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 10, padding: 6, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
+                            <button onClick={(e) => { e.stopPropagation(); setRoutineMenu(null); setBuildId(r.id); setView("build"); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "var(--text)", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Edit</button>
+                            <button onClick={(e) => { e.stopPropagation(); setRoutineMenu(null); setDupPrompt({ id: r.id, name: `${r.name} (copy)` }); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "var(--text)", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Duplicate</button>
+                            <button onClick={(e) => { e.stopPropagation(); setRoutineMenu(null); setDelConfirm(r.id); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "var(--danger)", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Delete</button>
                           </div>
                         </>
                       ) : null}
@@ -954,7 +954,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
               const done = !!plannedCardio[c.id];
               return (
                 <div key={c.id} className="card" style={{ padding: 12, minHeight: 96, display: "flex", flexDirection: "column", justifyContent: "space-between", cursor: busy || done ? "default" : "pointer", opacity: busy ? 0.6 : 1 }} onClick={() => { if (!busy && !done) { setBusy(true); cardioPrescribe({ routine_id: c.id }).then(() => setPlannedCardio((p) => ({ ...p, [c.id]: true }))).finally(() => setBusy(false)); } }}>
-                  <span aria-hidden style={{ alignSelf: "flex-start", fontSize: 10, fontWeight: 700, letterSpacing: 0.3, padding: "3px 7px", borderRadius: 6, background: "rgba(52,211,153,0.16)", color: "#7fe3b8" }}>CARDIO</span>
+                  <span aria-hidden style={{ alignSelf: "flex-start", fontSize: 10, fontWeight: 700, letterSpacing: 0.3, padding: "3px 7px", borderRadius: 6, background: "color-mix(in srgb, var(--success) 16%, transparent)", color: "var(--success)" }}>CARDIO</span>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.name}</div>
                     <div className="subtle tiny" style={{ textTransform: "capitalize" }}>{done ? "Planned ✓ for today" : (meta || "cardio routine")}</div>
@@ -962,7 +962,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
                 </div>
               );
             })}
-            <button onClick={() => { if (onOpenCardio) { setNewRoutinePick(true); } else { setBuildId(null); setView("build"); } }} className="card" style={{ padding: 12, minHeight: 96, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, cursor: "pointer", border: "1px dashed rgba(255,255,255,0.18)", background: "transparent", color: "inherit" }}>
+            <button onClick={() => { if (onOpenCardio) { setNewRoutinePick(true); } else { setBuildId(null); setView("build"); } }} className="card" style={{ padding: 12, minHeight: 96, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, cursor: "pointer", border: "1px dashed var(--line)", background: "transparent", color: "inherit" }}>
               <span style={{ fontSize: 22, lineHeight: 1, opacity: 0.8 }}>+</span>
               <span className="subtle tiny">New routine</span>
             </button>
@@ -981,9 +981,9 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
           ) : null}
           {dupPrompt ? (
             <div onClick={() => setDupPrompt(null)} style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-              <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 360, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: 18 }}>
+              <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 360, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 14, padding: 18 }}>
                 <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 10 }}>Duplicate routine</div>
-                <input autoFocus value={dupPrompt.name} onChange={(e) => setDupPrompt((p) => (p ? { ...p, name: e.target.value } : p))} placeholder="New routine name" style={{ width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,0.05)", color: "inherit", border: "1px solid rgba(255,255,255,0.14)", borderRadius: 8, padding: "9px 11px", fontSize: 14, fontFamily: "inherit", marginBottom: 12 }} />
+                <input autoFocus value={dupPrompt.name} onChange={(e) => setDupPrompt((p) => (p ? { ...p, name: e.target.value } : p))} placeholder="New routine name" style={{ width: "100%", boxSizing: "border-box", background: "var(--surface-2)", color: "inherit", border: "1px solid var(--line)", borderRadius: 8, padding: "9px 11px", fontSize: 14, fontFamily: "inherit", marginBottom: 12 }} />
                 <div style={{ display: "flex", gap: 8 }}>
                   <button disabled={busy} onClick={() => setDupPrompt(null)} className="trn-sub" style={{ flex: 1, padding: 11 }}>Cancel</button>
                   <button disabled={busy || !dupPrompt.name.trim()} onClick={doDuplicateRoutine} style={{ ...btn(ACCENT), flex: 1, padding: 11, opacity: dupPrompt.name.trim() ? 1 : 0.5 }}>Duplicate</button>
@@ -993,10 +993,10 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
           ) : null}
           {delConfirm ? (
             <div onClick={() => setDelConfirm(null)} style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-              <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 340, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: 16 }}>
-                <div className="tiny" style={{ color: "#ff8a8a", marginBottom: 12, fontWeight: 600 }}>Delete this routine? This can&apos;t be undone.</div>
+              <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 340, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 14, padding: 16 }}>
+                <div className="tiny" style={{ color: "var(--danger)", marginBottom: 12, fontWeight: 600 }}>Delete this routine? This can&apos;t be undone.</div>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button disabled={busy} onClick={doDeleteRoutine} style={{ ...btn("rgba(255,111,94,0.9)"), flex: 1, padding: 10 }}>Delete</button>
+                  <button disabled={busy} onClick={doDeleteRoutine} style={{ ...btn("color-mix(in srgb, var(--danger) 90%, transparent)"), flex: 1, padding: 10 }}>Delete</button>
                   <button disabled={busy} onClick={() => setDelConfirm(null)} className="trn-sub" style={{ flex: 1 }}>Cancel</button>
                 </div>
               </div>
@@ -1078,8 +1078,8 @@ function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExi
   }
 
   if (loading) return <div className="muted center pad">Loading…</div>;
-  const field: React.CSSProperties = { background: "rgba(255,255,255,0.05)", color: "inherit", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "8px 10px", fontSize: 13, fontFamily: "inherit" };
-  const SS_COLORS = ["#a274ff", "#79e0a8", "#5f9dff", "#ffb454", "#ff6f9e", "#4fd1c5"];
+  const field: React.CSSProperties = { background: "var(--surface-2)", color: "inherit", border: "1px solid var(--line)", borderRadius: 8, padding: "8px 10px", fontSize: 13, fontFamily: "inherit" };
+  const SS_COLORS = ["#d9704e", "#cc9a3d", "#5f9d8a", "#c2544a", "#d98a5a", "#a07a4a"];
   const ssColor = (v: number | null | undefined) => (v == null ? null : SS_COLORS[((v % SS_COLORS.length) + SS_COLORS.length) % SS_COLORS.length]);
   function bGroupTogether(anchorI: number, pickIs: number[]) {
     setItems((its) => {
@@ -1122,30 +1122,30 @@ function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExi
         <input value={focus} onChange={(e) => setFocus(e.target.value)} placeholder="Focus (optional, e.g. push / legs)" style={field} />
       </div>
 
-      <div style={{ marginTop: 12, padding: 12, borderRadius: 12, background: "rgba(162,116,255,0.06)", border: "1px solid rgba(162,116,255,0.18)" }}>
+      <div style={{ marginTop: 12, padding: 12, borderRadius: 12, background: "color-mix(in srgb, var(--ember) 6%, transparent)", border: "1px solid color-mix(in srgb, var(--ember) 18%, transparent)" }}>
         <div style={{ fontSize: 12.5, fontWeight: 700 }}>Describe it — Kai builds the list</div>
         <div className="subtle tiny" style={{ marginTop: 2 }}>e.g. &quot;Push day: bench 4×8, incline DB press 3×10, cable fly 3×12, lateral raises 4×15&quot;</div>
         <textarea value={rawText} onChange={(e) => setRawText(e.target.value)} rows={2} placeholder="Type or paste your routine…" style={{ ...field, width: "100%", marginTop: 8, resize: "vertical" }} />
         <button onClick={doParse} disabled={parsing || !rawText.trim()} style={{ ...btn(ACCENT), marginTop: 8, padding: "9px 12px", fontSize: 12 }}>{parsing ? "Kai is reading…" : "Parse with Kai"}</button>
-        {parseErr ? <div className="subtle tiny" style={{ marginTop: 8, color: "#ff8a8a" }}>{parseErr}</div> : null}
-        {unmatched.length > 0 ? <div className="subtle tiny" style={{ marginTop: 8, color: "#fbbf24" }}>Couldn&apos;t match: {unmatched.join(", ")} — edit or swap those below.</div> : null}
+        {parseErr ? <div className="subtle tiny" style={{ marginTop: 8, color: "var(--danger)" }}>{parseErr}</div> : null}
+        {unmatched.length > 0 ? <div className="subtle tiny" style={{ marginTop: 8, color: "var(--gold)" }}>Couldn&apos;t match: {unmatched.join(", ")} — edit or swap those below.</div> : null}
       </div>
 
       <div className="eyebrow" style={{ marginTop: 14, marginBottom: 6 }}>Exercises</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {items.map((it, i) => (
-          <div key={i} data-ridx={i} style={{ padding: 10, borderRadius: 10, background: dragIdx !== null && overIdx === i ? "rgba(162,116,255,0.14)" : "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderLeft: ssColor(it.superset_group) ? `3px solid ${ssColor(it.superset_group)}` : "1px solid rgba(255,255,255,0.06)", opacity: dragIdx === i ? 0.6 : 1 }}>
+          <div key={i} data-ridx={i} style={{ padding: 10, borderRadius: 10, background: dragIdx !== null && overIdx === i ? "color-mix(in srgb, var(--ember) 14%, transparent)" : "var(--surface-2)", border: "1px solid var(--line)", borderLeft: ssColor(it.superset_group) ? `3px solid ${ssColor(it.superset_group)}` : "1px solid var(--line)", opacity: dragIdx === i ? 0.6 : 1 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
               <span onPointerDown={(e) => { setDragIdx(i); setOverIdx(i); (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); }} onPointerMove={(e) => { if (dragIdx === null) return; const el = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest("[data-ridx]") as HTMLElement | null; if (el && el.dataset.ridx != null) setOverIdx(Number(el.dataset.ridx)); }} onPointerUp={(e) => { (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId); if (dragIdx !== null && overIdx !== null) move(dragIdx, overIdx); setDragIdx(null); setOverIdx(null); }} style={{ cursor: "grab", touchAction: "none", userSelect: "none", color: "var(--muted)", fontSize: 15, padding: "0 4px", flex: "0 0 auto" }} aria-label="Drag to reorder">⠿</span>
               <button onClick={() => setDetail(it.exercise_name)} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit", textAlign: "left", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 5, flex: 1, minWidth: 0 }}>{it.exercise_name}<span className="subtle" style={{ fontSize: 11, fontWeight: 400 }}>ⓘ</span></button>
               {it.superset_group != null ? <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.4, textTransform: "uppercase", color: ssColor(it.superset_group)!, border: `1px solid ${ssColor(it.superset_group)}`, borderRadius: 5, padding: "1px 5px", flex: "0 0 auto" }}>SS</span> : null}
               <div style={{ position: "relative", flex: "0 0 auto" }}>
-                <button aria-label="Superset options" onClick={() => setExMenu(exMenu === i ? null : i)} style={{ width: 26, height: 26, borderRadius: 7, cursor: "pointer", background: "none", border: "none", color: "#8a90a6", fontSize: 16, lineHeight: 1 }}>⋯</button>
+                <button aria-label="Superset options" onClick={() => setExMenu(exMenu === i ? null : i)} style={{ width: 26, height: 26, borderRadius: 7, cursor: "pointer", background: "none", border: "none", color: "var(--muted)", fontSize: 16, lineHeight: 1 }}>⋯</button>
                 {exMenu === i ? (<>
                   <div onClick={() => setExMenu(null)} style={{ position: "fixed", inset: 0, zIndex: 420 }} />
-                  <div style={{ position: "absolute", top: 28, right: 0, zIndex: 421, minWidth: 168, background: "#12151d", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 10, padding: 6, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
-                    <button onClick={() => { setExMenu(null); setSsPick(items.map((x, j) => (x.superset_group != null && x.superset_group === it.superset_group && j !== i ? j : -1)).filter((j) => j >= 0)); setSsFor(i); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "#e6e9f2", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Add to superset</button>
-                    {it.superset_group != null ? <button onClick={() => { setExMenu(null); bUngroup(i); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "#ff8a8a", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Remove from superset</button> : null}
+                  <div style={{ position: "absolute", top: 28, right: 0, zIndex: 421, minWidth: 168, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 10, padding: 6, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
+                    <button onClick={() => { setExMenu(null); setSsPick(items.map((x, j) => (x.superset_group != null && x.superset_group === it.superset_group && j !== i ? j : -1)).filter((j) => j >= 0)); setSsFor(i); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "var(--text)", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Add to superset</button>
+                    {it.superset_group != null ? <button onClick={() => { setExMenu(null); bUngroup(i); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "var(--danger)", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Remove from superset</button> : null}
                   </div>
                 </>) : null}
               </div>
@@ -1176,23 +1176,23 @@ function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExi
         const col = ssColor(grp) || SS_COLORS[0];
         return (
           <div onClick={() => { setSsFor(null); setSsPick([]); }} style={{ position: "fixed", inset: 0, zIndex: 460, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, maxHeight: "75vh", background: "#12151d", borderTopLeftRadius: 16, borderTopRightRadius: 16, border: "1px solid rgba(255,255,255,0.12)", display: "flex", flexDirection: "column" }}>
-              <div style={{ padding: "14px 16px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, maxHeight: "75vh", background: "var(--surface)", borderTopLeftRadius: 16, borderTopRightRadius: 16, border: "1px solid var(--line)", display: "flex", flexDirection: "column" }}>
+              <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)" }}>
                 <div style={{ fontSize: 15, fontWeight: 800 }}>Superset with {forIt?.exercise_name}</div>
                 <div className="subtle tiny" style={{ marginTop: 2 }}>Pick the exercises to group together.</div>
               </div>
               <div style={{ flex: 1, overflowY: "auto", padding: 8 }}>
                 {items.map((x, j) => { if (j === ssFor) return null; const on = ssPick.includes(j); return (
-                  <button key={j} onClick={() => setSsPick((p) => (on ? p.filter((k) => k !== j) : [...p, j]))} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 10px", background: "none", border: "none", borderBottom: "1px solid rgba(255,255,255,0.05)", cursor: "pointer", color: "#fff", textAlign: "left" }}>
-                    <span style={{ width: 20, height: 20, borderRadius: 6, flex: "0 0 auto", border: on ? "none" : "1px solid rgba(255,255,255,0.3)", background: on ? col : "transparent", color: "#04110a", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>{on ? "✓" : ""}</span>
+                  <button key={j} onClick={() => setSsPick((p) => (on ? p.filter((k) => k !== j) : [...p, j]))} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "11px 10px", background: "none", border: "none", borderBottom: "1px solid var(--line)", cursor: "pointer", color: "#fff", textAlign: "left" }}>
+                    <span style={{ width: 20, height: 20, borderRadius: 6, flex: "0 0 auto", border: on ? "none" : "1px solid var(--line)", background: on ? col : "transparent", color: "#04110a", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>{on ? "✓" : ""}</span>
                     <span style={{ fontSize: 14, fontWeight: 600, flex: 1, minWidth: 0 }}>{x.exercise_name}</span>
                     {x.superset_group != null && x.superset_group !== existing ? <span className="subtle tiny" style={{ flex: "0 0 auto" }}>in another</span> : null}
                   </button>
                 ); })}
               </div>
-              <div style={{ padding: 12, borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", gap: 8 }}>
-                <button onClick={() => { setSsFor(null); setSsPick([]); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "1px solid rgba(255,255,255,0.18)", background: "rgba(255,255,255,0.05)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Cancel</button>
-                <button disabled={ssPick.length === 0} onClick={() => { bGroupTogether(ssFor, ssPick); setSsFor(null); setSsPick([]); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "none", background: ssPick.length ? col : "rgba(255,255,255,0.12)", color: ssPick.length ? "#04110a" : "#8a90a6", fontWeight: 800, fontSize: 13, cursor: ssPick.length ? "pointer" : "default" }}>{existing != null ? "Update superset" : "Create superset"}</button>
+              <div style={{ padding: 12, borderTop: "1px solid var(--line)", display: "flex", gap: 8 }}>
+                <button onClick={() => { setSsFor(null); setSsPick([]); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface-2)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                <button disabled={ssPick.length === 0} onClick={() => { bGroupTogether(ssFor, ssPick); setSsFor(null); setSsPick([]); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "none", background: ssPick.length ? col : "var(--surface-2)", color: ssPick.length ? "#04110a" : "var(--muted)", fontWeight: 800, fontSize: 13, cursor: ssPick.length ? "pointer" : "default" }}>{existing != null ? "Update superset" : "Create superset"}</button>
               </div>
             </div>
           </div>
