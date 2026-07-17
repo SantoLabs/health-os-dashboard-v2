@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { coachDailyCard, type KaiDailyCard as Card } from "../lib/api";
 
 // StriveOS Today: Kai's daily note as the ember inset inside the readiness card,
@@ -15,7 +14,6 @@ export default function KaiTodayNote({
   whyLabel?: string;
   onWhy?: () => void;
 }) {
-  const router = useRouter();
   const [card, setCard] = useState<Card | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -28,10 +26,10 @@ export default function KaiTodayNote({
   }, []);
 
   function go(seed?: string) {
-    if (seed && typeof window !== "undefined") {
-      try { window.sessionStorage.setItem("kai_seed", seed); } catch { /* ignore */ }
+    if (typeof window !== "undefined" && seed) {
+      // Open the floating Kai chat as a bottom sheet, seeded with the tapped prompt.
+      window.dispatchEvent(new CustomEvent("kai:open", { detail: { seed } }));
     }
-    router.push("/more/ask");
   }
 
   const note = card ? [card.headline, card.body].filter(Boolean).join(" ") : "";
@@ -43,7 +41,12 @@ export default function KaiTodayNote({
     <>
       {note ? (
         <div className="kai-inset">
-          <span className="kai-k">K</span>
+          <span className="kai-k" aria-hidden>
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M6 9c1.8-2.4 4.2-2.4 6 0s4.2 2.4 6 0" stroke="var(--on-ember)" strokeWidth={2.3} strokeLinecap="round" />
+              <path d="M6 14c1.8-2.4 4.2-2.4 6 0s4.2 2.4 6 0" stroke="var(--on-ember)" strokeWidth={2.3} strokeLinecap="round" />
+            </svg>
+          </span>
           <div className="kai-note"><b>Kai:</b> {note}</div>
         </div>
       ) : null}
