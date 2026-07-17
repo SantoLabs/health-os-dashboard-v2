@@ -9,7 +9,7 @@ import type { AdaptState, AdaptChange } from "../lib/api";
 // proposes the SMALLEST set of changes to your UPCOMING sessions only (ease / shorten / move / rest),
 // guardrail-checked — you accept or dismiss. It never rewrites the past and never auto-applies.
 
-const GRAD = "linear-gradient(135deg,var(--ember),var(--ember-strong))";
+const GRAD = "var(--t-grad)";
 const SEV: Record<string, string> = { high: "var(--danger)", med: "var(--gold)", low: "var(--ember)" };
 const ACTION: Record<string, { label: string; color: string }> = {
   ease: { label: "Ease", color: "#6fb0d6" },
