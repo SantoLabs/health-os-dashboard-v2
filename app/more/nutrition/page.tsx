@@ -11,11 +11,10 @@ import Setup from "./Setup";
 const CARD = "var(--surface)", INSET = "var(--bg)", CB = "var(--line)", IB = "var(--line-2)";
 const H = "var(--text)", BODY = "var(--text)", MUTED = "var(--text-2)", FAINT = "var(--muted)", FAINTER = "var(--faint)", DIS = "var(--faint)";
 const ACCENT = "var(--ember)", ACCENT_LT = "var(--ember-strong)", CHIP_SEL = "var(--ember-tint)", CHIP_SEL_B = "color-mix(in srgb, var(--ember) 35%, transparent)", CHIP_IDLE = "var(--surface-2)", CHIP_IDLE_B = "var(--line-2)";
-const PROT = "#4a86e8", CARB = "#cf8a2e", FAT = "#d85c42", FIBR = "#3aa17e", TRACK = "var(--surface-2)";
+const PROT = "var(--ember)", CARB = "#dca23f", FAT = "var(--kai)", FIBR = "var(--success)";
 const ON = "var(--success)", PARTIAL = "var(--gold)", MISS = "var(--danger)";
 
 const card: CSSProperties = { background: CARD, border: "1px solid " + CB, borderRadius: 16, padding: 14 };
-const label: CSSProperties = { fontSize: 9, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: FAINT };
 const navBtn: CSSProperties = { width: 30, height: 30, borderRadius: 9, border: "1px solid " + CB, background: CHIP_IDLE, color: MUTED, fontSize: 16, lineHeight: 1, cursor: "pointer" };
 
 type Targets = { calories: number; protein: number; carbs: number; fats: number; fiber: number; micros_rda: Record<string, number> };
@@ -43,16 +42,36 @@ function statusColor(s: string): string { return s === "on" ? ON : s === "partia
 function mealColor(m: Meal): string { const t = m.snack_slot ? "snack" : (m.meal_type || ""); return t === "breakfast" ? CARB : t === "lunch" ? PROT : t === "dinner" ? ACCENT_LT : t === "snack" ? FIBR : ACCENT; }
 function mealLabel(m: Meal): string { if (m.snack_slot) return "SNACK · " + m.snack_slot.replace(/_/g, " ").toUpperCase(); return (m.meal_type || "meal").toUpperCase(); }
 
-function Bar({ pct, color, h = 6 }: { pct: number; color: string; h?: number }) {
-  return <div style={{ height: h, borderRadius: h / 2, background: TRACK, overflow: "hidden" }}><div style={{ width: Math.max(0, Math.min(100, pct)) + "%", height: "100%", background: color }} /></div>;
+function CalRing({ val, target }: { val: number; target: number }) {
+  const C = 2 * Math.PI * 52;
+  const pct = target > 0 ? Math.min(val / target, 1) : 0;
+  const left = Math.round((target || 0) - val);
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+      <div style={{ position: "relative", width: 96, height: 96, flexShrink: 0 }}>
+        <svg width={96} height={96} viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="52" fill="none" stroke="var(--line-2)" strokeWidth={10} />
+          <circle cx="60" cy="60" r="52" fill="none" stroke={ACCENT} strokeWidth={10} strokeLinecap="round" strokeDasharray={pct * C + " " + C} transform="rotate(-90 60 60)" />
+        </svg>
+        <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.03em", color: H, fontVariantNumeric: "tabular-nums" }}>{Math.round(val).toLocaleString()}</div>
+          <div style={{ fontSize: 9.5, fontWeight: 700, color: FAINT, letterSpacing: "0.08em" }}>KCAL</div>
+        </div>
+      </div>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ fontSize: 17, fontWeight: 800, color: H }}>{target ? (left >= 0 ? left.toLocaleString() + " kcal left" : Math.abs(left).toLocaleString() + " kcal over") : Math.round(val).toLocaleString() + " kcal"}</div>
+        <div style={{ fontSize: 13, color: MUTED, lineHeight: 1.5 }}>{target ? "Target " + target.toLocaleString() + " kcal" : "No target set"}</div>
+      </div>
+    </div>
+  );
 }
 function MacroCard({ lbl, val, target, color }: { lbl: string; val: number; target: number; color: string }) {
-  const pct = target ? (val / target) * 100 : 0;
+  const pct = target ? Math.min((val / target) * 100, 100) : 0;
   return (
-    <div style={{ flex: 1, background: CARD, border: "1px solid " + CB, borderRadius: 13, padding: "10px 9px" }}>
-      <div style={label}>{lbl}</div>
-      <div style={{ fontSize: 17, fontWeight: 800, color, margin: "3px 0 6px", fontVariantNumeric: "tabular-nums" }}>{Math.round(val)}<span style={{ fontSize: 10, color: FAINTER, fontWeight: 600 }}>g</span></div>
-      <Bar pct={pct} color={color} h={5} />
+    <div style={{ flex: 1, background: "var(--surface-3)", borderRadius: 16, padding: "12px 10px 14px" }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: FAINT, letterSpacing: "0.06em" }}>{lbl}</div>
+      <div style={{ fontSize: 16, fontWeight: 800, marginTop: 3, color: H, fontVariantNumeric: "tabular-nums" }}>{Math.round(val)}<span style={{ fontSize: 11, fontWeight: 600, color: FAINTER }}>{target ? "/" + target + "g" : "g"}</span></div>
+      <div style={{ marginTop: 8, height: 4, borderRadius: 999, background: "color-mix(in srgb, " + color + " 18%, transparent)" }}><div style={{ width: pct + "%", height: 4, borderRadius: 999, background: color }} /></div>
     </div>
   );
 }
@@ -160,19 +179,14 @@ export default function NutritionPage() {
         <div style={{ fontSize: 10.5, color: FAINT, marginBottom: 8, marginTop: -2 }}>No workout scheduled today \u2014 showing both; the active set highlights once the Schedule has a session.</div>
       )}
 
-      <div style={{ ...card, marginBottom: 8 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-          <span style={label}>Calories{sel !== today ? " · " + nice(sel) : ""}</span>
-          <span style={{ fontSize: 13, fontWeight: 700, color: H, fontVariantNumeric: "tabular-nums" }}>{Math.round(tot ? tot.calories : 0)} <span style={{ color: FAINTER, fontWeight: 600 }}>/ {t ? t.calories : 0} kcal</span></span>
+      <div style={{ background: "var(--surface)", borderRadius: 24, padding: 20, boxShadow: "var(--shadow-card)", marginBottom: 12 }}>
+        <CalRing val={tot ? tot.calories : 0} target={t ? t.calories : 0} />
+        <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
+          <MacroCard lbl="PROTEIN" val={tot ? tot.protein : 0} target={t ? t.protein : 0} color={PROT} />
+          <MacroCard lbl="CARBS" val={tot ? tot.carbs : 0} target={t ? t.carbs : 0} color={CARB} />
+          <MacroCard lbl="FAT" val={tot ? tot.fats : 0} target={t ? t.fats : 0} color={FAT} />
+          <MacroCard lbl="FIBER" val={tot ? tot.fiber : 0} target={t ? t.fiber : 0} color={FIBR} />
         </div>
-        <Bar pct={t && t.calories ? ((tot ? tot.calories : 0) / t.calories) * 100 : 0} color={ACCENT} h={7} />
-      </div>
-
-      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        <MacroCard lbl="Prot" val={tot ? tot.protein : 0} target={t ? t.protein : 0} color={PROT} />
-        <MacroCard lbl="Carb" val={tot ? tot.carbs : 0} target={t ? t.carbs : 0} color={CARB} />
-        <MacroCard lbl="Fat" val={tot ? tot.fats : 0} target={t ? t.fats : 0} color={FAT} />
-        <MacroCard lbl="Fibr" val={tot ? tot.fiber : 0} target={t ? t.fiber : 0} color={FIBR} />
       </div>
 
       {proteinLeft > 0 && day && day.meals.length > 0 && (
@@ -214,6 +228,13 @@ export default function NutritionPage() {
             <span style={{ position: "absolute", left: -16, top: 13, width: 9, height: 9, borderRadius: 5, background: "transparent", border: "2px dashed " + FAINT }} />
             <button onClick={openAdd} style={{ width: "100%", textAlign: "left", background: "transparent", border: "1px dashed " + IB, borderRadius: 13, padding: "11px 12px", cursor: "pointer", color: ACCENT, fontSize: 12.5, fontWeight: 700 }}>Add meal / snack +</button>
           </div>
+        </div>
+      )}
+
+      {day && (
+        <div style={{ background: "var(--surface-3)", borderRadius: 18, padding: "14px 16px", margin: "14px 0 4px", display: "flex", gap: 12, alignItems: "flex-start" }}>
+          <div style={{ width: 28, height: 28, borderRadius: 999, background: ACCENT, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--on-ember)", fontSize: 11, fontWeight: 800 }}>K</div>
+          <div style={{ fontSize: 12.5, lineHeight: 1.55, color: BODY }}><span style={{ fontWeight: 700, color: H }}>Kai</span> will nudge your fueling here. Daily protein pacing and meal ideas, coming soon.</div>
         </div>
       )}
 
