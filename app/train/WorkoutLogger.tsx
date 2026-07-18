@@ -178,7 +178,7 @@ function ExercisePicker({ onPick, onPickMany, placeholder }: { onPick: (e: { nam
   );
 }
 
-export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio }: { editSessionId?: string; onExitEdit?: () => void; onOpenCardio?: (intent: "workout" | "routine", startMode: "describe" | "build") => void } = {}) {
+export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio, autoStart }: { editSessionId?: string; onExitEdit?: () => void; onOpenCardio?: (intent: "workout" | "routine", startMode: "describe" | "build") => void; autoStart?: { plan_id?: string; routine_id?: string; title?: string } | null } = {}) {
   const [view, setView] = useState<View>(editSessionId ? "log" : "home");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -258,6 +258,15 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
     try { const b = await wkSession(editSessionId); setBundle(b); seedInputs(b.sets); setView("log"); } finally { setLoading(false); }
   }, [editSessionId, seedInputs]);
   useEffect(() => { if (editSessionId) loadEditSession(); else loadHome(); }, [editSessionId, loadEditSession, loadHome]);
+
+  // Launch directly into a session when opened from the Workouts home (quick start / plan / routine). One-shot.
+  const autoStartedRef = useRef(false);
+  useEffect(() => {
+    if (autoStartedRef.current || editSessionId || !autoStart) return;
+    autoStartedRef.current = true;
+    startFrom(autoStart);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoStart, editSessionId]);
 
   useEffect(() => {
     if (view === "log" && !editSessionId && bundle?.session?.started_at) {
@@ -1009,7 +1018,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio 
 }
 
 // ================= Routine builder =================
-function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExit: () => void }) {
+export function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExit: () => void }) {
   const [name, setName] = useState("");
   const [focus, setFocus] = useState("");
   const [items, setItems] = useState<WkRoutineItem[]>([]);
