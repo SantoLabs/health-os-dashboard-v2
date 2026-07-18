@@ -256,6 +256,10 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
 
         {data && tab === "targets" && (
           <div>
+            <div style={{ background: "var(--surface-3)", borderRadius: 14, padding: "12px 14px", marginBottom: 12, display: "flex", gap: 10, alignItems: "flex-start" }}>
+              <div style={{ width: 24, height: 24, borderRadius: 999, background: ACCENT, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 10, fontWeight: 800 }}>K</div>
+              <div style={{ fontSize: 11.5, color: BODY, lineHeight: 1.5 }}>Kai will set these from your goals and retune them as your weight trends. For now, use the calculator below.</div>
+            </div>
             <div style={{ background: CARD, border: "1px solid " + CB, borderRadius: 13, padding: 12 }}>
               <div style={{ ...tiny, marginBottom: 8 }}>✨ Calculator — your numbers</div>
               <div style={{ display: "flex", gap: 6 }}>
@@ -301,6 +305,7 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
 
         {data && tab === "prefs" && (
           <div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: H, letterSpacing: "0.04em", marginBottom: 10 }}>MY DIET</div>
             <div style={{ ...tiny, marginBottom: 6 }}>Cuisines you eat</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {CUISINES.map((c) => <button key={c} onClick={() => toggleCuisine(c)} style={chip(cuisine.indexOf(c) >= 0)}>{c}</button>)}
@@ -317,11 +322,14 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
             {(existingLikes || existingDislikes) && (
               <div style={{ fontSize: 10.5, color: FAINTER, marginTop: 8, lineHeight: 1.5 }}>{existingLikes ? <span>👍 {existingLikes}</span> : null}{existingLikes && existingDislikes ? <br /> : null}{existingDislikes ? <span>👎 {existingDislikes}</span> : null}</div>
             )}
-            <button onClick={() => setReferDefault((x) => !x)} style={{ width: "100%", marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center", background: CARD, border: "1px solid " + CB, borderRadius: 12, padding: "12px 13px", cursor: "pointer" }}>
-              <span style={{ fontSize: 12.5, color: BODY, textAlign: "left" }}>Use my Pantry brands by default<br /><span style={{ fontSize: 10.5, color: FAINT }}>The global default; each add screen can still override per entry.</span></span>
-              <span style={{ fontSize: 12, fontWeight: 800, color: referDefault ? FIBR2 : FAINTER }}>{referDefault ? "ON" : "OFF"}</span>
-            </button>
-            <div style={{ marginTop: 14 }}>
+            <div style={{ width: "100%", marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, background: CARD, border: "1px solid " + CB, borderRadius: 12, padding: "12px 13px" }}>
+              <span style={{ fontSize: 12.5, color: BODY, textAlign: "left" }}>Use my pantry brands<br /><span style={{ fontSize: 10.5, color: FAINT }}>The global default; each add screen can still override per entry.</span></span>
+              <button onClick={() => setReferDefault((x) => !x)} aria-label="Toggle pantry default" style={{ width: 44, height: 26, borderRadius: 999, border: "none", background: referDefault ? ACCENT : CHIP_IDLE_B, position: "relative", cursor: "pointer", flexShrink: 0 }}>
+                <span style={{ position: "absolute", top: 3, left: referDefault ? 21 : 3, width: 20, height: 20, borderRadius: 999, background: "#fff", transition: "left .15s", boxShadow: "0 1px 3px rgba(0,0,0,.2)" }} />
+              </button>
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: H, letterSpacing: "0.04em", margin: "18px 0 10px" }}>STARTER MENU</div>
+            <div style={{ marginTop: 0 }}>
               <button onClick={generateMenu} disabled={genBusy} style={{ ...softBtn, opacity: genBusy ? 0.6 : 1 }}>{genBusy ? "Generating…" : "✨ Generate starter menu"}</button>
               <div style={{ fontSize: 10.5, color: FAINTER, marginTop: 6 }}>Built from your cuisines, eating pattern, the notes above &amp; your targets. Tap a dish: once 👍, twice 👎.</div>
               {genNote && <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 6 }}>{genNote}</div>}
@@ -350,7 +358,8 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
 
         {data && tab === "pantry" && (
           <div>
-            <div style={{ fontSize: 11.5, color: FAINT, marginBottom: 12 }}>Set your usual product per category. When you log a food in that category, the add screen offers a “Refer Pantry” toggle to use these values.</div>
+            <div style={{ fontSize: 11.5, color: FAINT, marginBottom: 12 }}>Your pantry teaches Kai your kitchen - estimates default to these items first.</div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: H, letterSpacing: "0.04em", marginBottom: 10 }}>MY STAPLES{pantry.length ? " " + String.fromCharCode(183) + " " + pantry.length : ""}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
               {pantry.map((it) => (
                 <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 8, background: CARD, border: "1px solid " + CB, borderRadius: 12, padding: "10px 12px" }}>
