@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { planWeek, planRange, planPost, strengthSessions, cardioActivities, actualStarts, type StrengthSession, type CardioActivityLite } from "../../lib/api";
+import { CardioActivityDetail } from "../../train/CardioTab";
 import { Screen } from "../../components/Screen";
 
 /* ════════════════════ backend types (health-plan v4) ════════════════════ */
@@ -714,6 +715,10 @@ export default function SchedulePage() {
     if (!peek) return null;
     const it = peek; const t = T[it.tkey];
     const isEvent = it.kind === "event"; const isGcal = it.source === "gcal"; const isActual = it.source === "actual"; const readOnly = isGcal || isActual;
+    const isCardioActual = isActual && it.id.startsWith("act-c-"); const isStrengthActual = isActual && it.id.startsWith("act-s-");
+    const strSession = isStrengthActual ? actStr.find((s) => "act-s-" + s.id === it.id) : null;
+    const CARDSPORT: Record<string, string> = { run: "running", cycle: "cycling", swim: "swimming", walk: "walking" };
+    const MID = " " + String.fromCharCode(183) + " ";
     const done = it.status === "done"; const skip = it.status === "skipped";
     const em = (it.hour ?? 0) * 60 + (it.min ?? 0) + (it.dur ?? 0);
     const timeStr = it.allDay ? "All day" : it.hour != null ? fmtT(it.hour, it.min) + (it.dur ? " – " + fmtT(Math.floor(em / 60) % 24, em % 60) : "") : "Unscheduled";
@@ -722,8 +727,12 @@ export default function SchedulePage() {
     const nBtn: React.CSSProperties = { flex: 1, padding: "11px 8px", borderRadius: 12, cursor: "pointer", fontWeight: 700, fontSize: 13, border: "1px solid var(--line-2)", background: CARD2, color: T2, whiteSpace: "nowrap" };
     return (
       <div onClick={closePeek} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 1600, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-        <div className="schd-sheet" onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "20px 20px 0 0", padding: "14px 16px max(18px,env(safe-area-inset-bottom))", animation: "schd-in .22s ease" }}>
+        <div className="schd-sheet" onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "20px 20px 0 0", padding: "14px 16px max(18px,env(safe-area-inset-bottom))", maxHeight: "88vh", overflowY: "auto", animation: "schd-in .22s ease" }}>
           <div style={{ width: 36, height: 4, borderRadius: 999, background: "var(--line-2)", margin: "0 auto 14px" }} />
+          {isCardioActual ? (
+            <div className="trainv2"><CardioActivityDetail id={it.id.slice(6)} sport={CARDSPORT[it.tkey] || "running"} onBack={closePeek} /></div>
+          ) : (
+          <>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
             <div style={{ width: 40, height: 40, borderRadius: 12, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, background: hexA(t.color, .16), border: "1px solid " + hexA(t.color, .3) }}>{done ? "🎉" : t.emoji}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -732,15 +741,21 @@ export default function SchedulePage() {
             </div>
             <button onClick={closePeek} aria-label="Close" style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid var(--line-2)", background: CHIPBG, color: T2, fontSize: 14, cursor: "pointer", flex: "none" }}>✕</button>
           </div>
-          {readOnly ? (
-            isActual ? (
-              <div style={{ marginTop: 14 }}>
-                {it.stats && <div style={{ background: hexA(t.color, .1), border: "1px solid " + hexA(t.color, .25), borderRadius: 12, padding: "12px 14px", fontSize: 13.5, fontWeight: 700, color: chipTxt(t.color), textAlign: "center" }}>{it.stats}</div>}
-                <div style={{ fontSize: 11.5, color: T3, textAlign: "center", padding: "10px 0 2px" }}>Logged activity. Open the Train tab for the full breakdown.</div>
-              </div>
-            ) : (
-              <div style={{ fontSize: 12, color: T3, marginTop: 16, textAlign: "center", padding: "10px 0" }}>Read-only. Manage this in Google Calendar.</div>
-            )
+          {isStrengthActual ? (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: T3, letterSpacing: ".06em", textTransform: "uppercase", margin: "4px 2px 8px" }}>Exercises</div>
+              {strSession && strSession.exercises.map((e, i) => (
+                <div key={e.title + i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", marginBottom: 6, borderRadius: 12, background: CARD2, border: "1px solid var(--line)" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 700 }}>{e.title}</div>
+                    <div style={{ fontSize: 11, color: T3, textTransform: "capitalize" }}>{e.muscle_group.replace(/_/g, " ")}</div>
+                  </div>
+                  <div style={{ fontSize: 11.5, color: T3, whiteSpace: "nowrap", flex: "none" }}>{e.sets + " sets" + (e.volume ? MID + Math.round(e.volume).toLocaleString("en-US") + " kg" : "")}</div>
+                </div>
+              ))}
+            </div>
+          ) : readOnly ? (
+            <div style={{ fontSize: 12, color: T3, marginTop: 16, textAlign: "center", padding: "10px 0" }}>Read-only. Manage this in Google Calendar.</div>
           ) : (
             <>
               <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
@@ -757,6 +772,8 @@ export default function SchedulePage() {
                 <button onClick={() => fire(() => uncommitItem(it))} style={{ ...nBtn, width: "100%", flex: "none", marginTop: 8 }}>↩ Remove from calendar</button>
               )}
             </>
+          )}
+          </>
           )}
         </div>
       </div>
