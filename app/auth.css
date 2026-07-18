@@ -86,19 +86,31 @@
 .more-wrap { position: relative; display: flex; }
 .more-pop {
   position: absolute; bottom: calc(100% + 10px); right: 0;
-  width: 232px; background: var(--card); border: 1px solid var(--line);
-  border-radius: 14px; padding: 6px; box-shadow: 0 14px 34px rgba(0,0,0,0.45);
-  display: flex; flex-direction: column; gap: 2px; z-index: 1200;
+  width: 252px; background: var(--card); border: 1px solid var(--line);
+  border-radius: 16px; padding: 8px; box-shadow: 0 14px 34px rgba(0,0,0,0.45);
+  display: flex; flex-direction: column; gap: 0; z-index: 1200;
+}
+.more-pop-group { display: flex; flex-direction: column; gap: 1px; }
+.more-pop-group + .more-pop-group { margin-top: 4px; }
+.more-sec-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--muted); padding: 9px 12px 5px;
 }
 .more-pop-item {
-  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
-  border-radius: 10px; color: var(--text); font-size: 14px; font-weight: 500;
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  border-radius: 11px; color: var(--text); font-size: 14px; font-weight: 500;
   background: none; border: 0; width: 100%; text-align: left; cursor: pointer;
 }
 .more-pop-item:hover { background: var(--card2); }
-.mp-icon { font-size: 17px; width: 20px; text-align: center; }
+.more-pop-item.active { background: var(--card2); }
+.mp-icon {
+  width: 20px; height: 20px; flex-shrink: 0; color: var(--ember);
+  display: flex; align-items: center; justify-content: center;
+}
+.mp-icon svg { width: 19px; height: 19px; display: block; }
 .more-pop-sep { height: 1px; background: var(--line); margin: 4px 2px; }
-.more-pop-logout { color: #f87171; }
+.more-pop-logout { color: var(--danger); }
+.more-pop-logout .mp-icon { color: var(--danger); }
 
 /* ---- Today: actionable factor rows (P2.1) ---- */
 .factor-list { display: flex; flex-direction: column; gap: 8px; }
