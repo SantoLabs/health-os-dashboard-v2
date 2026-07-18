@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { planWeek, planRange, planPost, strengthSessions, cardioActivities, type StrengthSession, type CardioActivityLite } from "../../lib/api";
+import { planWeek, planRange, planPost, strengthSessions, cardioActivities, actualStarts, type StrengthSession, type CardioActivityLite } from "../../lib/api";
 import { Screen } from "../../components/Screen";
 
 /* ════════════════════ backend types (health-plan v4) ════════════════════ */
@@ -123,6 +123,7 @@ type Item = {
   hour: number | null; min: number; dur: number; intensity: string | null; effort: string | null;
   dist: number | null; status: Status; committed: boolean; source: string; cat: string;
   allDay: boolean; actual: Actual | null; session: Session | null; event: EventItem | null;
+  stats?: string;
 };
 
 function timeFromTs(ts: string | null): { hour: number | null; min: number } {
@@ -186,10 +187,13 @@ function strengthLabel(s: StrengthSession): string {
   if (nn.includes("core") || nn.includes("abs")) return "Core";
   return "Strength";
 }
-function actualsToItems(str: StrengthSession[], car: CardioActivityLite[]): Item[] {
+function fmtDur(m: number): string { const r = Math.round(m); return r >= 60 ? Math.floor(r / 60) + "h " + (r % 60) + "m" : r + "m"; }
+function actualsToItems(str: StrengthSession[], car: CardioActivityLite[], starts: Record<string, string>): Item[] {
   const out: Item[] = [];
-  for (const s of str) out.push({ id: "act-s-" + s.id, kind: "session", tkey: "strength", title: strengthLabel(s), date: s.date, hour: null, min: 0, dur: 0, intensity: null, effort: null, dist: null, status: "done", committed: true, source: "actual", cat: "workout", allDay: false, actual: null, session: null, event: null });
-  for (const a of car) { const sp = normCardioSport(a.sport); if (!sp) continue; out.push({ id: "act-c-" + a.activity_id, kind: "session", tkey: sp, title: a.name || ACT_LABEL[sp] || T[sp].label, date: a.date, hour: null, min: 0, dur: a.duration_mins ? Math.round(a.duration_mins) : 0, intensity: null, effort: null, dist: a.distance_km != null ? Math.round(a.distance_km * 1000) : null, status: "done", committed: true, source: "actual", cat: "workout", allDay: false, actual: null, session: null, event: null }); }
+  const MID = " " + String.fromCharCode(183) + " ";
+  const tm = (key: string): { hour: number | null; min: number } => { const ts = starts[key]; if (!ts) return { hour: null, min: 0 }; const d = new Date(Date.parse(ts) + 5.5 * 3600000); return { hour: d.getUTCHours(), min: d.getUTCMinutes() }; };
+  for (const s of str) { const t = tm("s|" + s.id); const stats = [s.sets ? s.sets + " sets" : "", s.volume ? Math.round(s.volume).toLocaleString() + " kg" : ""].filter(Boolean).join(MID); out.push({ id: "act-s-" + s.id, kind: "session", tkey: "strength", title: strengthLabel(s), date: s.date, hour: t.hour, min: t.min, dur: 0, intensity: null, effort: null, dist: null, status: "done", committed: true, source: "actual", cat: "workout", allDay: false, actual: null, session: null, event: null, stats: stats || undefined }); }
+  for (const a of car) { const sp = normCardioSport(a.sport); if (!sp) continue; const t = tm("c|" + a.activity_id); const stats = [a.distance_km ? a.distance_km.toFixed(1) + " km" : "", a.duration_mins ? fmtDur(a.duration_mins) : "", a.avg_hr ? "avg HR " + a.avg_hr : "", a.calories ? a.calories + " kcal" : ""].filter(Boolean).join(MID); out.push({ id: "act-c-" + a.activity_id, kind: "session", tkey: sp, title: a.name || ACT_LABEL[sp] || T[sp].label, date: a.date, hour: t.hour, min: t.min, dur: a.duration_mins ? Math.round(a.duration_mins) : 0, intensity: null, effort: null, dist: a.distance_km != null ? Math.round(a.distance_km * 1000) : null, status: "done", committed: true, source: "actual", cat: "workout", allDay: false, actual: null, session: null, event: null, stats: stats || undefined }); }
   return out;
 }
 
@@ -244,6 +248,7 @@ export default function SchedulePage() {
   const [agenda, setAgenda] = useState<RangeResp | null>(null);
   const [actStr, setActStr] = useState<StrengthSession[]>([]);
   const [actCar, setActCar] = useState<CardioActivityLite[]>([]);
+  const [actStart, setActStart] = useState<Record<string, string>>({});
 
   const [sheet, setSheet] = useState<Sheet>(null);
   const [mode, setMode] = useState<"add" | "edit">("add");
@@ -257,7 +262,7 @@ export default function SchedulePage() {
 
   const showToast = useCallback((t: string) => { setToast(t); }, []);
   useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(null), 2400); return () => clearTimeout(id); }, [toast]);
-  useEffect(() => { let a = true; strengthSessions().then((d) => a && setActStr(d)).catch(() => {}); cardioActivities().then((d) => a && setActCar(d)).catch(() => {}); return () => { a = false; }; }, []);
+  useEffect(() => { let a = true; strengthSessions().then((d) => a && setActStr(d)).catch(() => {}); cardioActivities().then((d) => a && setActCar(d)).catch(() => {}); actualStarts().then((rows) => { if (!a) return; const m: Record<string, string> = {}; for (const r of rows) m[r.kind + "|" + r.ref] = r.start_ts; setActStart(m); }).catch(() => {}); return () => { a = false; }; }, []);
 
   // Deep-link: ?date=YYYY-MM-DD (e.g. from the Progress → Summary calendar) lands on that week + day.
   useEffect(() => {
@@ -391,7 +396,7 @@ export default function SchedulePage() {
 
 
   /* ════════════════════ derived ════════════════════ */
-  const actualItems = useMemo(() => actualsToItems(actStr, actCar), [actStr, actCar]);
+  const actualItems = useMemo(() => actualsToItems(actStr, actCar, actStart), [actStr, actCar, actStart]);
   const mergeAct = useCallback((planItems: Item[]): Item[] => {
     if (actualItems.length === 0) return planItems;
     const planKeys = new Set<string>();
@@ -728,7 +733,14 @@ export default function SchedulePage() {
             <button onClick={closePeek} aria-label="Close" style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid var(--line-2)", background: CHIPBG, color: T2, fontSize: 14, cursor: "pointer", flex: "none" }}>✕</button>
           </div>
           {readOnly ? (
-            <div style={{ fontSize: 12, color: T3, marginTop: 16, textAlign: "center", padding: "10px 0" }}>{isActual ? "Logged activity. View it in the Train tab." : "Read-only. Manage this in Google Calendar."}</div>
+            isActual ? (
+              <div style={{ marginTop: 14 }}>
+                {it.stats && <div style={{ background: hexA(t.color, .1), border: "1px solid " + hexA(t.color, .25), borderRadius: 12, padding: "12px 14px", fontSize: 13.5, fontWeight: 700, color: chipTxt(t.color), textAlign: "center" }}>{it.stats}</div>}
+                <div style={{ fontSize: 11.5, color: T3, textAlign: "center", padding: "10px 0 2px" }}>Logged activity. Open the Train tab for the full breakdown.</div>
+              </div>
+            ) : (
+              <div style={{ fontSize: 12, color: T3, marginTop: 16, textAlign: "center", padding: "10px 0" }}>Read-only. Manage this in Google Calendar.</div>
+            )
           ) : (
             <>
               <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
