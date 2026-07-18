@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import CardioBuilder from "./CardioBuilder";
-import WorkoutLogger from "./WorkoutLogger";
+import WorkoutLogger, { RoutineBuilder } from "./WorkoutLogger";
+import TodaySuggestion from "./TodaySuggestion";
+import FuelToday from "./FuelToday";
 import { cardioList, cardioDelete, cardioPrescribe, wkRoutines, wkDeleteRoutine } from "../lib/api";
 import type { CardioRoutine, WkRoutineSummary } from "../lib/api";
 
@@ -25,7 +27,8 @@ type Discipline = "strength" | "cardio";
 type Surface =
   | { k: "home" }
   | { k: "cardio"; intent: "workout" | "routine"; start: "describe" | "build" }
-  | { k: "strength" };
+  | { k: "strengthLogger"; autoStart: { plan_id?: string; routine_id?: string; title?: string } | null }
+  | { k: "strengthBuild"; routineId: string | null };
 
 type GlyphKind = "run" | "bike" | "swim" | "brick" | "strength" | "mobility";
 type SportKey = "run" | "bike" | "swim" | "brick";
@@ -152,11 +155,19 @@ export default function WorkoutsTab() {
   if (surface.k === "cardio") {
     return <CardioBuilder onExit={backHome} intent={surface.intent} startMode={surface.start} />;
   }
-  if (surface.k === "strength") {
+  if (surface.k === "strengthLogger") {
     return (
       <div>
         <button className="trn-sub" onClick={backHome} style={{ marginBottom: 10 }}>‹ Workouts</button>
-        <WorkoutLogger onOpenCardio={(intent, start) => setSurface({ k: "cardio", intent, start })} />
+        <WorkoutLogger autoStart={surface.autoStart} onOpenCardio={(intent, start) => setSurface({ k: "cardio", intent, start })} />
+      </div>
+    );
+  }
+  if (surface.k === "strengthBuild") {
+    return (
+      <div>
+        <button className="trn-sub" onClick={backHome} style={{ marginBottom: 10 }}>‹ Workouts</button>
+        <RoutineBuilder routineId={surface.routineId} onExit={backHome} />
       </div>
     );
   }
@@ -166,7 +177,7 @@ export default function WorkoutsTab() {
 
   const editAction = (id: string) => {
     if (isCardio) setSurface({ k: "cardio", intent: "routine", start: "build" });
-    else setSurface({ k: "strength" });
+    else setSurface({ k: "strengthBuild", routineId: id });
   };
 
   const tray = (id: string, name: string) => {
@@ -235,10 +246,10 @@ export default function WorkoutsTab() {
   // entry pair (honest copy; destinations wired minimally — full intent routing is Phase 2)
   const doNow = isCardio
     ? { title: "Start cardio now", sub: "Pick a session — record on your watch", go: () => setSurface({ k: "cardio", intent: "workout", start: "build" }) }
-    : { title: "Start strength now", sub: "Log your sets as you go", go: () => setSurface({ k: "strength" }) };
+    : { title: "Start strength now", sub: "Log your sets as you go", go: () => setSurface({ k: "strengthLogger", autoStart: { title: "Quick workout" } }) };
   const build = isCardio
     ? { title: "Build a session", sub: "Author · save · schedule", go: () => setSurface({ k: "cardio", intent: "routine", start: "build" }) }
-    : { title: "Build a routine", sub: "Author · save · reuse", go: () => setSurface({ k: "strength" }) };
+    : { title: "Build a routine", sub: "Author · save · reuse", go: () => setSurface({ k: "strengthBuild", routineId: null }) };
 
   const cardioGroups = SPORTS
     .map((s) => ({ s, list: (cardio || []).filter((r) => sportOf(r.sport) === s.key) }))
@@ -330,6 +341,13 @@ export default function WorkoutsTab() {
           For now, {isCardio ? "build a session above" : "build a routine above"} — anything you save lands in Your routines.
         </div>
       </div>
+
+      {!isCardio ? (
+        <div style={{ marginTop: 4 }}>
+          <TodaySuggestion onStartPlan={(planId) => setSurface({ k: "strengthLogger", autoStart: { plan_id: planId } })} />
+          <FuelToday />
+        </div>
+      ) : null}
 
       <div style={{ margin: "16px 4px 4px", textAlign: "center", fontSize: 12, color: "var(--muted)" }}>
         Want a full plan? <span style={{ fontWeight: 700, color: "var(--ember-strong)" }}>Ask your coach</span> in the Coach tab.
