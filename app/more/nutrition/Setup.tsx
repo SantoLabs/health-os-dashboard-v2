@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { nutriProfile, nutriFoods, nutriPost } from "../../lib/api";
 
-const CARD = "var(--surface)", INSET = "var(--bg)", CB = "var(--line)", IB = "var(--line-2)";
+const CARD = "var(--surface)", INSET = "var(--bg)", CB = "var(--line)";
 const H = "var(--text)", BODY = "var(--text)", MUTED = "var(--text-2)", FAINT = "var(--muted)", FAINTER = "var(--faint)";
 const ACCENT = "var(--ember)", ACCENT_LT = "var(--ember-strong)", CHIP_SEL = "var(--ember-tint)", CHIP_SEL_B = "color-mix(in srgb, var(--ember) 35%, transparent)", CHIP_IDLE = "var(--surface-2)", CHIP_IDLE_B = "var(--line-2)";
-const PROT = "#4a86e8", CARB = "#cf8a2e", FAT = "#d85c42", FIBR = "#3aa17e", FIBR2 = "#3aa17e";
-const LIKE = "var(--success)", LIKE_B = "color-mix(in srgb, var(--success) 35%, transparent)", DISLIKE = "var(--danger)", DISLIKE_B = "color-mix(in srgb, var(--danger) 35%, transparent)";
+const PROT = "var(--ember)", CARB = "#dca23f", FAT = "var(--kai)", FIBR = "var(--success)";
+const LIKE = "var(--success)", DISLIKE = "var(--danger)";
+const SURF3 = "var(--surface-3)";
 
 type DaySet = { calories: number; protein: number; carbs: number; fats: number; fiber: number };
 type Targets = DaySet & { micros_rda: Record<string, number>; rest?: DaySet; has_rest?: boolean; inputs?: Record<string, number> | null };
@@ -15,20 +16,18 @@ type Profile = { cuisine: string[]; eating_pattern: string; restrictions: string
 type PantryItem = { id: string; category: string; food_id: string | null; label: string; basis: string; kcal: number; protein: number; carbs: number; fats: number; fiber: number; unit_grams: Record<string, number>; micros: Record<string, number> };
 type Food = { id: string; name: string; brand: string | null; category: string | null; basis: string; kcal: number; protein: number; carbs: number; fats: number; fiber: number; micros: Record<string, number>; unit_grams: Record<string, number>; source: string; verified: boolean };
 type ProfileResp = { profile: Profile; targets: Targets; pantry: PantryItem[] };
-type Sug = { rationale: string; bmr?: number; tdee?: number; bmi?: number; af?: number; ai?: boolean };
 
 const CUISINES = ["North Indian", "South Indian", "Gujarati", "Punjabi", "Bengali", "Maharashtrian", "Continental", "Chinese", "Mediterranean", "Mexican"];
 const PATTERNS = ["Vegetarian", "Eggetarian", "Non-veg", "Vegan", "Jain"];
 const CATS = ["milk", "paneer", "curd", "whey", "atta", "oats", "oil", "ghee", "bread", "rice", "dal"];
-const GOALS = ["cut", "recomp", "maintain", "gain"];
+const MEALS: [string, string][] = [["breakfast", "Breakfast"], ["lunch", "Lunch"], ["dinner", "Dinner"], ["snacks", "Snacks"]];
 
 const numv = (s: string) => Number(s) || 0;
 const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
-const tiny: CSSProperties = { fontSize: 9, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: FAINT };
-const inp: CSSProperties = { width: "100%", boxSizing: "border-box", padding: "10px 11px", borderRadius: 10, border: "1px solid " + IB, background: "var(--surface-2)", color: BODY, fontSize: 13.5, outline: "none" };
-function chip(active: boolean): CSSProperties { return { padding: "8px 12px", borderRadius: 11, cursor: "pointer", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", border: "1px solid " + (active ? CHIP_SEL_B : CHIP_IDLE_B), background: active ? CHIP_SEL : CHIP_IDLE, color: active ? ACCENT_LT : MUTED }; }
-const primary: CSSProperties = { width: "100%", marginTop: 14, padding: 13, borderRadius: 14, border: "none", background: ACCENT, color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer" };
-const softBtn: CSSProperties = { width: "100%", padding: 11, borderRadius: 12, border: "1px solid " + CHIP_SEL_B, background: CHIP_SEL, color: ACCENT_LT, fontSize: 13, fontWeight: 700, cursor: "pointer" };
+const label11: CSSProperties = { fontSize: 11, fontWeight: 700, color: FAINT, letterSpacing: "0.08em" };
+const inp: CSSProperties = { width: "100%", boxSizing: "border-box", padding: "12px 14px", borderRadius: 14, border: "1px solid " + CB, background: CARD, color: BODY, fontSize: 13, outline: "none" };
+function chip(active: boolean): CSSProperties { return { padding: "8px 15px", borderRadius: 999, cursor: "pointer", fontSize: 12.5, fontWeight: active ? 700 : 600, whiteSpace: "nowrap", border: "1px solid " + (active ? CHIP_SEL_B : CB), background: active ? CHIP_SEL : CARD, color: active ? ACCENT_LT : MUTED }; }
+const emberBtn: CSSProperties = { width: "100%", marginTop: 14, padding: 14, borderRadius: 16, border: "none", background: ACCENT, color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 6px 18px color-mix(in srgb, var(--ember) 35%, transparent)" };
 
 function resizeToB64(file: File): Promise<{ image_b64: string; mime: string }> {
   return new Promise((resolve, reject) => {
@@ -48,14 +47,38 @@ function resizeToB64(file: File): Promise<{ image_b64: string; mime: string }> {
   });
 }
 
-function NumIn({ v, on, color }: { v: string; on: (s: string) => void; color?: string }) {
-  return <input value={v} onChange={(e) => on(e.target.value.replace(/[^0-9.-]/g, ""))} inputMode="decimal" placeholder="0" style={{ width: "100%", boxSizing: "border-box", padding: "9px 8px", borderRadius: 10, border: "1px solid " + (color ? CHIP_SEL_B : IB), background: "var(--surface-2)", color: BODY, fontSize: 13, outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />;
+function Chevron() { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={FAINTER} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M9 6l6 6-6 6" /></svg>; }
+function Switch({ on, onClick }: { on: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick} aria-label="Toggle" style={{ width: 44, height: 26, borderRadius: 999, border: "none", background: on ? ACCENT : CHIP_IDLE_B, position: "relative", cursor: "pointer", flexShrink: 0 }}>
+      <span style={{ position: "absolute", top: 3, left: on ? 21 : 3, width: 20, height: 20, borderRadius: 999, background: "#fff", transition: "left .15s", boxShadow: "0 1px 3px rgba(0,0,0,.2)" }} />
+    </button>
+  );
 }
-function Field({ lbl, v, on, color }: { lbl: string; v: string; on: (s: string) => void; color?: string }) {
-  return <div style={{ flex: 1 }}><div style={{ ...tiny, textAlign: "center", color: color || FAINT, marginBottom: 4 }}>{lbl}</div><NumIn v={v} on={on} color={color} /></div>;
+function KaiNote({ text }: { text: string }) {
+  return (
+    <div style={{ background: SURF3, borderRadius: 16, padding: "13px 15px", display: "flex", gap: 10, alignItems: "flex-start" }}>
+      <div style={{ width: 24, height: 24, borderRadius: 999, background: ACCENT, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 10, fontWeight: 800 }}>K</div>
+      <div style={{ fontSize: 12, lineHeight: 1.5, color: BODY }}>{text}</div>
+    </div>
+  );
 }
-function QField({ lbl, v, on }: { lbl: string; v: string; on: (s: string) => void }) {
-  return <div style={{ flex: 1 }}><div style={{ ...tiny, marginBottom: 4 }}>{lbl}</div><NumIn v={v} on={on} /></div>;
+function MacroBox({ lbl, val, sub, color }: { lbl: string; val: number; sub: string; color: string }) {
+  return (
+    <div style={{ background: CARD, border: "1px solid " + CB, borderRadius: 18, padding: "14px 16px" }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, color: FAINT, letterSpacing: "0.06em" }}>{lbl}</div>
+      <div style={{ fontSize: 17, fontWeight: 800, color: H, marginTop: 4 }}>{val} <span style={{ fontSize: 11, fontWeight: 600, color: FAINTER }}>g</span></div>
+      <div style={{ fontSize: 11, color: FAINTER, marginTop: 2, display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 7, height: 7, borderRadius: 999, background: color }} />{sub}</div>
+    </div>
+  );
+}
+function Field({ lbl, v, on }: { lbl: string; v: string; on: (s: string) => void }) {
+  return (
+    <div style={{ flex: 1, background: CARD, border: "1px solid " + CB, borderRadius: 14, padding: "9px 4px", textAlign: "center" }}>
+      <div style={{ fontSize: 9.5, fontWeight: 700, color: FAINT, letterSpacing: "0.06em" }}>{lbl}</div>
+      <input value={v} onChange={(e) => on(e.target.value.replace(/[^0-9.-]/g, ""))} inputMode="decimal" placeholder="0" style={{ width: "100%", boxSizing: "border-box", marginTop: 3, border: "none", background: "transparent", color: v ? H : FAINTER, fontSize: 15, fontWeight: 800, outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />
+    </div>
+  );
 }
 
 export default function Setup({ onClose, onChanged }: { onClose: () => void; onChanged?: () => void }) {
@@ -63,21 +86,13 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
   const [data, setData] = useState<ProfileResp | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-
-  // targets — training + rest sets
-  const [calTr, setCalTr] = useState(""); const [proTr, setProTr] = useState(""); const [carTr, setCarTr] = useState(""); const [fatTr, setFatTr] = useState(""); const [fibTr, setFibTr] = useState("");
-  const [calRt, setCalRt] = useState(""); const [proRt, setProRt] = useState(""); const [carRt, setCarRt] = useState(""); const [fatRt, setFatRt] = useState(""); const [fibRt, setFibRt] = useState("");
-  const [hasRest, setHasRest] = useState(false);
-  // quantifiers
-  const [wt, setWt] = useState(""); const [bf, setBf] = useState(""); const [ht, setHt] = useState(""); const [age, setAge] = useState(""); const [sex, setSex] = useState("male");
-  const [spw, setSpw] = useState(""); const [goal, setGoal] = useState("recomp"); const [rate, setRate] = useState(""); const [ppk, setPpk] = useState("");
-  const [aiTune, setAiTune] = useState(false);
-  const [sugBusy, setSugBusy] = useState(false); const [sug, setSug] = useState<Sug | null>(null);
+  const [prefView, setPrefView] = useState<string>("list");
+  const [starterMeal, setStarterMeal] = useState<string>("breakfast");
   // prefs
   const [cuisine, setCuisine] = useState<string[]>([]); const [pattern, setPattern] = useState(""); const [referDefault, setReferDefault] = useState(true);
   const [typical, setTypical] = useState(""); const [listening, setListening] = useState(false);
   const [menu, setMenu] = useState<any>(null); const [genBusy, setGenBusy] = useState(false); const [genNote, setGenNote] = useState<string | null>(null);
-  const [menuPick, setMenuPick] = useState<Record<string, number>>({}); const [picksBusy, setPicksBusy] = useState(false); const [picksNote, setPicksNote] = useState<string | null>(null);
+  const [menuPick, setMenuPick] = useState<Record<string, number>>({});
   const [existingLikes, setExistingLikes] = useState(""); const [existingDislikes, setExistingDislikes] = useState("");
   // pantry
   const [pantry, setPantry] = useState<PantryItem[]>([]);
@@ -89,14 +104,6 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
 
   function hydrate(d: ProfileResp) {
     setData(d);
-    const tg = d.targets; const rest = tg.rest || tg; const inpv = tg.inputs || {};
-    setCalTr(String(tg.calories || "")); setProTr(String(tg.protein || "")); setCarTr(String(tg.carbs || "")); setFatTr(String(tg.fats || "")); setFibTr(String(tg.fiber || ""));
-    setCalRt(String(rest.calories || "")); setProRt(String(rest.protein || "")); setCarRt(String(rest.carbs || "")); setFatRt(String(rest.fats || "")); setFibRt(String(rest.fiber || ""));
-    setHasRest(!!tg.has_rest);
-    if (inpv.weight_kg) setWt(String(inpv.weight_kg)); if (inpv.body_fat_pct != null) setBf(String(inpv.body_fat_pct));
-    if (inpv.sessions_per_week != null) setSpw(String(inpv.sessions_per_week)); if (inpv.rate_kg_wk != null) setRate(String(inpv.rate_kg_wk)); if (inpv.protein_per_kg != null) setPpk(String(inpv.protein_per_kg));
-    if (inpv.goal != null) setGoal(String(inpv.goal));
-    if (d.profile.height_cm != null) setHt(String(d.profile.height_cm)); if (d.profile.age != null) setAge(String(d.profile.age)); if (d.profile.sex) setSex(d.profile.sex);
     setCuisine(d.profile.cuisine || []); setPattern(d.profile.eating_pattern || ""); setReferDefault(d.profile.refer_pantry_default !== false);
     setTypical(d.profile.typical_meals || ""); setExistingLikes(d.profile.likes || ""); setExistingDislikes(d.profile.dislikes || "");
     setPantry(d.pantry || []);
@@ -112,47 +119,10 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
   useEffect(() => { if (camOn && videoRef.current && streamRef.current) { videoRef.current.srcObject = streamRef.current; videoRef.current.play().catch(() => {}); } }, [camOn]);
   useEffect(() => () => { const s = streamRef.current; if (s) s.getTracks().forEach((t) => t.stop()); }, []);
 
-  async function suggestTargets() {
-    setSugBusy(true); setErr(null); setSug(null);
-    try {
-      const body = { weight_kg: numv(wt) || null, body_fat_pct: bf !== "" ? numv(bf) : null, height_cm: numv(ht) || null, age: numv(age) || null, sex: sex || null, sessions_per_week: spw !== "" ? numv(spw) : null, goal, rate_kg_wk: rate !== "" ? numv(rate) : null, protein_per_kg: ppk !== "" ? numv(ppk) : null, ai: aiTune };
-      const r = await nutriPost<any>("targets_suggest", body);
-      if (r && r.needs) { setErr("Add " + (r.needs as string[]).join(", ") + " above for a personalised suggestion."); return; }
-      if (r && r.training) {
-        const T = r.training, R = r.rest || r.training; const inpv = r.inputs || {};
-        setCalTr(String(T.calories)); setProTr(String(T.protein)); setCarTr(String(T.carbs)); setFatTr(String(T.fats)); setFibTr(String(T.fiber));
-        setCalRt(String(R.calories)); setProRt(String(R.protein)); setCarRt(String(R.carbs)); setFatRt(String(R.fats)); setFibRt(String(R.fiber));
-        setHasRest(true);
-        setSug({ rationale: r.rationale || "", bmr: inpv.bmr, tdee: inpv.tdee, bmi: inpv.bmi, af: inpv.activity_factor, ai: !!r.ai });
-        if (inpv.weight_kg && !wt) setWt(String(inpv.weight_kg));
-        if (inpv.body_fat_pct != null && bf === "") setBf(String(inpv.body_fat_pct));
-        if (inpv.sessions_per_week != null && spw === "") setSpw(String(inpv.sessions_per_week));
-        if (inpv.rate_kg_wk != null && rate === "") setRate(String(inpv.rate_kg_wk));
-        if (inpv.protein_per_kg != null && ppk === "") setPpk(String(inpv.protein_per_kg));
-      } else setErr((r && r.note) || "Couldn't suggest right now.");
-    } catch (e) { setErr((e as Error).message); } finally { setSugBusy(false); }
-  }
-  async function saveTargets() {
-    setBusy(true); setErr(null);
-    try {
-      const inputs = { weight_kg: numv(wt) || null, body_fat_pct: bf !== "" ? numv(bf) : null, height_cm: numv(ht) || null, age: numv(age) || null, sex, sessions_per_week: spw !== "" ? numv(spw) : null, goal, rate_kg_wk: rate !== "" ? numv(rate) : null, protein_per_kg: ppk !== "" ? numv(ppk) : null };
-      const d = await nutriPost<ProfileResp>("targets_save", {
-        calories: numv(calTr), protein: numv(proTr), carbs: numv(carTr), fats: numv(fatTr), fiber: numv(fibTr),
-        rest_calories: numv(calRt), rest_protein: numv(proRt), rest_carbs: numv(carRt), rest_fats: numv(fatRt), rest_fiber: numv(fibRt),
-        inputs,
-      });
-      hydrate(d); if (onChanged) onChanged();
-    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
-  }
-  async function savePrefs() {
-    setBusy(true); setErr(null);
-    try { const d = await nutriPost<ProfileResp>("profile_save", { cuisine, eating_pattern: pattern, refer_pantry_default: referDefault, typical_meals: typical }); hydrate(d); }
-    catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
-  }
   function toggleCuisine(c: string) { setCuisine((xs) => (xs.indexOf(c) >= 0 ? xs.filter((x) => x !== c) : [...xs, c])); }
   function startDictation() {
     const SR: any = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
-    if (!SR) { setErr("Voice input isn't supported in this browser — please type instead."); return; }
+    if (!SR) { setErr("Voice input isn't supported here. Please type instead."); return; }
     try {
       const rec = new SR(); rec.lang = "en-IN"; rec.interimResults = false; rec.continuous = false; setListening(true);
       rec.onresult = (e: any) => { const txt = Array.from(e.results).map((x: any) => x[0].transcript).join(" "); setTypical((t) => (t ? t + " " : "") + txt); };
@@ -160,34 +130,33 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
     } catch { setListening(false); }
   }
   async function generateMenu() {
-    setGenBusy(true); setGenNote(null); setPicksNote(null);
+    setGenBusy(true); setGenNote(null);
     try { const r = await nutriPost<{ menu: any; note?: string }>("menu_generate", { cuisine, eating_pattern: pattern, typical_meals: typical }); if (r && r.menu) { setMenu(r.menu); setMenuPick({}); } else setGenNote((r && r.note) || "Couldn't generate right now."); }
     catch (e) { setGenNote((e as Error).message); } finally { setGenBusy(false); }
   }
-  function cyclePick(item: string) {
-    setMenuPick((m) => { const cur = m[item] || 0; const nx = cur === 0 ? 1 : cur === 1 ? -1 : 0; const c = { ...m }; if (nx === 0) delete c[item]; else c[item] = nx; return c; });
+  function setPick(item: string, val: number) {
+    setMenuPick((m) => { const c = { ...m }; if (c[item] === val) delete c[item]; else c[item] = val; return c; });
   }
   function mergeCsv(existing: string, add: string[]): string {
     const seen = new Set<string>(); const out: string[] = [];
     for (const part of [...String(existing || "").split(","), ...add]) { const t = part.trim(); if (!t) continue; const k = t.toLowerCase(); if (seen.has(k)) continue; seen.add(k); out.push(t); }
     return out.join(", ");
   }
-  async function saveMenuPicks() {
-    const likes = Object.keys(menuPick).filter((k) => menuPick[k] === 1);
-    const dislikes = Object.keys(menuPick).filter((k) => menuPick[k] === -1);
-    if (!likes.length && !dislikes.length) { setPicksNote("Tap a dish once for 👍, twice for 👎."); return; }
-    setPicksBusy(true); setErr(null); setPicksNote(null);
+  async function savePrefs() {
+    setBusy(true); setErr(null);
     try {
-      const d = await nutriPost<ProfileResp>("profile_save", { likes: mergeCsv(existingLikes, likes), dislikes: mergeCsv(existingDislikes, dislikes) });
-      hydrate(d); setPicksNote("Saved — future menus will lean into your 👍 and avoid your 👎.");
-    } catch (e) { setErr((e as Error).message); } finally { setPicksBusy(false); }
+      const likes = mergeCsv(existingLikes, Object.keys(menuPick).filter((k) => menuPick[k] === 1));
+      const dislikes = mergeCsv(existingDislikes, Object.keys(menuPick).filter((k) => menuPick[k] === -1));
+      const d = await nutriPost<ProfileResp>("profile_save", { cuisine, eating_pattern: pattern, refer_pantry_default: referDefault, typical_meals: typical, likes, dislikes });
+      hydrate(d); if (onChanged) onChanged();
+    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   }
 
   function applyFood(f: Food) { setPPicked(true); setPLabel(f.brand ? f.brand + " " + f.name : f.name); setPKcal(String(f.kcal)); setPPro(String(f.protein)); setPCar(String(f.carbs)); setPFat(String(f.fats)); setPFib(String(f.fiber)); setPBasis(f.basis); setPUnitGrams(f.unit_grams || {}); setPMicros(f.micros || {}); if (f.category && !pCat) setPCat(f.category); }
   function resetPantryAdd() { setPCat(""); setPQ(""); setPFoods([]); setPPicked(false); setPLabel(""); setPKcal(""); setPPro(""); setPCar(""); setPFat(""); setPFib(""); setPBasis("per_100g"); setPUnitGrams({}); setPMicros({}); stopCam(); }
   async function aiPantryFood() {
     const nm = pQ.trim(); if (!nm) return; setBusy(true); setErr(null);
-    try { const r = await nutriPost<{ food: Food | null }>("ai_food", { name: nm }); if (r && r.food) applyFood(r.food); else setErr("Couldn't estimate that product — type the values or scan the label."); }
+    try { const r = await nutriPost<{ food: Food | null }>("ai_food", { name: nm }); if (r && r.food) applyFood(r.food); else setErr("Couldn't estimate that product. Type the values or scan the label."); }
     catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   }
   async function runLabelScan(image_b64: string, mime: string) {
@@ -195,7 +164,7 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
     try {
       const r = await nutriPost<any>("label_scan", { image_b64, mime });
       if (r && r.ok && r.label) { const L = r.label; setPPicked(true); if (L.name && !pLabel) setPLabel(L.name); setPKcal(String(L.kcal)); setPPro(String(L.protein)); setPCar(String(L.carbs)); setPFat(String(L.fats)); setPFib(String(L.fiber)); setPBasis(L.basis || "per_100g"); setPUnitGrams(L.unit_grams || {}); }
-      else setErr((r && r.note) || "Couldn't read the label — try a clearer photo or type the values.");
+      else setErr((r && r.note) || "Couldn't read the label. Try a clearer photo or type the values.");
     } catch (e) { setErr((e as Error).message); } finally { setScanBusy(false); }
   }
   function scanUpload(file: File) { resizeToB64(file).then((img) => runLabelScan(img.image_b64, img.mime)).catch(() => setErr("Couldn't read that image.")); }
@@ -203,7 +172,7 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
   async function startCam() {
     setErr(null);
     try { const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false }); streamRef.current = s; setCamOn(true); }
-    catch { setErr("Camera unavailable here — use the Upload option instead."); }
+    catch { setErr("Camera unavailable here. Use the Upload option instead."); }
   }
   function captureLabel() {
     const v = videoRef.current; if (!v) return;
@@ -223,217 +192,242 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
   }
   async function delPantry(it: PantryItem) { try { const r = await nutriPost<{ pantry: PantryItem[] }>("pantry_delete", { id: it.id }); setPantry(r.pantry || []); } catch { /* ignore */ } }
 
-  // macro row for a target set (training/rest), highlighted when active
-  function macroRow(kind: string) {
-    const isTr = kind === "training";
-    const fields: [string, string, (s: string) => void, string | undefined][] = isTr
-      ? [["Cal", calTr, setCalTr, undefined], ["Prot", proTr, setProTr, PROT], ["Carb", carTr, setCarTr, CARB], ["Fat", fatTr, setFatTr, FAT], ["Fibr", fibTr, setFibTr, FIBR]]
-      : [["Cal", calRt, setCalRt, undefined], ["Prot", proRt, setProRt, PROT], ["Carb", carRt, setCarRt, CARB], ["Fat", fatRt, setFatRt, FAT], ["Fibr", fibRt, setFibRt, FIBR]];
-    return (
-      <div style={{ marginTop: 10, padding: 11, borderRadius: 12, background: isTr ? CHIP_SEL : CARD, border: "1px solid " + (isTr ? CHIP_SEL_B : CB) }}>
-        <div style={{ fontSize: 11, fontWeight: 800, color: isTr ? ACCENT_LT : MUTED, marginBottom: 8 }}>{isTr ? "🏋 Training day" : "🛌 Rest day"}</div>
-        <div style={{ display: "flex", gap: 6 }}>
-          {fields.map(([lbl, v, on, col]) => <Field key={lbl} lbl={lbl} v={v} on={on} color={col} />)}
-        </div>
-      </div>
-    );
-  }
+  const t = data ? data.targets : null;
+  const pct = (g: number, per: number) => (t && t.calories ? Math.round((g * per) / t.calories * 100) + "%" : "-");
+  const cuisineSummary = cuisine.length ? cuisine[0] + (cuisine.length > 1 ? " +" + (cuisine.length - 1) : "") : "Not set";
+  const likesSummary = [existingLikes, existingDislikes].filter(Boolean).join(" / ") || "Not set";
+  const inSub = tab === "prefs" && prefView !== "list";
+  const subTitle = prefView === "pattern" ? "Eating pattern" : prefView === "cuisines" ? "Cuisines" : prefView === "likes" ? "Likes & dislikes" : "";
+  const showBack = inSub || pAdding;
+  const title = pAdding ? "Add pantry item" : inSub ? subTitle : "Nutrition settings";
+  function goBack() { if (pAdding) { resetPantryAdd(); setPAdding(false); } else setPrefView("list"); }
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 49 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: INSET, border: "1px solid " + CB, borderRadius: "20px 20px 0 0", padding: "14px 16px max(16px,env(safe-area-inset-bottom))", maxHeight: "92vh", overflowY: "auto" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: H }}>Nutrition setup</div>
-          <button onClick={onClose} aria-label="Close" style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid " + CB, background: CHIP_IDLE, color: MUTED, fontSize: 15, cursor: "pointer" }}>✕</button>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: INSET, border: "1px solid " + CB, borderRadius: "24px 24px 0 0", padding: "16px 18px max(18px,env(safe-area-inset-bottom))", maxHeight: "92vh", overflowY: "auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {showBack && <button onClick={goBack} aria-label="Back" style={{ width: 32, height: 32, borderRadius: 999, border: "1px solid " + CB, background: CARD, color: MUTED, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6" /></svg></button>}
+            <div style={{ fontSize: 19, fontWeight: 800, color: H, letterSpacing: "-0.02em" }}>{title}</div>
+          </div>
+          <button onClick={onClose} aria-label="Close" style={{ width: 34, height: 34, borderRadius: 999, border: "none", background: SURF3, color: FAINT, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
         </div>
 
-        <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-          {[["targets", "Targets"], ["prefs", "Preferences"], ["pantry", "Pantry"]].map(([k, lbl]) => <button key={k} onClick={() => setTab(k)} style={{ flex: 1, padding: "8px 0", borderRadius: 11, cursor: "pointer", fontSize: 12.5, fontWeight: 700, border: "1px solid " + (tab === k ? CHIP_SEL_B : CHIP_IDLE_B), background: tab === k ? CHIP_SEL : CHIP_IDLE, color: tab === k ? ACCENT_LT : MUTED }}>{lbl}</button>)}
-        </div>
-
-        {err && <div style={{ marginBottom: 10, padding: 10, borderRadius: 10, border: "1px solid color-mix(in srgb, var(--danger) 40%, transparent)", background: "color-mix(in srgb, var(--danger) 10%, transparent)", color: "var(--danger)", fontSize: 12 }}>{err}</div>}
-        {!data && !err && <div style={{ color: FAINT, fontSize: 12.5, textAlign: "center", padding: 24 }}>Loading…</div>}
-
-        {data && tab === "targets" && (
-          <div>
-            <div style={{ background: "var(--surface-3)", borderRadius: 14, padding: "12px 14px", marginBottom: 12, display: "flex", gap: 10, alignItems: "flex-start" }}>
-              <div style={{ width: 24, height: 24, borderRadius: 999, background: ACCENT, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 10, fontWeight: 800 }}>K</div>
-              <div style={{ fontSize: 11.5, color: BODY, lineHeight: 1.5 }}>Kai will set these from your goals and retune them as your weight trends. For now, use the calculator below.</div>
-            </div>
-            <div style={{ background: CARD, border: "1px solid " + CB, borderRadius: 13, padding: 12 }}>
-              <div style={{ ...tiny, marginBottom: 8 }}>✨ Calculator — your numbers</div>
-              <div style={{ display: "flex", gap: 6 }}>
-                <QField lbl="Weight kg" v={wt} on={setWt} />
-                <QField lbl="Body-fat %" v={bf} on={setBf} />
-                <QField lbl="Sessions/wk" v={spw} on={setSpw} />
-              </div>
-              <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                <QField lbl="Height cm" v={ht} on={setHt} />
-                <QField lbl="Age" v={age} on={setAge} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ ...tiny, marginBottom: 4 }}>Sex</div>
-                  <div style={{ display: "flex", gap: 5 }}>{["male", "female"].map((s) => <button key={s} onClick={() => setSex(s)} style={{ ...chip(sex === s), flex: 1, padding: "8px 0", textAlign: "center", fontSize: 11 }}>{cap(s)}</button>)}</div>
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                <QField lbl="Rate kg/wk (− = loss)" v={rate} on={setRate} />
-                <QField lbl="Protein g/kg" v={ppk} on={setPpk} />
-              </div>
-              <div style={{ ...tiny, margin: "10px 0 4px" }}>Goal</div>
-              <div style={{ display: "flex", gap: 5 }}>{GOALS.map((g) => <button key={g} onClick={() => setGoal(g)} style={{ ...chip(goal === g), flex: 1, padding: "8px 0", textAlign: "center", fontSize: 11 }}>{cap(g)}</button>)}</div>
-              <button onClick={() => setAiTune((x) => !x)} style={{ width: "100%", marginTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center", background: INSET, border: "1px solid " + CB, borderRadius: 10, padding: "9px 11px", cursor: "pointer" }}>
-                <span style={{ fontSize: 11.5, color: MUTED }}>✨ AI fine-tune <span style={{ color: FAINTER }}>· nudge ±12% for training load</span></span>
-                <span style={{ fontSize: 11, fontWeight: 800, color: aiTune ? FIBR2 : FAINTER }}>{aiTune ? "ON" : "OFF"}</span>
-              </button>
-              <button onClick={suggestTargets} disabled={sugBusy} style={{ ...softBtn, marginTop: 10, opacity: sugBusy ? 0.6 : 1 }}>{sugBusy ? "Calculating…" : "Calculate targets"}</button>
-              {sug && (
-                <div style={{ marginTop: 10, padding: 10, borderRadius: 10, background: INSET, border: "1px solid " + CB }}>
-                  <div style={{ fontSize: 11.5, color: BODY, lineHeight: 1.45 }}>{sug.rationale}</div>
-                  <div style={{ fontSize: 10.5, color: FAINT, marginTop: 6 }}>BMR ~{sug.bmr} · TDEE ~{sug.tdee} kcal{sug.bmi ? " · BMI " + sug.bmi : ""}{sug.af ? " · ×" + sug.af : ""}{sug.ai ? " · AI-tuned" : ""} — edit any field below.</div>
-                </div>
-              )}
-              <div style={{ fontSize: 10.5, color: FAINTER, marginTop: 6 }}>Blanks fall back to your latest weight, DEXA body-fat &amp; training load. A starting point, not medical advice.</div>
-            </div>
-
-            <div style={{ ...tiny, margin: "14px 0 0" }}>Daily targets — protein held constant; carbs cycle by day</div>
-            {macroRow("training")}
-            {macroRow("rest")}
-            <div style={{ fontSize: 10.5, color: FAINTER, marginTop: 6 }}>The day view highlights whichever set applies, based on your Schedule.</div>
-            <button onClick={saveTargets} disabled={busy} style={{ ...primary, opacity: busy ? 0.6 : 1 }}>{busy ? "Saving…" : "Save both targets"}</button>
+        {!showBack && (
+          <div style={{ display: "flex", background: CHIP_IDLE, borderRadius: 999, padding: 4, marginBottom: 16 }}>
+            {[["targets", "Targets"], ["prefs", "Preferences"], ["pantry", "Pantry"]].map(([k, lbl]) => (
+              <button key={k} onClick={() => { setTab(k); setPrefView("list"); }} style={{ flex: 1, textAlign: "center", fontSize: 12.5, fontWeight: tab === k ? 800 : 600, color: tab === k ? H : MUTED, background: tab === k ? CARD : "transparent", borderRadius: 999, padding: "9px 0", border: "none", cursor: "pointer", boxShadow: tab === k ? "0 2px 6px rgba(0,0,0,0.08)" : "none" }}>{lbl}</button>
+            ))}
           </div>
         )}
 
-        {data && tab === "prefs" && (
+        {err && <div style={{ marginBottom: 12, padding: 10, borderRadius: 12, border: "1px solid color-mix(in srgb, var(--danger) 40%, transparent)", background: "color-mix(in srgb, var(--danger) 10%, transparent)", color: "var(--danger)", fontSize: 12 }}>{err}</div>}
+
+        {data && t && tab === "targets" && (
           <div>
-            <div style={{ fontSize: 12, fontWeight: 800, color: H, letterSpacing: "0.04em", marginBottom: 10 }}>MY DIET</div>
-            <div style={{ ...tiny, marginBottom: 6 }}>Cuisines you eat</div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {CUISINES.map((c) => <button key={c} onClick={() => toggleCuisine(c)} style={chip(cuisine.indexOf(c) >= 0)}>{c}</button>)}
+            <div style={{ background: CARD, border: "1px solid " + CB, borderRadius: 20, padding: 18 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: H }}>Daily calories</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: H }}>{t.calories.toLocaleString()} <span style={{ fontSize: 11, fontWeight: 600, color: FAINTER }}>kcal</span></div>
+              </div>
+              <div style={{ marginTop: 12, background: SURF3, borderRadius: 14, padding: "11px 13px", display: "flex", gap: 10, alignItems: "center" }}>
+                <div style={{ width: 22, height: 22, borderRadius: 999, background: ACCENT, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 9.5, fontWeight: 800 }}>K</div>
+                <div style={{ fontSize: 11.5, color: MUTED, lineHeight: 1.45 }}>Kai will dial this in from your goals and training load. Coming soon.</div>
+              </div>
             </div>
-            <div style={{ ...tiny, margin: "16px 0 6px" }}>Eating pattern</div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {PATTERNS.map((p) => <button key={p} onClick={() => setPattern(p)} style={chip(pattern === p)}>{p}</button>)}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
+              <MacroBox lbl="PROTEIN" val={t.protein} sub={pct(t.protein, 4)} color={PROT} />
+              <MacroBox lbl="CARBS" val={t.carbs} sub={pct(t.carbs, 4)} color={CARB} />
+              <MacroBox lbl="FAT" val={t.fats} sub={pct(t.fats, 9)} color={FAT} />
+              <MacroBox lbl="FIBER" val={t.fiber} sub="goal" color={FIBR} />
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "16px 0 6px" }}>
-              <div style={tiny}>What you typically eat · likes &amp; dislikes</div>
-              <button onClick={startDictation} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 9, border: "1px solid " + (listening ? "color-mix(in srgb, var(--danger) 40%, transparent)" : CHIP_IDLE_B), background: listening ? "color-mix(in srgb, var(--danger) 10%, transparent)" : CHIP_IDLE, color: listening ? "var(--danger)" : ACCENT_LT, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{listening ? "● Listening…" : "🎤 Speak"}</button>
-            </div>
-            <textarea value={typical} onChange={(e) => setTypical(e.target.value)} rows={3} placeholder="e.g. I usually have idli or oats for breakfast, dal-roti-sabzi lunches, paneer often. Love filter coffee. Dislike mushrooms; no eggs." style={{ ...inp, resize: "vertical", lineHeight: 1.45 }} />
-            {(existingLikes || existingDislikes) && (
-              <div style={{ fontSize: 10.5, color: FAINTER, marginTop: 8, lineHeight: 1.5 }}>{existingLikes ? <span>👍 {existingLikes}</span> : null}{existingLikes && existingDislikes ? <br /> : null}{existingDislikes ? <span>👎 {existingDislikes}</span> : null}</div>
-            )}
-            <div style={{ width: "100%", marginTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, background: CARD, border: "1px solid " + CB, borderRadius: 12, padding: "12px 13px" }}>
-              <span style={{ fontSize: 12.5, color: BODY, textAlign: "left" }}>Use my pantry brands<br /><span style={{ fontSize: 10.5, color: FAINT }}>The global default; each add screen can still override per entry.</span></span>
-              <button onClick={() => setReferDefault((x) => !x)} aria-label="Toggle pantry default" style={{ width: 44, height: 26, borderRadius: 999, border: "none", background: referDefault ? ACCENT : CHIP_IDLE_B, position: "relative", cursor: "pointer", flexShrink: 0 }}>
-                <span style={{ position: "absolute", top: 3, left: referDefault ? 21 : 3, width: 20, height: 20, borderRadius: 999, background: "#fff", transition: "left .15s", boxShadow: "0 1px 3px rgba(0,0,0,.2)" }} />
+            <div style={{ marginTop: 12 }}><KaiNote text="Placeholder targets for now. Kai retunes these from your goals as your weight trends." /></div>
+          </div>
+        )}
+
+        {data && tab === "prefs" && prefView === "list" && (
+          <div>
+            <div style={{ ...label11, marginBottom: 10 }}>MY DIET</div>
+            <div style={{ background: CARD, border: "1px solid " + CB, borderRadius: 20, overflow: "hidden" }}>
+              <button onClick={() => setPrefView("pattern")} style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", background: "transparent", border: "none", borderBottom: "1px solid " + INSET, cursor: "pointer", textAlign: "left" }}>
+                <div style={{ flex: 1, fontSize: 13.5, fontWeight: 700, color: H }}>Eating pattern</div>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: ACCENT_LT }}>{pattern || "Not set"}</div>
+                <Chevron />
               </button>
+              <button onClick={() => setPrefView("cuisines")} style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", background: "transparent", border: "none", borderBottom: "1px solid " + INSET, cursor: "pointer", textAlign: "left" }}>
+                <div style={{ flex: 1, fontSize: 13.5, fontWeight: 700, color: H }}>Cuisines</div>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: ACCENT_LT }}>{cuisineSummary}</div>
+                <Chevron />
+              </button>
+              <button onClick={() => setPrefView("likes")} style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", background: "transparent", border: "none", borderBottom: "1px solid " + INSET, cursor: "pointer", textAlign: "left" }}>
+                <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: H }}>Likes & dislikes</div><div style={{ fontSize: 11.5, color: MUTED, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{likesSummary}</div></div>
+                <Chevron />
+              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px" }}>
+                <div style={{ flex: 1 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: H }}>Use my pantry brands</div><div style={{ fontSize: 11.5, color: MUTED, marginTop: 1 }}>Add screens can override per entry</div></div>
+                <Switch on={referDefault} onClick={() => setReferDefault((x) => !x)} />
+              </div>
             </div>
-            <div style={{ fontSize: 12, fontWeight: 800, color: H, letterSpacing: "0.04em", margin: "18px 0 10px" }}>STARTER MENU</div>
-            <div style={{ marginTop: 0 }}>
-              <button onClick={generateMenu} disabled={genBusy} style={{ ...softBtn, opacity: genBusy ? 0.6 : 1 }}>{genBusy ? "Generating…" : "✨ Generate starter menu"}</button>
-              <div style={{ fontSize: 10.5, color: FAINTER, marginTop: 6 }}>Built from your cuisines, eating pattern, the notes above &amp; your targets. Tap a dish: once 👍, twice 👎.</div>
-              {genNote && <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 6 }}>{genNote}</div>}
-              {menu && ["breakfast", "lunch", "dinner", "snacks"].map((k) => (Array.isArray(menu[k]) && menu[k].length ? (
-                <div key={k} style={{ marginTop: 10 }}>
-                  <div style={{ ...tiny, marginBottom: 5 }}>{cap(k)}</div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{menu[k].map((it: string, i: number) => {
+
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "18px 0 10px" }}>
+              <div style={label11}>STARTER MENU</div>
+              <button onClick={generateMenu} disabled={genBusy} style={{ background: "transparent", border: "none", fontSize: 12, fontWeight: 700, color: ACCENT_LT, cursor: "pointer", opacity: genBusy ? 0.6 : 1 }}>{genBusy ? "Generating..." : "Regenerate"}</button>
+            </div>
+            {genNote && <div style={{ fontSize: 11, color: "var(--danger)", marginBottom: 8 }}>{genNote}</div>}
+            {!menu && !genBusy && (
+              <div style={{ background: CARD, border: "1px solid " + CB, borderRadius: 18, padding: "18px 16px", textAlign: "center", fontSize: 12.5, color: MUTED, lineHeight: 1.5 }}>Tap Regenerate to build a starter menu from your diet and targets.</div>
+            )}
+            {menu && (
+              <>
+                <div style={{ display: "flex", background: CHIP_IDLE, borderRadius: 999, padding: 3 }}>
+                  {MEALS.map(([k, lbl]) => (
+                    <button key={k} onClick={() => setStarterMeal(k)} style={{ flex: 1, textAlign: "center", fontSize: 11.5, fontWeight: starterMeal === k ? 800 : 600, color: starterMeal === k ? H : MUTED, background: starterMeal === k ? CARD : "transparent", borderRadius: 999, padding: "6px 0", border: "none", cursor: "pointer", boxShadow: starterMeal === k ? "0 2px 6px rgba(0,0,0,0.08)" : "none" }}>{lbl}</button>
+                  ))}
+                </div>
+                <div style={{ marginTop: 10, background: CARD, border: "1px solid " + CB, borderRadius: 18, overflow: "hidden" }}>
+                  {(Array.isArray(menu[starterMeal]) ? menu[starterMeal] : []).map((it: string, i: number, arr: string[]) => {
                     const p = menuPick[it] || 0;
-                    const bg = p === 1 ? LIKE_B : p === -1 ? DISLIKE_B : CARD;
-                    const bd = p === 1 ? LIKE : p === -1 ? DISLIKE : CB;
-                    const col = p === 1 ? LIKE : p === -1 ? DISLIKE : BODY;
-                    return <button key={i} onClick={() => cyclePick(it)} style={{ fontSize: 11.5, color: col, background: bg, border: "1px solid " + bd, borderRadius: 9, padding: "5px 9px", cursor: "pointer", fontWeight: p ? 700 : 500 }}>{p === 1 ? "👍 " : p === -1 ? "👎 " : ""}{it}</button>;
-                  })}</div>
+                    return (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderBottom: i < arr.length - 1 ? "1px solid " + INSET : "none" }}>
+                        <div style={{ flex: 1, fontSize: 12.5, lineHeight: 1.45, color: BODY }}>{it}</div>
+                        <button onClick={() => setPick(it, 1)} aria-label="Keep" style={{ width: 28, height: 28, borderRadius: 999, border: "none", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: p === 1 ? LIKE : SURF3 }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={p === 1 ? "#fff" : FAINT} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg></button>
+                        <button onClick={() => setPick(it, -1)} aria-label="Skip" style={{ width: 28, height: 28, borderRadius: 999, border: "none", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: p === -1 ? DISLIKE : SURF3 }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={p === -1 ? "#fff" : FAINT} strokeWidth="2.6" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
+                      </div>
+                    );
+                  })}
                 </div>
-              ) : null))}
-              {menu && (
-                <>
-                  <button onClick={saveMenuPicks} disabled={picksBusy} style={{ width: "100%", marginTop: 12, padding: 11, borderRadius: 12, border: "1px solid " + LIKE_B, background: "transparent", color: LIKE, fontSize: 12.5, fontWeight: 700, cursor: "pointer", opacity: picksBusy ? 0.6 : 1 }}>{picksBusy ? "Saving…" : "Save 👍 / 👎 to my preferences"}</button>
-                  {picksNote && <div style={{ fontSize: 11, color: FAINT, marginTop: 6 }}>{picksNote}</div>}
-                </>
-              )}
-            </div>
-            <button onClick={savePrefs} disabled={busy} style={{ ...primary, opacity: busy ? 0.6 : 1 }}>{busy ? "Saving…" : "Save preferences"}</button>
+                <div style={{ marginTop: 8, textAlign: "center", fontSize: 11, color: FAINTER }}>Keep what you like, skip what you don't. Built from your diet & targets.</div>
+              </>
+            )}
+            <button onClick={savePrefs} disabled={busy} style={{ ...emberBtn, opacity: busy ? 0.6 : 1 }}>{busy ? "Saving..." : "Save preferences"}</button>
           </div>
         )}
 
-        {data && tab === "pantry" && (
+        {data && tab === "prefs" && prefView === "pattern" && (
           <div>
-            <div style={{ fontSize: 11.5, color: FAINT, marginBottom: 12 }}>Your pantry teaches Kai your kitchen - estimates default to these items first.</div>
-            <div style={{ fontSize: 12, fontWeight: 800, color: H, letterSpacing: "0.04em", marginBottom: 10 }}>MY STAPLES{pantry.length ? " " + String.fromCharCode(183) + " " + pantry.length : ""}</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-              {pantry.map((it) => (
-                <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 8, background: CARD, border: "1px solid " + CB, borderRadius: 12, padding: "10px 12px" }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 700, color: H }}>{cap(it.category)} <span style={{ color: FAINT, fontWeight: 500 }}>· {it.label}</span></div>
-                    <div style={{ fontSize: 10.5, color: FAINT, marginTop: 1 }}>{it.kcal} kcal · P {it.protein} · C {it.carbs} · F {it.fats}{it.basis === "per_100g" ? " /100g" : ""}</div>
-                  </div>
-                  <button onClick={() => delPantry(it)} aria-label="Remove" style={{ width: 26, height: 26, borderRadius: 7, border: "1px solid " + CB, background: CHIP_IDLE, color: FAINTER, fontSize: 12, cursor: "pointer" }}>✕</button>
-                </div>
-              ))}
-              {pantry.length === 0 && <div style={{ fontSize: 12, color: FAINT, padding: 6 }}>No pantry defaults yet.</div>}
+            <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>How you eat shapes every estimate and starter menu.</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{PATTERNS.map((p) => <button key={p} onClick={() => setPattern(p)} style={chip(pattern === p)}>{p}</button>)}</div>
+            <button onClick={() => { savePrefs(); setPrefView("list"); }} disabled={busy} style={{ ...emberBtn, opacity: busy ? 0.6 : 1 }}>{busy ? "Saving..." : "Done"}</button>
+          </div>
+        )}
+        {data && tab === "prefs" && prefView === "cuisines" && (
+          <div>
+            <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>Pick the cuisines you cook and eat most.</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{CUISINES.map((c) => <button key={c} onClick={() => toggleCuisine(c)} style={chip(cuisine.indexOf(c) >= 0)}>{c}</button>)}</div>
+            <button onClick={() => { savePrefs(); setPrefView("list"); }} disabled={busy} style={{ ...emberBtn, opacity: busy ? 0.6 : 1 }}>{busy ? "Saving..." : "Done"}</button>
+          </div>
+        )}
+        {data && tab === "prefs" && prefView === "likes" && (
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.5, flex: 1, paddingRight: 10 }}>What you usually eat, love, or avoid. Kai reads this for every estimate.</div>
+              <button onClick={startDictation} aria-label="Dictate" style={{ width: 38, height: 38, borderRadius: 999, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid " + (listening ? "color-mix(in srgb, var(--danger) 45%, transparent)" : CB), background: listening ? "color-mix(in srgb, var(--danger) 12%, transparent)" : CARD, color: listening ? "var(--danger)" : MUTED, cursor: "pointer" }}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="2" width="6" height="12" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v4" /></svg></button>
             </div>
+            <textarea value={typical} onChange={(e) => setTypical(e.target.value)} rows={5} placeholder="e.g. Oats + whey mornings, dal-roti-sabzi lunches, paneer often. No mushrooms, low oil." style={{ ...inp, resize: "vertical", lineHeight: 1.5 }} />
+            {(existingLikes || existingDislikes) && <div style={{ fontSize: 11, color: FAINTER, marginTop: 10, lineHeight: 1.5 }}>{existingLikes ? "Likes: " + existingLikes : ""}{existingLikes && existingDislikes ? " / " : ""}{existingDislikes ? "Dislikes: " + existingDislikes : ""}</div>}
+            <button onClick={() => { savePrefs(); setPrefView("list"); }} disabled={busy} style={{ ...emberBtn, opacity: busy ? 0.6 : 1 }}>{busy ? "Saving..." : "Done"}</button>
+          </div>
+        )}
 
-            {!pAdding ? (
-              <button onClick={() => { resetPantryAdd(); setPAdding(true); }} style={{ width: "100%", marginTop: 12, padding: 12, borderRadius: 12, border: "1px dashed " + IB, background: "transparent", color: ACCENT, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>+ Add a pantry default</button>
+        {data && tab === "pantry" && !pAdding && (
+          <div>
+            <KaiNote text="Your pantry teaches Kai your kitchen. Estimates default to these items first." />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "16px 0 10px" }}>
+              <div style={label11}>MY STAPLES{pantry.length ? " (" + pantry.length + ")" : ""}</div>
+              <button onClick={() => { resetPantryAdd(); setPAdding(true); }} style={{ background: "transparent", border: "none", fontSize: 12, fontWeight: 700, color: ACCENT_LT, cursor: "pointer" }}>+ Add item</button>
+            </div>
+            {pantry.length ? (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {pantry.map((it) => <div key={it.id} style={{ fontSize: 12.5, fontWeight: 600, background: CARD, border: "1px solid " + CB, borderRadius: 999, padding: "8px 14px", color: BODY }}>{cap(it.label || it.category)}</div>)}
+              </div>
             ) : (
-              <div style={{ marginTop: 12, background: CARD, border: "1px solid " + CB, borderRadius: 14, padding: 13 }}>
-                <div style={{ ...tiny, marginBottom: 6 }}>Category</div>
-                <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>
-                  {CATS.map((c) => <button key={c} onClick={() => setPCat(c)} style={{ ...chip(pCat === c), padding: "6px 10px", fontSize: 11 }}>{c}</button>)}
-                </div>
-                <input value={pCat} onChange={(e) => setPCat(e.target.value)} placeholder="or type a category" style={{ ...inp, marginBottom: 10 }} />
+              <div style={{ background: CARD, border: "1px solid " + CB, borderRadius: 18, padding: "18px 16px", textAlign: "center", fontSize: 12.5, color: MUTED }}>No staples yet. Add the products you keep at home.</div>
+            )}
 
-                <div style={{ ...tiny, marginBottom: 6 }}>Find your product</div>
-                <input value={pQ} onChange={(e) => setPQ(e.target.value)} placeholder="search e.g. paneer, whey, milk…" style={inp} />
-                {!pPicked && pFoods.length > 0 && (
-                  <div style={{ marginTop: 8, maxHeight: 150, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
-                    {pFoods.map((f) => (
-                      <button key={f.id} onClick={() => applyFood(f)} style={{ textAlign: "left", background: INSET, border: "1px solid " + CB, borderRadius: 10, padding: "8px 10px", cursor: "pointer" }}>
-                        <span style={{ fontSize: 12.5, fontWeight: 600, color: BODY }}>{f.name}</span>
-                        <span style={{ fontSize: 10.5, color: FAINT }}> · {f.kcal} kcal · P {f.protein}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {!pPicked && pQ.trim() && pFoods.length === 0 && (
-                  <button onClick={aiPantryFood} disabled={busy} style={{ ...softBtn, marginTop: 8, opacity: busy ? 0.6 : 1 }}>{busy ? "Estimating…" : "✨ Estimate “" + pQ.trim() + "” with AI"}</button>
-                )}
+            <div style={{ ...label11, margin: "20px 0 10px" }}>BEHAVIOR</div>
+            <div style={{ background: CARD, border: "1px solid " + CB, borderRadius: 20, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ flex: 1 }}><div style={{ fontSize: 13.5, fontWeight: 600, color: H }}>Prefer pantry in estimates</div><div style={{ fontSize: 11.5, color: MUTED, marginTop: 1 }}>Describe & photo match pantry items first</div></div>
+              <Switch on={referDefault} onClick={() => setReferDefault((x) => !x)} />
+            </div>
+            <button onClick={savePrefs} disabled={busy} style={{ ...emberBtn, opacity: busy ? 0.6 : 1 }}>{busy ? "Saving..." : "Save pantry"}</button>
+          </div>
+        )}
 
-                <div style={{ ...tiny, margin: "12px 0 6px" }}>Or scan the nutrition label</div>
-                {camOn ? (
-                  <div style={{ borderRadius: 12, overflow: "hidden", background: "#000" }}>
-                    <video ref={videoRef} playsInline muted style={{ width: "100%", display: "block", maxHeight: 280, objectFit: "cover" }} />
-                    <div style={{ display: "flex", gap: 8, padding: 8 }}>
-                      <button onClick={stopCam} style={{ flex: 1, padding: 10, borderRadius: 10, border: "1px solid " + CB, background: CHIP_IDLE, color: MUTED, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
-                      <button onClick={captureLabel} style={{ flex: 2, padding: 10, borderRadius: 10, border: "none", background: ACCENT, color: "#fff", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>📸 Capture label</button>
+        {data && tab === "pantry" && pAdding && (
+          <div>
+            {pantry.length > 0 && (
+              <>
+                <div style={{ ...label11, marginBottom: 10 }}>YOUR DEFAULTS</div>
+                <div style={{ background: CARD, border: "1px solid " + CB, borderRadius: 20, overflow: "hidden", marginBottom: 18 }}>
+                  {pantry.map((it, i) => (
+                    <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderBottom: i < pantry.length - 1 ? "1px solid " + INSET : "none" }}>
+                      <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: H }}>{cap(it.category)} <span style={{ fontWeight: 600, color: FAINT }}>/ {it.label}</span></div><div style={{ fontSize: 11, color: FAINT, marginTop: 1 }}>{it.kcal} kcal / P{it.protein} / C{it.carbs} / F{it.fats}{it.basis === "per_100g" ? " / per 100g" : ""}</div></div>
+                      <button onClick={() => delPantry(it)} aria-label="Remove" style={{ width: 28, height: 28, borderRadius: 999, border: "none", background: SURF3, color: FAINT, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
                     </div>
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <label style={{ flex: 1, textAlign: "center", border: "1px dashed " + IB, borderRadius: 11, padding: "11px 8px", cursor: "pointer", background: INSET, color: ACCENT_LT, fontSize: 12, fontWeight: 700 }}>📁 Upload label
-                      <input type="file" accept="image/*" onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) scanUpload(f); }} style={{ display: "none" }} />
-                    </label>
-                    <button onClick={startCam} style={{ flex: 1, border: "1px dashed " + IB, borderRadius: 11, padding: "11px 8px", cursor: "pointer", background: INSET, color: ACCENT_LT, fontSize: 12, fontWeight: 700 }}>📷 Camera</button>
-                  </div>
-                )}
-                {scanBusy && <div style={{ fontSize: 11, color: FAINT, marginTop: 6 }}>✨ Reading label…</div>}
+                  ))}
+                </div>
+              </>
+            )}
 
-                <div style={{ ...tiny, margin: "12px 0 4px" }}>Label</div>
-                <input value={pLabel} onChange={(e) => setPLabel(e.target.value)} placeholder="e.g. Amul High-Protein Paneer" style={inp} />
-                <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
-                  <Field lbl="Cal" v={pKcal} on={setPKcal} />
-                  <Field lbl="Prot" v={pPro} on={setPPro} color={PROT} />
-                  <Field lbl="Carb" v={pCar} on={setPCar} color={CARB} />
-                  <Field lbl="Fat" v={pFat} on={setPFat} color={FAT} />
-                  <Field lbl="Fibr" v={pFib} on={setPFib} color={FIBR} />
-                </div>
-                <div style={{ fontSize: 10.5, color: FAINTER, marginTop: 6 }}>{pBasis === "per_serving" ? "Per serving (from the label)." : "Per 100g (or per piece/serving if picked/scanned)."}</div>
-                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                  <button onClick={() => { resetPantryAdd(); setPAdding(false); }} style={{ flex: 1, padding: 11, borderRadius: 12, border: "1px solid " + CB, background: CHIP_IDLE, color: MUTED, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
-                  <button onClick={savePantryItem} disabled={busy} style={{ flex: 1, padding: 11, borderRadius: 12, border: "none", background: ACCENT, color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>{busy ? "Saving…" : "Save default"}</button>
-                </div>
+            <div style={{ ...label11, marginBottom: 10 }}>CATEGORY</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{CATS.map((c) => <button key={c} onClick={() => setPCat(c)} style={chip(pCat === c)}>{cap(c)}</button>)}</div>
+            <input value={pCat} onChange={(e) => setPCat(e.target.value)} placeholder="or type a category" style={{ ...inp, marginTop: 10 }} />
+
+            <div style={{ ...label11, margin: "18px 0 10px" }}>FIND YOUR PRODUCT</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, background: CARD, border: "1.5px solid " + (pQ ? ACCENT : CB), borderRadius: 16, padding: "12px 15px" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={FAINT} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+              <input value={pQ} onChange={(e) => setPQ(e.target.value)} placeholder="Search e.g. paneer, whey, milk..." style={{ flex: 1, border: "none", background: "transparent", color: BODY, fontSize: 13, outline: "none" }} />
+            </div>
+            {!pPicked && pFoods.length > 0 && (
+              <div style={{ marginTop: 10, background: CARD, border: "1px solid " + CB, borderRadius: 18, overflow: "hidden" }}>
+                {pFoods.slice(0, 6).map((f, i) => (
+                  <button key={f.id} onClick={() => applyFood(f)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", background: "transparent", border: "none", borderBottom: i < Math.min(pFoods.length, 6) - 1 ? "1px solid " + INSET : "none", cursor: "pointer", textAlign: "left" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 700, color: H }}>{f.name}</div><div style={{ fontSize: 11, color: FAINT, marginTop: 1 }}>{f.kcal} kcal / P{f.protein}</div></div>
+                    <div style={{ width: 30, height: 30, borderRadius: 999, background: CHIP_SEL, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={ACCENT_LT} strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg></div>
+                  </button>
+                ))}
               </div>
             )}
+            {!pPicked && pQ.trim() && pFoods.length === 0 && (
+              <button onClick={aiPantryFood} disabled={busy} style={{ width: "100%", marginTop: 10, padding: 12, borderRadius: 14, border: "1px solid " + CHIP_SEL_B, background: CHIP_SEL, color: ACCENT_LT, fontSize: 12.5, fontWeight: 700, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>{busy ? "Estimating..." : "Estimate \"" + pQ.trim() + "\" with AI"}</button>
+            )}
+
+            <div style={{ ...label11, margin: "18px 0 10px" }}>OR SCAN THE NUTRITION LABEL</div>
+            {camOn ? (
+              <div style={{ borderRadius: 16, overflow: "hidden", background: "#000" }}>
+                <video ref={videoRef} playsInline muted style={{ width: "100%", display: "block", maxHeight: 280, objectFit: "cover" }} />
+                <div style={{ display: "flex", gap: 8, padding: 10 }}>
+                  <button onClick={stopCam} style={{ flex: 1, padding: 11, borderRadius: 12, border: "1px solid " + CB, background: CHIP_IDLE, color: MUTED, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+                  <button onClick={captureLabel} style={{ flex: 2, padding: 11, borderRadius: 12, border: "none", background: ACCENT, color: "#fff", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>Capture label</button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: 12 }}>
+                <label style={{ flex: 1, background: CHIP_SEL, borderRadius: 16, padding: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, cursor: "pointer", color: ACCENT_LT, fontSize: 13, fontWeight: 800 }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M12 3v13M7 8l5-5 5 5" /></svg>Upload label
+                  <input type="file" accept="image/*" onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) scanUpload(f); }} style={{ display: "none" }} />
+                </label>
+                <button onClick={startCam} style={{ flex: 1, background: ACCENT, borderRadius: 16, padding: 14, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, border: "none", cursor: "pointer", color: "#fff", fontSize: 13, fontWeight: 800 }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="3.4" /></svg>Camera
+                </button>
+              </div>
+            )}
+            {scanBusy && <div style={{ fontSize: 11, color: FAINT, marginTop: 8 }}>Reading label...</div>}
+
+            <div style={{ ...label11, margin: "18px 0 10px" }}>LABEL</div>
+            <input value={pLabel} onChange={(e) => setPLabel(e.target.value)} placeholder="e.g. Amul High-Protein Paneer" style={inp} />
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <Field lbl="CAL" v={pKcal} on={setPKcal} />
+              <Field lbl="PROT" v={pPro} on={setPPro} />
+              <Field lbl="CARB" v={pCar} on={setPCar} />
+              <Field lbl="FAT" v={pFat} on={setPFat} />
+              <Field lbl="FIBER" v={pFib} on={setPFib} />
+            </div>
+            <div style={{ fontSize: 11, color: FAINTER, marginTop: 8 }}>{pBasis === "per_serving" ? "Per serving (from the label)." : "Per 100g, or per piece/serving if picked or scanned."}</div>
+            <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
+              <button onClick={() => { resetPantryAdd(); setPAdding(false); }} style={{ flex: 1, padding: 14, borderRadius: 16, border: "1px solid " + CB, background: CARD, color: MUTED, fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+              <button onClick={savePantryItem} disabled={busy} style={{ flex: 2, padding: 14, borderRadius: 16, border: "none", background: ACCENT, color: "#fff", fontSize: 13.5, fontWeight: 800, cursor: "pointer", boxShadow: "0 6px 18px color-mix(in srgb, var(--ember) 35%, transparent)", opacity: busy ? 0.6 : 1 }}>{busy ? "Saving..." : "Save default"}</button>
+            </div>
           </div>
         )}
       </div>
