@@ -257,7 +257,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
     setLoading(true);
     try { const b = await wkSession(editSessionId); setBundle(b); seedInputs(b.sets); setView("log"); } finally { setLoading(false); }
   }, [editSessionId, seedInputs]);
-  useEffect(() => { if (editSessionId) loadEditSession(); else loadHome(); }, [editSessionId, loadEditSession, loadHome]);
+  useEffect(() => { if (editSessionId) loadEditSession(); else if (!autoStart) loadHome(); }, [editSessionId, loadEditSession, loadHome, autoStart]);
 
   // Launch directly into a session when opened from the Workouts home (quick start / plan / routine). One-shot.
   const autoStartedRef = useRef(false);
@@ -337,7 +337,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
           try { localStorage.setItem(`hos_rest_map:${b.session.id}`, JSON.stringify(map)); } catch { /* ignore */ }
         } catch { /* ignore */ }
       }
-    } finally { setBusy(false); }
+    } finally { setBusy(false); setLoading(false); }
   }
 
   // ---- optimistic set ops (instant local update, background persist) ----
