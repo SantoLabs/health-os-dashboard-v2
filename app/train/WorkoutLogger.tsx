@@ -178,7 +178,7 @@ function ExercisePicker({ onPick, onPickMany, placeholder }: { onPick: (e: { nam
   );
 }
 
-export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio, autoStart }: { editSessionId?: string; onExitEdit?: () => void; onOpenCardio?: (intent: "workout" | "routine", startMode: "describe" | "build") => void; autoStart?: { plan_id?: string; routine_id?: string; title?: string } | null } = {}) {
+export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio, autoStart, resume, onExit }: { editSessionId?: string; onExitEdit?: () => void; onOpenCardio?: (intent: "workout" | "routine", startMode: "describe" | "build") => void; autoStart?: { plan_id?: string; routine_id?: string; title?: string } | null; resume?: boolean; onExit?: () => void } = {}) {
   const [view, setView] = useState<View>(editSessionId ? "log" : "home");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -267,6 +267,13 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
     startFrom(autoStart);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoStart, editSessionId]);
+
+  // Resume an in-progress session straight into the log view when reopened from the Workouts home. One-shot.
+  const resumedRef = useRef(false);
+  useEffect(() => {
+    if (!resume || editSessionId || resumedRef.current) return;
+    if (bundle?.session) { resumedRef.current = true; setView("log"); }
+  }, [resume, editSessionId, bundle?.session]);
 
   useEffect(() => {
     if (view === "log" && !editSessionId && bundle?.session?.started_at) {
@@ -480,7 +487,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
   async function doDiscard() {
     if (!bundle?.session) return;
     setBusy(true);
-    try { await wkDiscard(bundle.session.id); setDiscarding(false); if (editSessionId) { onExitEdit?.(); } else { setView("home"); await loadHome(); } } finally { setBusy(false); }
+    try { await wkDiscard(bundle.session.id); setDiscarding(false); if (editSessionId) { onExitEdit?.(); } else if (onExit) { onExit(); } else { setView("home"); await loadHome(); } } finally { setBusy(false); }
   }
   async function saveTitle() {
     const t = (titleEdit || "").trim();
@@ -603,7 +610,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
             ))}
           </div>
         ) : <div className="subtle tiny" style={{ marginTop: 12 }}>No PRs this time — consistency is what compounds. Logged and counted.</div>}
-        <button onClick={() => { setCelebrate(null); setRoutinePrompt(null); setView("home"); loadHome(); }} style={{ ...btn(ACCENT), width: "100%", marginTop: 14, padding: 12 }}>Done</button>
+        <button onClick={() => { setCelebrate(null); setRoutinePrompt(null); if (onExit) { onExit(); } else { setView("home"); loadHome(); } }} style={{ ...btn(ACCENT), width: "100%", marginTop: 14, padding: 12 }}>Done</button>
         {routinePrompt ? (
           <div style={{ position: "fixed", inset: 0, zIndex: 500, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
             <div style={{ width: "100%", maxWidth: 360, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 14, padding: 18 }}>
@@ -652,7 +659,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
       <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "var(--bg)", display: "flex", flexDirection: "column" }}>
         <div style={{ borderBottom: "1px solid var(--line)", background: "var(--bg)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", width: "100%", maxWidth: 480, margin: "0 auto" }}>
-            <button onClick={() => { if (editSessionId) { onExitEdit?.(); } else { setView("home"); loadHome(); } }} aria-label="Back" style={{ width: 34, height: 34, borderRadius: 9, flex: "0 0 auto", cursor: "pointer", background: "var(--surface-2)", border: "1px solid var(--line)", color: "var(--text)", fontSize: 20, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
+            <button onClick={() => { if (editSessionId) { onExitEdit?.(); } else if (onExit) { onExit(); } else { setView("home"); loadHome(); } }} aria-label="Back" style={{ width: 34, height: 34, borderRadius: 9, flex: "0 0 auto", cursor: "pointer", background: "var(--surface-2)", border: "1px solid var(--line)", color: "var(--text)", fontSize: 20, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
             {titleEdit !== null ? (
               <input autoFocus value={titleEdit} onChange={(e) => setTitleEdit(e.target.value)} onBlur={saveTitle} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} style={{ flex: 1, minWidth: 0, background: "var(--surface-2)", color: "inherit", border: "1px solid var(--line)", borderRadius: 8, padding: "7px 10px", fontSize: 15, fontWeight: 800, fontFamily: "inherit" }} />
             ) : (
