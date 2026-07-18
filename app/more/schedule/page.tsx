@@ -59,6 +59,27 @@ const T: Record<TKey, { label: string; emoji: string; color: string; cat: string
 const PICK_TYPES: TKey[] = ["run", "swim", "strength", "hiit", "cycle", "yoga", "walk", "rest", "travel", "race", "social", "custom"];
 const WORKOUT_TYPES: TKey[] = ["run", "swim", "strength", "hiit", "cycle", "yoga", "walk", "rest", "custom"];
 const EVENT_TYPES: TKey[] = ["travel", "race", "social"];
+const DISPLAY_TRAINING: TKey[] = ["run", "swim", "strength", "hiit", "cycle", "yoga", "walk", "rest"];
+const DISPLAY_LIFE: TKey[] = ["travel", "race", "social", "custom"];
+function typeGroup(k: TKey) { return DISPLAY_LIFE.includes(k) ? "Life" : "Training"; }
+const ICON: Record<TKey, string> = {
+  run: '<path d="M13.5 5a2 2 0 1 0 2-2M9 20l3-6 3 2 2 5M6 12l3-4 4 2 3-1"/>',
+  swim: '<path d="M2 18c2 1.5 4 1.5 6 0s4-1.5 6 0 4 1.5 6 0M6 13l4-5 6 3 3-2"/><circle cx="17" cy="6" r="1.8"/>',
+  strength: '<path d="M6.5 6.5v11M17.5 6.5v11M3 9v6M21 9v6M6.5 12h11"/>',
+  hiit: '<path d="M13 2L5 13h5l-2 9 8-11h-5l2-9Z"/>',
+  cycle: '<circle cx="6" cy="16" r="3.4"/><circle cx="18" cy="16" r="3.4"/><path d="M6 16l4-7h5l3 7M10 9l2 7"/>',
+  yoga: '<circle cx="12" cy="5" r="1.8"/><path d="M12 8v5M12 13l-5 4M12 13l5 4M6 10c2 1.5 4 2 6 2s4-.5 6-2"/>',
+  walk: '<circle cx="13" cy="4" r="1.8"/><path d="M10 20l2-6 2.5 2 1.5 4M9 12l2.5-4 3 1.5 2.5 3.5M13 10l-1 4"/>',
+  rest: '<path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10Z"/>',
+  travel: '<path d="M10.5 13.5L4 11l1.5-1.5L11 10l4.5-4.5a1.6 1.6 0 0 1 2.3 2.3L13.5 12l.5 5.5L12.5 19l-2.5-6.5L7 15l.5 2L6 18.5 4.5 15 1 13.5 2.5 12l2 .5Z"/>',
+  race: '<circle cx="12" cy="15" r="5"/><path d="M12 12.2l.9 1.8 2 .3-1.45 1.4.35 2-1.8-.95-1.8.95.35-2-1.45-1.4 2-.3ZM8.5 10.5L6 3h4l2 4 2-4h4l-2.5 7.5"/>',
+  social: '<circle cx="9" cy="8" r="3"/><path d="M3.5 20c.5-3.5 2.5-5.5 5.5-5.5s5 2 5.5 5.5"/><path d="M16 5.5a3 3 0 0 1 0 5.2M17.5 14.8c1.7.8 2.8 2.5 3 5.2"/>',
+  meeting: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M16 3v4M8 3v4M3 11h18"/>',
+  custom: '<path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4ZM18.5 15l.9 2.3 2.1.7-2.1.7-.9 2.3-.9-2.3-2.1-.7 2.1-.7ZM5 16l.7 1.8 1.8.7-1.8.7L5 21l-.7-1.8-1.8-.7 1.8-.7Z"/>',
+};
+function TypeIco({ k, size = 17, color = "currentColor" }: { k: TKey; size?: number; color?: string }) {
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: ICON[k] }} />;
+}
 
 function normType(s: string): TKey {
   const k = (s || "").toLowerCase().replace(/[^a-z]/g, "");
@@ -165,6 +186,10 @@ const SCOPED_CSS = `
 .schd-grid-scroll::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:3px;}
 @keyframes schd-in{from{transform:translateY(16px);opacity:.6}to{transform:translateY(0);opacity:1}}
 @media (prefers-reduced-motion: reduce){.schd-sheet{animation:none!important;}}
+.schd details.typedd > summary{list-style:none;}
+.schd details.typedd > summary::-webkit-details-marker{display:none;}
+.schd .chev{transition:transform .18s ease;}
+.schd details.typedd[open] .chev{transform:rotate(180deg);}
 `;
 
 /* ════════════════════ component ════════════════════ */
@@ -655,7 +680,7 @@ export default function SchedulePage() {
   function renderSheet() {
     return (
       <div onClick={closeSheet} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 1500, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-        <div className="schd-sheet" onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "20px 20px 0 0", padding: "18px 16px max(18px,env(safe-area-inset-bottom))", maxHeight: "90vh", overflowY: "auto", animation: "schd-in .22s ease" }}>
+        <div className="schd-sheet" onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: "var(--bg)", border: "1px solid var(--line)", borderRadius: "20px 20px 0 0", padding: "18px 16px max(18px,env(safe-area-inset-bottom))", maxHeight: "90vh", overflowY: "auto", animation: "schd-in .22s ease" }}>
           <div style={{ position: "sticky", top: 0, display: "flex", justifyContent: "flex-end", zIndex: 5 }}>
             <button onClick={closeSheet} aria-label="Close" style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid var(--line-2)", background: CHIPBG, color: T2, fontSize: 15, lineHeight: 1, cursor: "pointer" }}>✕</button>
           </div>
@@ -669,56 +694,75 @@ export default function SchedulePage() {
     if (!draft) return null;
     const tkey = draft.tkey || "run";
     const isEvent = isEventType(tkey);
-    const isWorkout = T[tkey].cat === "workout";
     const allDay = !!draft.allDay;
     const fMon = monOf(draft.session_date || today);
-    const gridTypes = mode === "edit" ? (isEvent ? EVENT_TYPES : WORKOUT_TYPES) : PICK_TYPES;
+    const allowed = mode === "edit" ? (isEvent ? EVENT_TYPES : WORKOUT_TYPES) : PICK_TYPES;
+    const gTrain = DISPLAY_TRAINING.filter((k) => allowed.includes(k));
+    const gLife = DISPLAY_LIFE.filter((k) => allowed.includes(k));
+    const col = T[tkey].color;
+    const card: React.CSSProperties = { background: CARD, border: "1px solid var(--line)", borderRadius: 14 };
+    const pick = (k: TKey, e: React.MouseEvent<HTMLButtonElement>) => { setD({ tkey: k, session_type: T[k].label }); const d = e.currentTarget.closest("details") as HTMLDetailsElement | null; if (d) d.open = false; };
+    const seg = (on: boolean): React.CSSProperties => ({ fontSize: 11.5, fontWeight: on ? 800 : 600, border: "none", cursor: "pointer", borderRadius: 999, padding: "7px 14px", background: on ? CARD : "transparent", color: on ? T1 : T3, boxShadow: on ? "0 2px 6px rgba(0,0,0,.08)" : "none" });
+    const menuCol = (title: string, ks: TKey[]) => (
+      <div style={{ flex: 1 }}>
+        <div style={{ padding: "8px 12px 4px", fontSize: 10, fontWeight: 700, color: T4, letterSpacing: ".08em" }}>{title}</div>
+        {ks.map((k) => { const sel = tkey === k; return (
+          <button key={k} onClick={(e) => pick(k, e)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", border: "none", background: sel ? hexA(T[k].color, .14) : "transparent", cursor: "pointer", textAlign: "left" }}>
+            <TypeIco k={k} size={16} color={sel ? T[k].color : T3} />
+            <span style={{ flex: 1, fontSize: 13, fontWeight: sel ? 800 : 600, color: sel ? chipTxt(T[k].color) : T1 }}>{T[k].label}</span>
+            {sel && <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke={T[k].color} strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5L20 6" /></svg>}
+          </button>
+        ); })}
+      </div>
+    );
     return (
       <>
-        <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 4 }}>{mode === "edit" ? "Edit" : "New entry"}</div>
-        <div style={{ fontSize: 11.5, color: T3, marginBottom: 14 }}>{isEvent ? "Blocks time on your calendar and gives the coach travel/busy context." : "Added to your calendar (committed) so a plan regenerate won't move it."}</div>
+        <div style={{ fontSize: 19, fontWeight: 800, letterSpacing: "-.02em" }}>{mode === "edit" ? "Edit" : "Add to plan"}</div>
+        <div style={{ fontSize: 11.5, color: T3, marginTop: 3 }}>{isEvent ? "Blocks time on your calendar and gives the coach travel / busy context." : "Committed to your calendar so a plan regenerate won't move it."}</div>
 
         <label style={fl}>Type</label>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6 }}>
-          {gridTypes.map((k) => { const t = T[k]; const sel = tkey === k; return (
-            <button key={k} onClick={() => setD({ tkey: k, session_type: t.label })} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 2px", borderRadius: 12, cursor: "pointer", background: sel ? hexA(t.color, .18) : CHIPBG, border: "1px solid " + (sel ? hexA(t.color, .6) : "var(--line)"), color: "var(--text)" }}><span style={{ fontSize: 18 }}>{t.emoji}</span><span style={{ fontSize: 9, color: T3 }}>{t.label}</span></button>
-          ); })}
-        </div>
+        <details className="typedd">
+          <summary style={{ ...card, listStyle: "none", padding: "10px 12px", display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+            <span style={{ width: 32, height: 32, borderRadius: 10, background: hexA(col, .14), display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}><TypeIco k={tkey} size={17} color={col} /></span>
+            <span style={{ flex: 1 }}><span style={{ display: "block", fontSize: 13.5, fontWeight: 800, color: T1 }}>{T[tkey].label}</span><span style={{ display: "block", fontSize: 10.5, color: T3 }}>{typeGroup(tkey)}</span></span>
+            <svg className="chev" width={13} height={13} viewBox="0 0 24 24" fill="none" stroke={T3} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+          </summary>
+          <div style={{ ...card, marginTop: 6, display: "flex", overflow: "hidden" }}>
+            {menuCol("Training", gTrain)}
+            {gLife.length > 0 && <div style={{ width: 1, background: "var(--line)", flex: "none" }} />}
+            {gLife.length > 0 && menuCol("Life", gLife)}
+          </div>
+        </details>
 
         <label style={fl}>{isEvent ? "Title" : "What you'll do"}</label>
-        <input value={draft.activity || ""} onChange={(e) => setD({ activity: e.target.value })} placeholder={isEvent ? "e.g. Flight to Phuket" : "e.g. 6×800m at threshold"} style={inp} />
+        <input value={draft.activity || ""} onChange={(e) => setD({ activity: e.target.value })} placeholder={isEvent ? "e.g. Flight to Phuket" : "e.g. 6×800m at threshold"} style={{ ...card, width: "100%", padding: "12px 14px", fontSize: 14, color: T1, outline: "none" }} />
 
         <label style={fl}>Day</label>
-        <div className="hscroll" style={{ marginTop: 5 }}>
+        <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
           {[0, 1, 2, 3, 4, 5, 6].map((i) => { const dt = addDays(fMon, i); const sel = draft.session_date === dt; return (
-            <button key={dt} onClick={() => setD({ session_date: dt })} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, minWidth: 44, padding: "8px 0", borderRadius: 11, border: "1px solid " + (sel ? "transparent" : "var(--line)"), background: sel ? A : CHIPBG, color: sel ? "#fff" : T2, cursor: "pointer", flex: "none" }}><span style={{ fontSize: 11, fontWeight: 700 }}>{DOW[i].slice(0, 2)}</span><span style={{ fontSize: 14, fontWeight: 700 }}>{num(dt)}</span></button>
+            <button key={dt} onClick={() => setD({ session_date: dt })} style={{ flex: 1, textAlign: "center", borderRadius: 12, padding: "7px 0", cursor: "pointer", border: sel ? "none" : "1px solid var(--line)", background: sel ? A : CARD, boxShadow: sel ? "0 4px 12px " + hexA("#d96f4e", .3) : "none" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: sel ? "rgba(255,255,255,.85)" : T3 }}>{DOW[i].slice(0, 2)}</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: sel ? "#fff" : T1, marginTop: 1 }}>{num(dt)}</div>
+            </button>
           ); })}
         </div>
-        <input type="date" value={draft.session_date || ""} onChange={(e) => setD({ session_date: e.target.value })} style={{ ...inp, marginTop: 8 }} />
+        <input type="date" value={draft.session_date || ""} onChange={(e) => setD({ session_date: e.target.value })} style={{ ...card, width: "100%", padding: "11px 14px", marginTop: 8, fontSize: 13.5, fontWeight: 700, color: T1, outline: "none" }} />
 
-        <label style={fl}>All day</label>
-        <button onClick={() => setD(allDay ? { allDay: false, start_time: draft.start_time || "07:00", end_time: draft.end_time || "08:00" } : { allDay: true })} style={{ width: "100%", padding: "12px 14px", borderRadius: 11, cursor: "pointer", fontWeight: 700, fontSize: 14, border: "1px solid " + (allDay ? "transparent" : "var(--line-2)"), background: allDay ? A : CHIPBG, color: allDay ? "#fff" : T2, display: "flex", alignItems: "center", justifyContent: "space-between" }}><span>{allDay ? "All-day — no set time" : "Has a start & end time"}</span><span style={{ fontSize: 12, opacity: .85 }}>{allDay ? "ON" : "OFF"}</span></button>
-
-        {!allDay && (
-          <div style={{ display: "flex", gap: 8 }}>
-            <div style={{ flex: 1 }}><label style={fl}>Start</label><input type="time" value={draft.start_time || "07:00"} onChange={(e) => setD({ start_time: e.target.value })} style={inp} /></div>
-            <div style={{ flex: 1 }}><label style={fl}>End</label><input type="time" value={draft.end_time || "08:00"} onChange={(e) => setD({ end_time: e.target.value })} style={inp} /></div>
+        <label style={fl}>Time</label>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ display: "flex", background: CHIPBG, borderRadius: 999, padding: 3, flex: "none" }}>
+            <button onClick={() => setD({ allDay: false, start_time: draft.start_time || "07:00", end_time: draft.end_time || "08:00" })} style={seg(!allDay)}>Timed</button>
+            <button onClick={() => setD({ allDay: true })} style={seg(allDay)}>All day</button>
           </div>
-        )}
+          {!allDay && <>
+            <input type="time" value={draft.start_time || "07:00"} onChange={(e) => setD({ start_time: e.target.value })} style={{ ...card, flex: 1, minWidth: 0, padding: "10px 12px", fontSize: 13, fontWeight: 700, color: T1, outline: "none" }} />
+            <span style={{ color: T4, fontSize: 12, flex: "none" }}>–</span>
+            <input type="time" value={draft.end_time || "08:00"} onChange={(e) => setD({ end_time: e.target.value })} style={{ ...card, flex: 1, minWidth: 0, padding: "10px 12px", fontSize: 13, fontWeight: 700, color: T1, outline: "none" }} />
+          </>}
+        </div>
 
-        {isWorkout && (
-          <>
-            <label style={fl}>Intensity</label>
-            <div style={{ display: "flex", gap: 8 }}>{["easy", "moderate", "hard"].map((k) => <button key={k} onClick={() => setD({ intensity: draft.intensity === k ? null : k })} style={chipStyle(draft.intensity === k, { flex: 1, textAlign: "center", color: draft.intensity === k ? "#fff" : INT[k] })}>{k}</button>)}</div>
-            <label style={fl}>Effort</label>
-            <div className="hscroll" style={{ marginTop: 5 }}>{EFFORTS.map((k) => <button key={k} onClick={() => setD({ focus: draft.focus === k ? null : k })} style={chipStyle(draft.focus === k)}>{k}</button>)}</div>
-            <label style={fl}>Distance (km, optional)</label>
-            <input inputMode="decimal" value={draft.distance_m != null ? String(draft.distance_m / 1000) : ""} onChange={(e) => { const v = e.target.value.replace(/[^0-9.]/g, ""); setD({ distance_m: v ? Math.round(parseFloat(v) * 1000) : null }); }} placeholder="e.g. 8" style={inp} />
-          </>
-        )}
-
-        <button onClick={saveDraft} disabled={busy || !draft.session_date} style={{ width: "100%", border: "none", color: "#fff", font: "700 15px 'Plus Jakarta Sans',sans-serif", padding: 15, borderRadius: 14, cursor: "pointer", background: A, marginTop: 16 }}>{busy ? "Saving…" : mode === "edit" ? "Save changes" : "Add to calendar"}</button>
-        <button onClick={closeSheet} style={{ width: "100%", padding: 12, borderRadius: 12, border: "none", background: "none", color: T3, fontWeight: 600, cursor: "pointer", marginTop: 8 }}>Cancel</button>
+        <button onClick={saveDraft} disabled={busy || !draft.session_date} style={{ width: "100%", border: "none", color: "#fff", font: "800 15px 'Plus Jakarta Sans',sans-serif", padding: 15, borderRadius: 16, cursor: "pointer", background: A, marginTop: 18, boxShadow: "0 6px 18px " + hexA("#d96f4e", .35) }}>{busy ? "Saving…" : mode === "edit" ? "Save changes" : "Add to plan"}</button>
+        <button onClick={closeSheet} style={{ width: "100%", padding: 12, borderRadius: 12, border: "none", background: "none", color: T3, fontWeight: 700, fontSize: 12.5, cursor: "pointer", marginTop: 8 }}>Cancel</button>
       </>
     );
   }
