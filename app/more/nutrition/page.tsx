@@ -8,11 +8,11 @@ import Adherence from "./Adherence";
 import Setup from "./Setup";
 
 /* ---- design tokens (mapped from the Nutrition spec) ---- */
-const CARD = "#101626", INSET = "#0e1320", CB = "#1a2232", IB = "#1f2838";
-const H = "#f3f6fb", BODY = "#e8ecf3", MUTED = "#aeb6c4", FAINT = "#7b8597", FAINTER = "#5c6573", DIS = "#4b5462";
-const ACCENT = "#4f9cf9", ACCENT_LT = "#7fb0ff", CHIP_SEL = "#13203a", CHIP_SEL_B = "#294063", CHIP_IDLE = "#141b29", CHIP_IDLE_B = "#222c3d";
-const PROT = "#5b9bff", CARB = "#f3b14e", FAT = "#f0735a", FIBR = "#46c79a", TRACK = "#1b2333";
-const ON = "#46c79a", PARTIAL = "#f3b14e", MISS = "#e0574b";
+const CARD = "var(--surface)", INSET = "var(--bg)", CB = "var(--line)", IB = "var(--line-2)";
+const H = "var(--text)", BODY = "var(--text)", MUTED = "var(--text-2)", FAINT = "var(--muted)", FAINTER = "var(--faint)", DIS = "var(--faint)";
+const ACCENT = "var(--ember)", ACCENT_LT = "var(--ember-strong)", CHIP_SEL = "var(--ember-tint)", CHIP_SEL_B = "color-mix(in srgb, var(--ember) 35%, transparent)", CHIP_IDLE = "var(--surface-2)", CHIP_IDLE_B = "var(--line-2)";
+const PROT = "#4a86e8", CARB = "#cf8a2e", FAT = "#d85c42", FIBR = "#3aa17e", TRACK = "var(--surface-2)";
+const ON = "var(--success)", PARTIAL = "var(--gold)", MISS = "var(--danger)";
 
 const card: CSSProperties = { background: CARD, border: "1px solid " + CB, borderRadius: 16, padding: 14 };
 const label: CSSProperties = { fontSize: 9, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: FAINT };
@@ -103,7 +103,7 @@ export default function NutritionPage() {
 
   return (
     <Screen title="Nutrition">
-      {err && <div style={{ ...card, borderColor: "#5a2532", color: "#ff9aa5", marginBottom: 10, fontSize: 12.5 }}>{err}</div>}
+      {err && <div style={{ ...card, borderColor: "color-mix(in srgb, var(--danger) 40%, transparent)", color: "var(--danger)", marginBottom: 10, fontSize: 12.5 }}>{err}</div>}
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: MUTED }}>{week ? monOf(week.days[0].date) + (monOf(week.days[0].date) !== monOf(week.days[6].date) ? " – " + monOf(week.days[6].date) : "") : ""}</div>
@@ -137,8 +137,8 @@ export default function NutritionPage() {
       )}
 
       {gaps.length > 0 && (
-        <button onClick={() => jumpTo(gaps[0])} style={{ width: "100%", textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between", background: "#1b1606", border: "1px solid #4a3a12", borderRadius: 13, padding: "10px 13px", marginBottom: 12, cursor: "pointer" }}>
-          <span style={{ fontSize: 12.5, color: "#f3cf8e", fontWeight: 600 }}>🗓️ {gaps.length} unlogged {gaps.length === 1 ? "day" : "days"} this past week</span>
+        <button onClick={() => jumpTo(gaps[0])} style={{ width: "100%", textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between", background: "color-mix(in srgb, var(--gold) 12%, transparent)", border: "1px solid color-mix(in srgb, var(--gold) 35%, transparent)", borderRadius: 13, padding: "10px 13px", marginBottom: 12, cursor: "pointer" }}>
+          <span style={{ fontSize: 12.5, color: "var(--gold)", fontWeight: 600 }}>🗓️ {gaps.length} unlogged {gaps.length === 1 ? "day" : "days"} this past week</span>
           <span style={{ fontSize: 11.5, fontWeight: 800, color: PARTIAL }}>Backfill →</span>
         </button>
       )}
@@ -165,7 +165,7 @@ export default function NutritionPage() {
           <span style={label}>Calories{sel !== today ? " · " + nice(sel) : ""}</span>
           <span style={{ fontSize: 13, fontWeight: 700, color: H, fontVariantNumeric: "tabular-nums" }}>{Math.round(tot ? tot.calories : 0)} <span style={{ color: FAINTER, fontWeight: 600 }}>/ {t ? t.calories : 0} kcal</span></span>
         </div>
-        <Bar pct={t && t.calories ? ((tot ? tot.calories : 0) / t.calories) * 100 : 0} color="#cdd5e3" h={7} />
+        <Bar pct={t && t.calories ? ((tot ? tot.calories : 0) / t.calories) * 100 : 0} color={ACCENT} h={7} />
       </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
@@ -176,7 +176,7 @@ export default function NutritionPage() {
       </div>
 
       {proteinLeft > 0 && day && day.meals.length > 0 && (
-        <div style={{ background: "linear-gradient(90deg, #13203a, #101626)", border: "1px solid " + CHIP_SEL_B, borderRadius: 14, padding: "11px 13px", marginBottom: 12 }}>
+        <div style={{ background: "linear-gradient(90deg, var(--ember-tint), var(--surface))", border: "1px solid " + CHIP_SEL_B, borderRadius: 14, padding: "11px 13px", marginBottom: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: ACCENT_LT }}>🎯 {proteinLeft}g protein to go</div>
           <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>{Math.round(tot ? tot.protein : 0)} of {t ? t.protein : 0}g — log a protein-rich item to close the gap.</div>
         </div>
@@ -217,7 +217,7 @@ export default function NutritionPage() {
         </div>
       )}
 
-      <button onClick={openAdd} aria-label="Add food" className="app-fab" style={{ position: "fixed", right: "max(16px, calc(50vw - 224px))", bottom: "calc(140px + env(safe-area-inset-bottom, 0px))", width: 56, height: 56, borderRadius: 28, border: "none", background: ACCENT, color: "#fff", fontSize: 28, lineHeight: 1, cursor: "pointer", boxShadow: "0 6px 18px rgba(79,156,249,.45)", zIndex: 30 }}>＋</button>
+      <button onClick={openAdd} aria-label="Add food" className="app-fab" style={{ position: "fixed", right: "max(16px, calc(50vw - 224px))", bottom: "calc(140px + env(safe-area-inset-bottom, 0px))", width: 56, height: 56, borderRadius: 28, border: "none", background: ACCENT, color: "#fff", fontSize: 28, lineHeight: 1, cursor: "pointer", boxShadow: "var(--shadow-fab)", zIndex: 30 }}>＋</button>
 
       {addOpen && <AddFlow date={sel} editMeal={editMeal} onClose={() => setAddOpen(false)} onSaved={onSaved} />}
       {adhOpen && <Adherence onClose={() => setAdhOpen(false)} />}
