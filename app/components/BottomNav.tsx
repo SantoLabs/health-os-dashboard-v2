@@ -26,15 +26,34 @@ const TABS = [
   { href: "/more/schedule", key: "schedule", label: "Schedule" },
 ];
 
-const MORE_ITEMS = [
-  { href: "/trends", icon: "📈", label: "Trends" },
-  { href: "/sleep", icon: "😴", label: "Sleep" },
-  { href: "/more/goals", icon: "🏁", label: "Goals & Body" },
-  { href: "/more/medical", icon: "🩺", label: "Medical" },
-  { href: "/more/coach", icon: "🔔", label: "Reminders & Memory" },
-  { href: "/more/ask", icon: "💬", label: "Ask Health AI" },
-  { href: "/more/mind", icon: "🧘", label: "Mind" },
-  { href: "/more/profile", icon: "⚙️", label: "Profile" },
+const MP_ICONS: Record<string, ReactNode> = {
+  trends: (<svg viewBox="0 0 24 24" {...sw}><path d="M3 17l6-6 4 4 8-8" /><path d="M17 7h4v4" /></svg>),
+  sleep: (<svg viewBox="0 0 24 24" {...sw}><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" /></svg>),
+  medical: (<svg viewBox="0 0 24 24" {...sw}><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z" /></svg>),
+  mind: (<svg viewBox="0 0 24 24" {...sw}><path d="M20 4C9 4 4 9 4 15c0 3 2 5 5 5 6 0 11-5 11-16z" /><path d="M9 20c0-6 3-10 8-12" /></svg>),
+  ask: (<svg viewBox="0 0 24 24" {...sw}><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /><path d="M12 8v6M9 11h6" /></svg>),
+  reminders: (<svg viewBox="0 0 24 24" {...sw}><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></svg>),
+  profile: (<svg viewBox="0 0 24 24" {...sw}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></svg>),
+  logout: (<svg viewBox="0 0 24 24" {...sw}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></svg>),
+};
+
+const MORE_SECTIONS = [
+  {
+    title: "Health",
+    items: [
+      { href: "/trends", key: "trends", label: "Trends" },
+      { href: "/sleep", key: "sleep", label: "Sleep" },
+      { href: "/more/medical", key: "medical", label: "Medical" },
+      { href: "/more/mind", key: "mind", label: "Mind" },
+    ],
+  },
+  {
+    title: "Assistant",
+    items: [
+      { href: "/more/ask", key: "ask", label: "Ask Health AI" },
+      { href: "/more/coach", key: "reminders", label: "Reminders & Memory" },
+    ],
+  },
 ];
 
 export default function BottomNav() {
@@ -82,28 +101,44 @@ export default function BottomNav() {
       <div className="more-wrap" ref={wrapRef}>
         {open && (
           <div className="more-pop" role="menu">
-            {MORE_ITEMS.map((it) => (
+            {MORE_SECTIONS.map((sec) => (
+              <div key={sec.title} className="more-pop-group">
+                <div className="more-sec-label">{sec.title}</div>
+                {sec.items.map((it) => (
+                  <Link
+                    key={it.href}
+                    href={it.href}
+                    className={path.startsWith(it.href) ? "more-pop-item active" : "more-pop-item"}
+                    role="menuitem"
+                    onClick={() => setOpen(false)}
+                  >
+                    <span className="mp-icon">{MP_ICONS[it.key]}</span>
+                    <span>{it.label}</span>
+                  </Link>
+                ))}
+              </div>
+            ))}
+            <div className="more-pop-group">
+              <div className="more-sec-label">Account</div>
               <Link
-                key={it.href}
-                href={it.href}
-                className="more-pop-item"
+                href="/more/profile"
+                className={path.startsWith("/more/profile") ? "more-pop-item active" : "more-pop-item"}
                 role="menuitem"
                 onClick={() => setOpen(false)}
               >
-                <span className="mp-icon">{it.icon}</span>
-                <span>{it.label}</span>
+                <span className="mp-icon">{MP_ICONS.profile}</span>
+                <span>Profile</span>
               </Link>
-            ))}
-            <div className="more-pop-sep" />
-            <button
-              type="button"
-              className="more-pop-item more-pop-logout"
-              role="menuitem"
-              onClick={() => { setOpen(false); logout(); }}
-            >
-              <span className="mp-icon">🚪</span>
-              <span>Log out</span>
-            </button>
+              <button
+                type="button"
+                className="more-pop-item more-pop-logout"
+                role="menuitem"
+                onClick={() => { setOpen(false); logout(); }}
+              >
+                <span className="mp-icon">{MP_ICONS.logout}</span>
+                <span>Log out</span>
+              </button>
+            </div>
           </div>
         )}
         <button
