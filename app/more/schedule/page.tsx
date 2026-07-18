@@ -203,6 +203,7 @@ export default function SchedulePage() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [monthOffset, setMonthOffset] = useState(0);
   const [selDate, setSelDate] = useState(today);
+  const dayScrollRef = useRef<HTMLDivElement>(null);
 
   const [week, setWeek] = useState<WeekResp | null>(null);
   const [weekErr, setWeekErr] = useState<string | null>(null);
@@ -239,6 +240,14 @@ export default function SchedulePage() {
   }, []);
   useEffect(() => { loadWeek(weekMon); }, [weekMon, loadWeek]);
   useEffect(() => { if (view === "day") { const wo = Math.round((parse(monOf(selDate)).getTime() - parse(monOf(today)).getTime()) / 6.048e8); if (wo !== weekOffset) setWeekOffset(wo); } }, [view, selDate]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (view !== "day") return;
+    const el = dayScrollRef.current; if (!el) return;
+    const n = istNow();
+    const targetH = selDate === today ? n.getHours() : 6;
+    const id = requestAnimationFrame(() => { el.scrollTop = Math.max(0, targetH * 54 - 90); });
+    return () => cancelAnimationFrame(id);
+  }, [view, selDate, week]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadMonth = useCallback(async (anchorMonthOffset: number) => {
     const base = new Date(2000, 0, 1); base.setFullYear(parse(today).getFullYear(), parse(today).getMonth() + anchorMonthOffset, 1);
@@ -452,9 +461,7 @@ export default function SchedulePage() {
     const allDay = items.filter((b) => b.allDay);
     const unscheduled = items.filter((b) => b.kind === "session" && b.hour == null && !b.allDay);
     const timed = items.filter((b) => !b.allDay && b.hour != null).sort((a, b) => (((a.hour ?? 0) - (b.hour ?? 0)) || ((a.min ?? 0) - (b.min ?? 0))));
-    const ends = timed.map((b) => (b.hour ?? 0) + Math.max(1, Math.ceil((((b.min ?? 0) + (b.dur ?? 45)) / 60))));
-    const H0 = Math.min(6, ...timed.map((b) => b.hour ?? 6));
-    const H1 = Math.max(21, ...ends);
+    const H0 = 0, H1 = 23;
     const hours: number[] = []; for (let h = H0; h <= H1; h++) hours.push(h);
     const hourH = 54;
     const now = istNow(); const showNow = selDate === today && now.getHours() >= H0 && now.getHours() <= H1;
@@ -491,28 +498,32 @@ export default function SchedulePage() {
           </div>
         )}
 
-        <div style={{ ...SS.card, position: "relative", height: hours.length * hourH + 16, padding: "8px 12px", overflow: "hidden" }}>
-          {hours.map((h, i) => (
-            <div key={h} style={{ position: "absolute", left: 12, right: 12, top: 8 + i * hourH, display: "flex", alignItems: "flex-start", gap: 10 }}>
-              <div style={{ width: 40, fontSize: 10, color: T4, textAlign: "right", transform: "translateY(-5px)", flex: "none" }}>{fmtHour(h)}</div>
-              <div style={{ flex: 1, borderTop: "1px solid var(--line)" }} />
-            </div>
-          ))}
-          {timed.map((b) => { const t = T[b.tkey]; const isMeet = b.cat === "meeting"; const done = b.status === "done"; const skip = b.status === "skipped"; const top = 8 + ((b.hour ?? 0) - H0) * hourH + ((b.min ?? 0) / 60) * hourH; const ht = Math.max(((b.dur ?? 45) / 60) * hourH, 34); const em = (b.hour ?? 0) * 60 + (b.min ?? 0) + (b.dur ?? 0); const col = isMeet ? "var(--muted)" : t.color; return (
-            <div key={b.id} onClick={() => openPeek(b)} style={{ position: "absolute", left: 62, right: 12, top, height: ht, background: isMeet ? "var(--surface-2)" : hexA(t.color, .14), border: "1px solid " + (isMeet ? "var(--line-2)" : hexA(t.color, .3)), borderLeft: "3px solid " + col, borderRadius: 10, padding: "6px 12px", cursor: "pointer", overflow: "hidden", opacity: skip ? .6 : 1, zIndex: 5 }}>
-              <div style={{ fontSize: 12, fontWeight: 800, color: isMeet ? "var(--text-2)" : chipTxt(t.color), whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textDecoration: skip ? "line-through" : "none" }}>{done ? "🎉 " : t.emoji + " "}{b.title}</div>
-              <div style={{ fontSize: 10.5, color: T3, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtT(b.hour ?? 0, b.min ?? 0)}{b.dur ? " – " + fmtT(Math.floor(em / 60) % 24, em % 60) : ""}{b.dist ? " · " + km(b.dist) : ""}{isMeet ? " · Google" : ""}</div>
-            </div>
-          ); })}
-          {showNow && (
-            <div style={{ position: "absolute", left: 50, right: 12, top: nowTop, display: "flex", alignItems: "center", zIndex: 8 }}>
-              <div style={{ width: 8, height: 8, borderRadius: 999, background: "var(--ember)", flex: "none" }} />
-              <div style={{ flex: 1, height: 2, background: "var(--ember)" }} />
-              <div style={{ fontSize: 9.5, fontWeight: 800, color: "var(--ember-strong)", background: "color-mix(in srgb, var(--ember) 16%, transparent)", borderRadius: 999, padding: "2px 7px", marginLeft: 4, flex: "none" }}>{fmtT(now.getHours(), now.getMinutes())}</div>
-            </div>
-          )}
+        <div ref={dayScrollRef} style={{ ...SS.card, position: "relative", height: "58vh", padding: 0, overflowY: "auto", overflowX: "hidden" }}>
+          <div style={{ position: "relative", height: hours.length * hourH + 16, padding: "8px 12px" }}>
+            {hours.map((h, i) => (
+              <div key={h} onClick={() => openAdd(selDate, h)} style={{ position: "absolute", left: 12, right: 12, top: 8 + i * hourH, height: hourH, cursor: "pointer" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                  <div style={{ width: 40, fontSize: 10, color: T4, textAlign: "right", transform: "translateY(-5px)", flex: "none" }}>{fmtHour(h)}</div>
+                  <div style={{ flex: 1, borderTop: "1px solid var(--line)" }} />
+                </div>
+              </div>
+            ))}
+            {timed.map((b) => { const t = T[b.tkey]; const isMeet = b.cat === "meeting"; const done = b.status === "done"; const skip = b.status === "skipped"; const top = 8 + ((b.hour ?? 0) - H0) * hourH + ((b.min ?? 0) / 60) * hourH; const ht = Math.max(((b.dur ?? 45) / 60) * hourH, 34); const em = (b.hour ?? 0) * 60 + (b.min ?? 0) + (b.dur ?? 0); const col = isMeet ? "var(--muted)" : t.color; return (
+              <div key={b.id} onClick={() => openPeek(b)} style={{ position: "absolute", left: 62, right: 12, top, height: ht, background: isMeet ? "var(--surface-2)" : hexA(t.color, .14), border: "1px solid " + (isMeet ? "var(--line-2)" : hexA(t.color, .3)), borderLeft: "3px solid " + col, borderRadius: 10, padding: "6px 12px", cursor: "pointer", overflow: "hidden", opacity: skip ? .6 : 1, zIndex: 5 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, color: isMeet ? "var(--text-2)" : chipTxt(t.color), whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textDecoration: skip ? "line-through" : "none" }}>{done ? "🎉 " : t.emoji + " "}{b.title}</div>
+                <div style={{ fontSize: 10.5, color: T3, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtT(b.hour ?? 0, b.min ?? 0)}{b.dur ? " – " + fmtT(Math.floor(em / 60) % 24, em % 60) : ""}{b.dist ? " · " + km(b.dist) : ""}{isMeet ? " · Google" : ""}</div>
+              </div>
+            ); })}
+            {showNow && (
+              <div style={{ position: "absolute", left: 50, right: 12, top: nowTop, display: "flex", alignItems: "center", zIndex: 8, pointerEvents: "none" }}>
+                <div style={{ width: 8, height: 8, borderRadius: 999, background: "var(--ember)", flex: "none" }} />
+                <div style={{ flex: 1, height: 2, background: "var(--ember)" }} />
+                <div style={{ fontSize: 9.5, fontWeight: 800, color: "var(--ember-strong)", background: "color-mix(in srgb, var(--ember) 16%, transparent)", borderRadius: 999, padding: "2px 7px", marginLeft: 4, flex: "none" }}>{fmtT(now.getHours(), now.getMinutes())}</div>
+              </div>
+            )}
+          </div>
         </div>
-        <div style={{ color: T4, fontSize: 11, textAlign: "center", marginTop: 10 }}>Tap a block to edit · use ＋ to add.</div>
+        <div style={{ color: T4, fontSize: 11, textAlign: "center", marginTop: 10 }}>Tap a block to edit, or an empty hour to add.</div>
       </>
     );
   }
