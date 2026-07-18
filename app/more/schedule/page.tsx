@@ -244,7 +244,7 @@ export default function SchedulePage() {
     if (view !== "day") return;
     const el = dayScrollRef.current; if (!el) return;
     const n = istNow();
-    const targetH = selDate === today ? n.getHours() : 6;
+    const targetH = selDate === today ? n.getUTCHours() : 6;
     const id = requestAnimationFrame(() => { el.scrollTop = Math.max(0, targetH * 54 - 90); });
     return () => cancelAnimationFrame(id);
   }, [view, selDate, week]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -464,8 +464,8 @@ export default function SchedulePage() {
     const H0 = 0, H1 = 23;
     const hours: number[] = []; for (let h = H0; h <= H1; h++) hours.push(h);
     const hourH = 54;
-    const now = istNow(); const showNow = selDate === today && now.getHours() >= H0 && now.getHours() <= H1;
-    const nowTop = 8 + (now.getHours() - H0) * hourH + (now.getMinutes() / 60) * hourH;
+    const now = istNow(); const showNow = selDate === today && now.getUTCHours() >= H0 && now.getUTCHours() <= H1;
+    const nowTop = 8 + (now.getUTCHours() - H0) * hourH + (now.getUTCMinutes() / 60) * hourH;
     const rel = selDate === today ? "Today" : selDate === addDays(today, 1) ? "Tomorrow" : selDate === addDays(today, -1) ? "Yesterday" : DOW[dowMon(selDate)];
     return (
       <>
@@ -518,7 +518,7 @@ export default function SchedulePage() {
               <div style={{ position: "absolute", left: 50, right: 12, top: nowTop, display: "flex", alignItems: "center", zIndex: 8, pointerEvents: "none" }}>
                 <div style={{ width: 8, height: 8, borderRadius: 999, background: "var(--ember)", flex: "none" }} />
                 <div style={{ flex: 1, height: 2, background: "var(--ember)" }} />
-                <div style={{ fontSize: 9.5, fontWeight: 800, color: "var(--ember-strong)", background: "color-mix(in srgb, var(--ember) 16%, transparent)", borderRadius: 999, padding: "2px 7px", marginLeft: 4, flex: "none" }}>{fmtT(now.getHours(), now.getMinutes())}</div>
+                <div style={{ fontSize: 9.5, fontWeight: 800, color: "var(--ember-strong)", background: "color-mix(in srgb, var(--ember) 16%, transparent)", borderRadius: 999, padding: "2px 7px", marginLeft: 4, flex: "none" }}>{fmtT(now.getUTCHours(), now.getUTCMinutes())}</div>
               </div>
             )}
           </div>
