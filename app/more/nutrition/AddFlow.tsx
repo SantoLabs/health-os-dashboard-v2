@@ -103,7 +103,7 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [pantry, setPantry] = useState<Pantry[]>([]); const [referPantry, setReferPantry] = useState(true);
 
-  const [text, setText] = useState(""); const [estNote, setEstNote] = useState<string | null>(null); const [photo, setPhoto] = useState<string | null>(null);
+  const [text, setText] = useState(""); const [estNote, setEstNote] = useState<string | null>(null); const [photo, setPhoto] = useState<string | null>(null); const [listening, setListening] = useState(false);
   const [camOn, setCamOn] = useState(false); const videoRef = useRef<HTMLVideoElement | null>(null); const streamRef = useRef<MediaStream | null>(null);
   const [aiMode, setAiMode] = useState(false); const [aiQty, setAiQty] = useState(1); const [aiUnit, setAiUnit] = useState("serving");
   const [tmpls, setTmpls] = useState<Tmpl[] | null>(null); const [hist, setHist] = useState<Hist[] | null>(null);
@@ -230,15 +230,30 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
   async function editDelete() { if (!editMeal) return; setBusy(true); setErr(null); try { const day = await nutriPost("delete", { id: editMeal.id, date }); onSaved(day); onClose(); } catch (e) { setErr((e as Error).message); setBusy(false); } }
 
   const title = view === "edit" ? "Edit entry" : view === "manual" ? "Manual entry" : view === "describe" ? "Describe meal" : view === "photo" ? "Snap a photo" : view === "templates" ? "Quick-add" : view === "history" ? "Recent foods" : "Add food";
+  function dictate() {
+    const SR: any = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    if (!SR) { setErr("Voice input isn't supported here. Please type instead."); return; }
+    try {
+      const rec = new SR(); rec.lang = "en-IN"; rec.interimResults = false; rec.continuous = false; setListening(true);
+      rec.onresult = (e: any) => { const txt = Array.from(e.results).map((x: any) => x[0].transcript).join(" "); setText((t) => (t ? t + " " : "") + txt); };
+      rec.onerror = () => setListening(false); rec.onend = () => setListening(false); rec.start();
+    } catch { setListening(false); }
+  }
   const showBack = view !== "method" && view !== "edit";
 
   // shared per-entry pantry toggle (A) — local overrides the global default
   function renderPantryToggle() {
     return (
-      <button onClick={() => setUsePantry((x) => !x)} style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: INSET, border: "1px solid " + CB, borderRadius: 10, padding: "9px 11px", marginTop: 10, cursor: "pointer" }}>
-        <span style={{ fontSize: 12, color: MUTED }}>🧺 Use my pantry <span style={{ color: FAINTER, fontWeight: 400 }}>· compose from your items</span></span>
-        <span style={{ fontSize: 11, fontWeight: 800, color: usePantry ? FIBR : FAINTER }}>{usePantry ? "ON" : "OFF"}</span>
-      </button>
+      <div style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, background: CARD, border: "1px solid " + CB, borderRadius: 16, padding: "12px 14px", marginTop: 12 }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={usePantry ? ACCENT : FAINT} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M4 9h16l-1.4 10.3a2 2 0 0 1-2 1.7H7.4a2 2 0 0 1-2-1.7zM8 9V6a4 4 0 0 1 8 0v3" /></svg>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: H }}>Use my pantry</div>
+          <div style={{ fontSize: 11.5, color: MUTED, marginTop: 1 }}>Compose from your items</div>
+        </div>
+        <button onClick={() => setUsePantry((x) => !x)} aria-label="Toggle pantry" style={{ width: 44, height: 26, borderRadius: 999, border: "none", background: usePantry ? ACCENT : CHIP_IDLE_B, position: "relative", cursor: "pointer", flexShrink: 0 }}>
+          <span style={{ position: "absolute", top: 3, left: usePantry ? 21 : 3, width: 20, height: 20, borderRadius: 999, background: "#fff", transition: "left .15s", boxShadow: "0 1px 3px rgba(0,0,0,.2)" }} />
+        </button>
+      </div>
     );
   }
 
@@ -327,16 +342,21 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
 
         {/* METHOD TILES */}
         {view === "method" && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 14 }}>
-            {([["Describe", "✍️", "describe", "Type what you ate"], ["Photo", "📷", "photo", "Snap your plate"], ["Templates", "⚡", "templates", "Your quick-adds"], ["Manual", "🔍", "manual", "Search the food list"]] as [string, string, string, string][]).map(([lbl, ic, v, desc]) => (
-              <button key={v} onClick={() => { setView(v); setItems([]); setEstNote(null); if (v === "templates") loadTemplates(); if (v === "history") loadHistory(); }} style={{ textAlign: "left", background: CARD, border: "1px solid " + CB, borderRadius: 16, padding: "16px 14px", cursor: "pointer" }}>
-                <div style={{ fontSize: 24 }}>{ic}</div>
-                <div style={{ fontSize: 14, fontWeight: 800, color: H, marginTop: 8 }}>{lbl}</div>
-                <div style={{ ...sub, marginTop: 2 }}>{desc}</div>
-              </button>
-            ))}
-            <button onClick={() => { setView("history"); loadHistory(); }} style={{ gridColumn: "1 / span 2", background: "transparent", border: "1px dashed " + IB, borderRadius: 14, padding: "11px", cursor: "pointer", color: ACCENT, fontSize: 12.5, fontWeight: 700 }}>↻ Re-log a recent food</button>
-          </div>
+          <>
+            <div style={{ marginTop: 14, display: "flex", alignItems: "flex-end", gap: 8, background: CARD, border: "1px solid " + CB, borderRadius: 18, padding: "12px 12px 12px 15px" }}>
+              <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder="Describe what you ate..." style={{ flex: 1, boxSizing: "border-box", background: "transparent", border: "none", color: BODY, fontSize: 14, outline: "none", resize: "none", lineHeight: 1.4, padding: "3px 0", fontFamily: "inherit" }} />
+              <button onClick={dictate} aria-label="Dictate" style={{ width: 38, height: 38, borderRadius: 999, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid " + (listening ? "color-mix(in srgb, var(--danger) 45%, transparent)" : CB), background: listening ? "color-mix(in srgb, var(--danger) 12%, transparent)" : CHIP_IDLE, color: listening ? "var(--danger)" : MUTED, cursor: "pointer" }}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4"/></svg></button>
+              <button onClick={() => { if (text.trim()) { setView("describe"); setItems([]); setEstNote(null); runEstimate("describe"); } }} disabled={!text.trim()} aria-label="Estimate" style={{ width: 38, height: 38, borderRadius: 999, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: ACCENT, color: "#fff", cursor: text.trim() ? "pointer" : "default", opacity: text.trim() ? 1 : 0.45 }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginTop: 12 }}>
+              {([["Photo", "photo", "M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"], ["Templates", "templates", "M13 2L4 14h6l-1 8 9-12h-6l1-8z"], ["Search", "manual", "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.3-4.3"], ["Recent", "history", "M21 12a9 9 0 1 1-3-6.7M21 3v6h-6M12 8v4l3 2"]] as [string, string, string][]).map(([lbl, v, d]) => (
+                <button key={v} onClick={() => { setView(v); setItems([]); setEstNote(null); if (v === "templates") loadTemplates(); if (v === "history") loadHistory(); }} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 7, background: CARD, border: "1px solid " + CB, borderRadius: 16, padding: "15px 4px", cursor: "pointer" }}>
+                  <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d} />{v === "photo" ? <circle cx="12" cy="13" r="3.2" /> : null}</svg>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, color: H }}>{lbl}</div>
+                </button>
+              ))}
+            </div>
+          </>
         )}
 
         {/* MANUAL */}
@@ -434,11 +454,11 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
               <>
                 {photo && <img src={photo} alt="meal" style={{ width: "100%", display: "block", maxHeight: 240, objectFit: "cover", borderRadius: 14, border: "1px solid " + CB }} />}
                 {renderPantryToggle()}
-                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                  <label style={{ flex: 1, textAlign: "center", border: "1px dashed " + IB, borderRadius: 12, padding: "14px 10px", cursor: "pointer", background: CARD, color: ACCENT_LT, fontSize: 13, fontWeight: 700 }}>📁 Upload photo
+                <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+                  <button onClick={startCam} style={{ flex: 1, border: "none", borderRadius: 16, padding: "18px 8px", cursor: "pointer", background: ACCENT, color: "#fff", fontSize: 13.5, fontWeight: 800, display: "flex", flexDirection: "column", alignItems: "center", gap: 7 }}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="3.2" /></svg>Use camera</button>
+                  <label style={{ flex: 1, textAlign: "center", border: "1px solid " + CB, borderRadius: 16, padding: "18px 8px", cursor: "pointer", background: CARD, color: BODY, fontSize: 13.5, fontWeight: 700, display: "flex", flexDirection: "column", alignItems: "center", gap: 7 }}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M12 3v13M7 8l5-5 5 5" /></svg>Upload photo
                     <input type="file" accept="image/*" onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) { setPhoto(URL.createObjectURL(f)); resizeToB64(f).then((img) => runEstimate("photo", img)).catch(() => runEstimate("photo")); } }} style={{ display: "none" }} />
                   </label>
-                  <button onClick={startCam} style={{ flex: 1, border: "1px dashed " + IB, borderRadius: 12, padding: "14px 10px", cursor: "pointer", background: CARD, color: ACCENT_LT, fontSize: 13, fontWeight: 700 }}>📷 Use camera</button>
                 </div>
               </>
             )}
