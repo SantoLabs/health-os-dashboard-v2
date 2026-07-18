@@ -3,11 +3,11 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { nutriAdherence } from "../../lib/api";
 
-const CARD = "#101626", INSET = "#0e1320", CB = "#1a2232", IB = "#1f2838";
-const H = "#f3f6fb", BODY = "#e8ecf3", MUTED = "#aeb6c4", FAINT = "#7b8597", FAINTER = "#5c6573";
-const ACCENT = "#4f9cf9", ACCENT_LT = "#7fb0ff", CHIP_SEL = "#13203a", CHIP_SEL_B = "#294063", CHIP_IDLE = "#141b29", CHIP_IDLE_B = "#222c3d";
-const PROT = "#5b9bff", CARB = "#f3b14e", FAT = "#f0735a", FIBR = "#46c79a", TRACK = "#1b2333";
-const ON = "#46c79a", PARTIAL = "#f3b14e", MISS = "#e0574b";
+const CARD = "var(--surface)", INSET = "var(--bg)", CB = "var(--line)", IB = "var(--line-2)";
+const H = "var(--text)", BODY = "var(--text)", MUTED = "var(--text-2)", FAINT = "var(--muted)", FAINTER = "var(--faint)";
+const ACCENT = "var(--ember)", ACCENT_LT = "var(--ember-strong)", CHIP_SEL = "var(--ember-tint)", CHIP_SEL_B = "color-mix(in srgb, var(--ember) 35%, transparent)", CHIP_IDLE = "var(--surface-2)", CHIP_IDLE_B = "var(--line-2)";
+const PROT = "#4a86e8", CARB = "#cf8a2e", FAT = "#d85c42", FIBR = "#3aa17e", TRACK = "var(--surface-2)";
+const ON = "var(--success)", PARTIAL = "var(--gold)", MISS = "var(--danger)";
 
 type MacroStat = { avg: number; target: number; pct: number; days_on_target: number };
 type MicroStat = { avg: number; rda: number; pct: number };
@@ -51,7 +51,7 @@ export default function Adherence({ onClose }: { onClose: () => void }) {
           {[7, 30].map((w) => <button key={w} onClick={() => setWindow(w)} style={{ flex: 1, padding: "8px 0", borderRadius: 11, cursor: "pointer", fontSize: 12.5, fontWeight: 700, border: "1px solid " + (window === w ? CHIP_SEL_B : CHIP_IDLE_B), background: window === w ? CHIP_SEL : CHIP_IDLE, color: window === w ? ACCENT_LT : MUTED }}>Last {w} days</button>)}
         </div>
 
-        {err && <div style={{ padding: 10, borderRadius: 10, border: "1px solid #5a2532", background: "#1a0f12", color: "#ff9aa5", fontSize: 12 }}>{err}</div>}
+        {err && <div style={{ padding: 10, borderRadius: 10, border: "1px solid color-mix(in srgb, var(--danger) 40%, transparent)", background: "color-mix(in srgb, var(--danger) 10%, transparent)", color: "var(--danger)", fontSize: 12 }}>{err}</div>}
         {!data && !err && <div style={{ color: FAINT, fontSize: 12.5, textAlign: "center", padding: 24 }}>Loading…</div>}
 
         {data && (
@@ -72,7 +72,7 @@ export default function Adherence({ onClose }: { onClose: () => void }) {
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 12.5, color: MUTED }}>You averaged <span style={{ color: H, fontWeight: 800 }}>{prot ? prot.avg : 0}g</span> protein/day vs your <span style={{ color: H, fontWeight: 800 }}>{prot ? prot.target : 0}g</span> goal.</div>
                     <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: ON, background: "#0e1f18", border: "1px solid #1f3b30", borderRadius: 999, padding: "4px 9px" }}>🔥 {data.streak}-day streak</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: ON, background: "color-mix(in srgb, var(--success) 12%, transparent)", border: "1px solid color-mix(in srgb, var(--success) 35%, transparent)", borderRadius: 999, padding: "4px 9px" }}>🔥 {data.streak}-day streak</span>
                       <span style={{ fontSize: 11, fontWeight: 700, color: ACCENT_LT, background: CHIP_SEL, border: "1px solid " + CHIP_SEL_B, borderRadius: 999, padding: "4px 9px" }}>{prot ? prot.days_on_target : 0}/{data.days_total} days on target</span>
                     </div>
                     <div style={{ fontSize: 11, color: FAINT, marginTop: 8 }}>Logged {data.days_logged} of {data.days_total} days</div>
