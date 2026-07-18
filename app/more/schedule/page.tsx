@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { planWeek, planRange, planPost } from "../../lib/api";
+import { planWeek, planRange, planPost, strengthSessions, cardioActivities, type StrengthSession, type CardioActivityLite } from "../../lib/api";
 import { Screen } from "../../components/Screen";
 
 /* ════════════════════ backend types (health-plan v4) ════════════════════ */
@@ -160,6 +160,39 @@ function eventToItem(e: EventItem): Item {
   };
 }
 
+/* Actuals (logged workouts) merged into the calendar, de-duped against the plan.
+   Strength sessions and cardio activities have no scheduled time, so they land untimed. */
+const ACT_LABEL: Record<string, string> = { run: "Run", cycle: "Cycle", swim: "Swim", walk: "Walk" };
+function normCardioSport(s: string): TKey | null {
+  const k = (s || "").toLowerCase();
+  if (k.startsWith("run")) return "run";
+  if (k.startsWith("cycl") || k.startsWith("bik") || k.startsWith("rid")) return "cycle";
+  if (k.startsWith("swim")) return "swim";
+  if (k.startsWith("walk") || k.startsWith("hik")) return "walk";
+  return null;
+}
+function sportOf(tkey: TKey): string | null {
+  if (tkey === "run" || tkey === "cycle" || tkey === "swim" || tkey === "walk" || tkey === "strength") return tkey;
+  if (tkey === "hiit") return "strength";
+  return null;
+}
+function strengthLabel(s: StrengthSession): string {
+  const nn = (s.name || "").toLowerCase().replace(/[^a-z]/g, "");
+  if (nn.includes("fullbody") || nn.includes("totalbody")) return "Full body";
+  if (nn.includes("push") && !nn.includes("pull")) return "Upper push";
+  if (nn.includes("pull") && !nn.includes("push")) return "Upper pull";
+  if (nn.includes("upper")) return "Upper";
+  if (nn.includes("lower") || nn.includes("leg")) return "Lower";
+  if (nn.includes("core") || nn.includes("abs")) return "Core";
+  return "Strength";
+}
+function actualsToItems(str: StrengthSession[], car: CardioActivityLite[]): Item[] {
+  const out: Item[] = [];
+  for (const s of str) out.push({ id: "act-s-" + s.id, kind: "session", tkey: "strength", title: strengthLabel(s), date: s.date, hour: null, min: 0, dur: 0, intensity: null, effort: null, dist: null, status: "done", committed: true, source: "actual", cat: "workout", allDay: false, actual: null, session: null, event: null });
+  for (const a of car) { const sp = normCardioSport(a.sport); if (!sp) continue; out.push({ id: "act-c-" + a.activity_id, kind: "session", tkey: sp, title: a.name || ACT_LABEL[sp] || T[sp].label, date: a.date, hour: null, min: 0, dur: a.duration_mins ? Math.round(a.duration_mins) : 0, intensity: null, effort: null, dist: a.distance_km != null ? Math.round(a.distance_km * 1000) : null, status: "done", committed: true, source: "actual", cat: "workout", allDay: false, actual: null, session: null, event: null }); }
+  return out;
+}
+
 /* Only sessions the user has sent to the calendar (committed) or already completed show in
    the Week/Month/Schedule views. Uncommitted sessions (e.g. a Kai plan not yet sent) are hidden here.
    Calendar events (Google sync, manual travel/race/social) are always real, so always shown. */
@@ -209,6 +242,8 @@ export default function SchedulePage() {
   const [weekErr, setWeekErr] = useState<string | null>(null);
   const [monthData, setMonthData] = useState<RangeResp | null>(null);
   const [agenda, setAgenda] = useState<RangeResp | null>(null);
+  const [actStr, setActStr] = useState<StrengthSession[]>([]);
+  const [actCar, setActCar] = useState<CardioActivityLite[]>([]);
 
   const [sheet, setSheet] = useState<Sheet>(null);
   const [mode, setMode] = useState<"add" | "edit">("add");
@@ -222,6 +257,7 @@ export default function SchedulePage() {
 
   const showToast = useCallback((t: string) => { setToast(t); }, []);
   useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(null), 2400); return () => clearTimeout(id); }, [toast]);
+  useEffect(() => { let a = true; strengthSessions().then((d) => a && setActStr(d)).catch(() => {}); cardioActivities().then((d) => a && setActCar(d)).catch(() => {}); return () => { a = false; }; }, []);
 
   // Deep-link: ?date=YYYY-MM-DD (e.g. from the Progress → Summary calendar) lands on that week + day.
   useEffect(() => {
@@ -355,10 +391,18 @@ export default function SchedulePage() {
 
 
   /* ════════════════════ derived ════════════════════ */
+  const actualItems = useMemo(() => actualsToItems(actStr, actCar), [actStr, actCar]);
+  const mergeAct = useCallback((planItems: Item[]): Item[] => {
+    if (actualItems.length === 0) return planItems;
+    const planKeys = new Set<string>();
+    for (const p of planItems) { const sp = sportOf(p.tkey); if (sp) planKeys.add(p.date + "|" + sp); }
+    const extra = actualItems.filter((a) => { const sp = sportOf(a.tkey); return !(sp && planKeys.has(a.date + "|" + sp)); });
+    return [...planItems, ...extra];
+  }, [actualItems]);
   const wItems = useMemo(() => {
     if (!week) return [] as Item[];
-    return [...week.sessions.map(sessionToItem), ...week.events.map(eventToItem)];
-  }, [week]);
+    return mergeAct([...week.sessions.map(sessionToItem), ...week.events.map(eventToItem)]);
+  }, [week, mergeAct]);
   const ctx = week?.context;
   const meetingConflict = useCallback((it: Item) => {
     if (it.hour == null) return false;
@@ -536,7 +580,7 @@ export default function SchedulePage() {
     const my = base.getFullYear(), mo = base.getMonth();
     const first = iso(new Date(my, mo, 1)); const gridStart = monOf(first);
     const cells = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
-    const items = (monthData ? [...monthData.sessions.map(sessionToItem), ...monthData.events.map(eventToItem)] : []).filter(onCalendar);
+    const items = mergeAct((monthData ? [...monthData.sessions.map(sessionToItem), ...monthData.events.map(eventToItem)] : []).filter(onCalendar));
     const byDay = new Map<string, Item[]>();
     items.forEach((x) => { if (!byDay.has(x.date)) byDay.set(x.date, []); byDay.get(x.date)!.push(x); });
     return (
@@ -591,7 +635,7 @@ export default function SchedulePage() {
   function renderDayCard() {
     if (!dayCard) return null;
     const d = dayCard;
-    const items = (monthData ? [...monthData.sessions.map(sessionToItem), ...monthData.events.map(eventToItem)] : []).filter(onCalendar).filter((x) => x.date === d).sort((a, b) => (a.hour ?? 99) - (b.hour ?? 99));
+    const items = mergeAct((monthData ? [...monthData.sessions.map(sessionToItem), ...monthData.events.map(eventToItem)] : []).filter(onCalendar)).filter((x) => x.date === d).sort((a, b) => (a.hour ?? 99) - (b.hour ?? 99));
     const rel = d === today ? "Today" : d === addDays(today, 1) ? "Tomorrow" : d === addDays(today, -1) ? "Yesterday" : MON_L[parse(d).getMonth()] + " " + parse(d).getFullYear();
     return (
       <div onClick={() => setDayCard(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 1550, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
@@ -616,7 +660,7 @@ export default function SchedulePage() {
   /* ───────────── SCHEDULE (agenda) ───────────── */
   function renderAgenda() {
     if (!agenda) return <Loading />;
-    const items = [...agenda.sessions.map(sessionToItem), ...agenda.events.map(eventToItem)].filter((x) => x.date >= sunOf(addDays(today, -7)) && onCalendar(x));
+    const items = mergeAct([...agenda.sessions.map(sessionToItem), ...agenda.events.map(eventToItem)].filter((x) => x.date >= sunOf(addDays(today, -7)) && onCalendar(x))).filter((x) => x.date >= sunOf(addDays(today, -7)));
     const byDay = new Map<string, Item[]>();
     items.forEach((x) => { if (!byDay.has(x.date)) byDay.set(x.date, []); byDay.get(x.date)!.push(x); });
     const dayKeys = [...byDay.keys()].sort();
@@ -664,7 +708,7 @@ export default function SchedulePage() {
   function renderPeek() {
     if (!peek) return null;
     const it = peek; const t = T[it.tkey];
-    const isEvent = it.kind === "event"; const isGcal = it.source === "gcal";
+    const isEvent = it.kind === "event"; const isGcal = it.source === "gcal"; const isActual = it.source === "actual"; const readOnly = isGcal || isActual;
     const done = it.status === "done"; const skip = it.status === "skipped";
     const em = (it.hour ?? 0) * 60 + (it.min ?? 0) + (it.dur ?? 0);
     const timeStr = it.allDay ? "All day" : it.hour != null ? fmtT(it.hour, it.min) + (it.dur ? " – " + fmtT(Math.floor(em / 60) % 24, em % 60) : "") : "Unscheduled";
@@ -683,8 +727,8 @@ export default function SchedulePage() {
             </div>
             <button onClick={closePeek} aria-label="Close" style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid var(--line-2)", background: CHIPBG, color: T2, fontSize: 14, cursor: "pointer", flex: "none" }}>✕</button>
           </div>
-          {isGcal ? (
-            <div style={{ fontSize: 12, color: T3, marginTop: 16, textAlign: "center", padding: "10px 0" }}>Read-only — manage this in Google Calendar.</div>
+          {readOnly ? (
+            <div style={{ fontSize: 12, color: T3, marginTop: 16, textAlign: "center", padding: "10px 0" }}>{isActual ? "Logged activity. View it in the Train tab." : "Read-only. Manage this in Google Calendar."}</div>
           ) : (
             <>
               <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
