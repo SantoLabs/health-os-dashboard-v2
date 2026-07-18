@@ -3,11 +3,11 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { nutriProfile, nutriFoods, nutriPost } from "../../lib/api";
 
-const CARD = "#101626", INSET = "#0e1320", CB = "#1a2232", IB = "#1f2838";
-const H = "#f3f6fb", BODY = "#e8ecf3", MUTED = "#aeb6c4", FAINT = "#7b8597", FAINTER = "#5c6573";
-const ACCENT = "#4f9cf9", ACCENT_LT = "#7fb0ff", CHIP_SEL = "#13203a", CHIP_SEL_B = "#294063", CHIP_IDLE = "#141b29", CHIP_IDLE_B = "#222c3d";
-const PROT = "#5b9bff", CARB = "#f3b14e", FAT = "#f0735a", FIBR = "#46c79a", FIBR2 = "#46c79a";
-const LIKE = "#46c79a", LIKE_B = "#1f4d3e", DISLIKE = "#e0574b", DISLIKE_B = "#4d2622";
+const CARD = "var(--surface)", INSET = "var(--bg)", CB = "var(--line)", IB = "var(--line-2)";
+const H = "var(--text)", BODY = "var(--text)", MUTED = "var(--text-2)", FAINT = "var(--muted)", FAINTER = "var(--faint)";
+const ACCENT = "var(--ember)", ACCENT_LT = "var(--ember-strong)", CHIP_SEL = "var(--ember-tint)", CHIP_SEL_B = "color-mix(in srgb, var(--ember) 35%, transparent)", CHIP_IDLE = "var(--surface-2)", CHIP_IDLE_B = "var(--line-2)";
+const PROT = "#4a86e8", CARB = "#cf8a2e", FAT = "#d85c42", FIBR = "#3aa17e", FIBR2 = "#3aa17e";
+const LIKE = "var(--success)", LIKE_B = "color-mix(in srgb, var(--success) 35%, transparent)", DISLIKE = "var(--danger)", DISLIKE_B = "color-mix(in srgb, var(--danger) 35%, transparent)";
 
 type DaySet = { calories: number; protein: number; carbs: number; fats: number; fiber: number };
 type Targets = DaySet & { micros_rda: Record<string, number>; rest?: DaySet; has_rest?: boolean; inputs?: Record<string, number> | null };
@@ -25,7 +25,7 @@ const GOALS = ["cut", "recomp", "maintain", "gain"];
 const numv = (s: string) => Number(s) || 0;
 const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 const tiny: CSSProperties = { fontSize: 9, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: FAINT };
-const inp: CSSProperties = { width: "100%", boxSizing: "border-box", padding: "10px 11px", borderRadius: 10, border: "1px solid " + IB, background: "#0b101b", color: BODY, fontSize: 13.5, outline: "none" };
+const inp: CSSProperties = { width: "100%", boxSizing: "border-box", padding: "10px 11px", borderRadius: 10, border: "1px solid " + IB, background: "var(--surface-2)", color: BODY, fontSize: 13.5, outline: "none" };
 function chip(active: boolean): CSSProperties { return { padding: "8px 12px", borderRadius: 11, cursor: "pointer", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", border: "1px solid " + (active ? CHIP_SEL_B : CHIP_IDLE_B), background: active ? CHIP_SEL : CHIP_IDLE, color: active ? ACCENT_LT : MUTED }; }
 const primary: CSSProperties = { width: "100%", marginTop: 14, padding: 13, borderRadius: 14, border: "none", background: ACCENT, color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer" };
 const softBtn: CSSProperties = { width: "100%", padding: 11, borderRadius: 12, border: "1px solid " + CHIP_SEL_B, background: CHIP_SEL, color: ACCENT_LT, fontSize: 13, fontWeight: 700, cursor: "pointer" };
@@ -49,7 +49,7 @@ function resizeToB64(file: File): Promise<{ image_b64: string; mime: string }> {
 }
 
 function NumIn({ v, on, color }: { v: string; on: (s: string) => void; color?: string }) {
-  return <input value={v} onChange={(e) => on(e.target.value.replace(/[^0-9.-]/g, ""))} inputMode="decimal" placeholder="0" style={{ width: "100%", boxSizing: "border-box", padding: "9px 8px", borderRadius: 10, border: "1px solid " + (color ? "#294063" : IB), background: "#0b101b", color: BODY, fontSize: 13, outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />;
+  return <input value={v} onChange={(e) => on(e.target.value.replace(/[^0-9.-]/g, ""))} inputMode="decimal" placeholder="0" style={{ width: "100%", boxSizing: "border-box", padding: "9px 8px", borderRadius: 10, border: "1px solid " + (color ? CHIP_SEL_B : IB), background: "var(--surface-2)", color: BODY, fontSize: 13, outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />;
 }
 function Field({ lbl, v, on, color }: { lbl: string; v: string; on: (s: string) => void; color?: string }) {
   return <div style={{ flex: 1 }}><div style={{ ...tiny, textAlign: "center", color: color || FAINT, marginBottom: 4 }}>{lbl}</div><NumIn v={v} on={on} color={color} /></div>;
@@ -251,7 +251,7 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
           {[["targets", "Targets"], ["prefs", "Preferences"], ["pantry", "Pantry"]].map(([k, lbl]) => <button key={k} onClick={() => setTab(k)} style={{ flex: 1, padding: "8px 0", borderRadius: 11, cursor: "pointer", fontSize: 12.5, fontWeight: 700, border: "1px solid " + (tab === k ? CHIP_SEL_B : CHIP_IDLE_B), background: tab === k ? CHIP_SEL : CHIP_IDLE, color: tab === k ? ACCENT_LT : MUTED }}>{lbl}</button>)}
         </div>
 
-        {err && <div style={{ marginBottom: 10, padding: 10, borderRadius: 10, border: "1px solid #5a2532", background: "#1a0f12", color: "#ff9aa5", fontSize: 12 }}>{err}</div>}
+        {err && <div style={{ marginBottom: 10, padding: 10, borderRadius: 10, border: "1px solid color-mix(in srgb, var(--danger) 40%, transparent)", background: "color-mix(in srgb, var(--danger) 10%, transparent)", color: "var(--danger)", fontSize: 12 }}>{err}</div>}
         {!data && !err && <div style={{ color: FAINT, fontSize: 12.5, textAlign: "center", padding: 24 }}>Loading…</div>}
 
         {data && tab === "targets" && (
@@ -311,7 +311,7 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "16px 0 6px" }}>
               <div style={tiny}>What you typically eat · likes &amp; dislikes</div>
-              <button onClick={startDictation} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 9, border: "1px solid " + (listening ? "#5a2532" : CHIP_IDLE_B), background: listening ? "#1a0f12" : CHIP_IDLE, color: listening ? "#ff9aa5" : ACCENT_LT, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{listening ? "● Listening…" : "🎤 Speak"}</button>
+              <button onClick={startDictation} style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 9, border: "1px solid " + (listening ? "color-mix(in srgb, var(--danger) 40%, transparent)" : CHIP_IDLE_B), background: listening ? "color-mix(in srgb, var(--danger) 10%, transparent)" : CHIP_IDLE, color: listening ? "var(--danger)" : ACCENT_LT, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>{listening ? "● Listening…" : "🎤 Speak"}</button>
             </div>
             <textarea value={typical} onChange={(e) => setTypical(e.target.value)} rows={3} placeholder="e.g. I usually have idli or oats for breakfast, dal-roti-sabzi lunches, paneer often. Love filter coffee. Dislike mushrooms; no eggs." style={{ ...inp, resize: "vertical", lineHeight: 1.45 }} />
             {(existingLikes || existingDislikes) && (
@@ -324,7 +324,7 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
             <div style={{ marginTop: 14 }}>
               <button onClick={generateMenu} disabled={genBusy} style={{ ...softBtn, opacity: genBusy ? 0.6 : 1 }}>{genBusy ? "Generating…" : "✨ Generate starter menu"}</button>
               <div style={{ fontSize: 10.5, color: FAINTER, marginTop: 6 }}>Built from your cuisines, eating pattern, the notes above &amp; your targets. Tap a dish: once 👍, twice 👎.</div>
-              {genNote && <div style={{ fontSize: 11, color: "#ff9aa5", marginTop: 6 }}>{genNote}</div>}
+              {genNote && <div style={{ fontSize: 11, color: "var(--danger)", marginTop: 6 }}>{genNote}</div>}
               {menu && ["breakfast", "lunch", "dinner", "snacks"].map((k) => (Array.isArray(menu[k]) && menu[k].length ? (
                 <div key={k} style={{ marginTop: 10 }}>
                   <div style={{ ...tiny, marginBottom: 5 }}>{cap(k)}</div>
