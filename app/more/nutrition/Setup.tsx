@@ -100,6 +100,7 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
   const [pLabel, setPLabel] = useState(""); const [pKcal, setPKcal] = useState(""); const [pPro, setPPro] = useState(""); const [pCar, setPCar] = useState(""); const [pFat, setPFat] = useState(""); const [pFib, setPFib] = useState("");
   const [pBasis, setPBasis] = useState("per_100g"); const [pUnitGrams, setPUnitGrams] = useState<Record<string, number>>({}); const [pMicros, setPMicros] = useState<Record<string, number>>({});
   const [scanBusy, setScanBusy] = useState(false); const [camOn, setCamOn] = useState(false);
+  const [pantrySel, setPantrySel] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null); const streamRef = useRef<MediaStream | null>(null);
 
   function hydrate(d: ProfileResp) {
@@ -107,8 +108,13 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
     setCuisine(d.profile.cuisine || []); setPattern(d.profile.eating_pattern || ""); setReferDefault(d.profile.refer_pantry_default !== false);
     setTypical(d.profile.typical_meals || ""); setExistingLikes(d.profile.likes || ""); setExistingDislikes(d.profile.dislikes || "");
     setPantry(d.pantry || []);
-    setMenu(d.profile.starter_menu && (d.profile.starter_menu as any).breakfast ? d.profile.starter_menu : null);
-    setMenuPick({});
+    const m = d.profile.starter_menu && (d.profile.starter_menu as any).breakfast ? d.profile.starter_menu : null;
+    setMenu(m);
+    const likeSet = new Set(String(d.profile.likes || "").split(",").map((s) => s.trim()).filter(Boolean));
+    const disSet = new Set(String(d.profile.dislikes || "").split(",").map((s) => s.trim()).filter(Boolean));
+    const mp: Record<string, number> = {};
+    if (m) for (const meal of ["breakfast", "lunch", "dinner", "snacks"]) for (const dish of ((m as any)[meal] || [])) { if (likeSet.has(dish)) mp[dish] = 1; else if (disSet.has(dish)) mp[dish] = -1; }
+    setMenuPick(mp);
   }
   useEffect(() => { nutriProfile<ProfileResp>().then(hydrate).catch((e) => setErr(e.message)); }, []);
   useEffect(() => {
@@ -191,16 +197,17 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   }
   async function delPantry(it: PantryItem) { try { const r = await nutriPost<{ pantry: PantryItem[] }>("pantry_delete", { id: it.id }); setPantry(r.pantry || []); } catch { /* ignore */ } }
+  function editPantry(it: PantryItem) { setPCat(it.category); setPLabel(it.label || ""); setPKcal(String(it.kcal)); setPPro(String(it.protein)); setPCar(String(it.carbs)); setPFat(String(it.fats)); setPFib(String(it.fiber)); setPBasis(it.basis); setPUnitGrams(it.unit_grams || {}); setPMicros(it.micros || {}); setPPicked(true); setPantrySel(null); setPAdding(true); }
 
   const t = data ? data.targets : null;
   const pct = (g: number, per: number) => (t && t.calories ? Math.round((g * per) / t.calories * 100) + "%" : "-");
   const cuisineSummary = cuisine.length ? cuisine[0] + (cuisine.length > 1 ? " +" + (cuisine.length - 1) : "") : "Not set";
-  const likesSummary = [existingLikes, existingDislikes].filter(Boolean).join(" / ") || "Not set";
+  const likesSummary = typical.trim() || "Not set";
   const inSub = tab === "prefs" && prefView !== "list";
   const subTitle = prefView === "pattern" ? "Eating pattern" : prefView === "cuisines" ? "Cuisines" : prefView === "likes" ? "Likes & dislikes" : "";
   const showBack = inSub || pAdding;
   const title = pAdding ? "Add pantry item" : inSub ? subTitle : "Nutrition settings";
-  function goBack() { if (pAdding) { resetPantryAdd(); setPAdding(false); } else setPrefView("list"); }
+  function goBack() { if (pAdding) { resetPantryAdd(); setPAdding(false); } else { if (tab === "prefs" && prefView !== "list") savePrefs(); setPrefView("list"); } }
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", display: "flex", alignItems: "flex-end", justifyContent: "center", zIndex: 49 }}>
@@ -307,14 +314,12 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
           <div>
             <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>How you eat shapes every estimate and starter menu.</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{PATTERNS.map((p) => <button key={p} onClick={() => setPattern(p)} style={chip(pattern === p)}>{p}</button>)}</div>
-            <button onClick={() => { savePrefs(); setPrefView("list"); }} disabled={busy} style={{ ...emberBtn, opacity: busy ? 0.6 : 1 }}>{busy ? "Saving..." : "Done"}</button>
           </div>
         )}
         {data && tab === "prefs" && prefView === "cuisines" && (
           <div>
             <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>Pick the cuisines you cook and eat most.</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{CUISINES.map((c) => <button key={c} onClick={() => toggleCuisine(c)} style={chip(cuisine.indexOf(c) >= 0)}>{c}</button>)}</div>
-            <button onClick={() => { savePrefs(); setPrefView("list"); }} disabled={busy} style={{ ...emberBtn, opacity: busy ? 0.6 : 1 }}>{busy ? "Saving..." : "Done"}</button>
           </div>
         )}
         {data && tab === "prefs" && prefView === "likes" && (
@@ -324,8 +329,6 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
               <button onClick={startDictation} aria-label="Dictate" style={{ width: 38, height: 38, borderRadius: 999, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid " + (listening ? "color-mix(in srgb, var(--danger) 45%, transparent)" : CB), background: listening ? "color-mix(in srgb, var(--danger) 12%, transparent)" : CARD, color: listening ? "var(--danger)" : MUTED, cursor: "pointer" }}><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="2" width="6" height="12" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v4" /></svg></button>
             </div>
             <textarea value={typical} onChange={(e) => setTypical(e.target.value)} rows={5} placeholder="e.g. Oats + whey mornings, dal-roti-sabzi lunches, paneer often. No mushrooms, low oil." style={{ ...inp, resize: "vertical", lineHeight: 1.5 }} />
-            {(existingLikes || existingDislikes) && <div style={{ fontSize: 11, color: FAINTER, marginTop: 10, lineHeight: 1.5 }}>{existingLikes ? "Likes: " + existingLikes : ""}{existingLikes && existingDislikes ? " / " : ""}{existingDislikes ? "Dislikes: " + existingDislikes : ""}</div>}
-            <button onClick={() => { savePrefs(); setPrefView("list"); }} disabled={busy} style={{ ...emberBtn, opacity: busy ? 0.6 : 1 }}>{busy ? "Saving..." : "Done"}</button>
           </div>
         )}
 
@@ -338,11 +341,28 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
             </div>
             {pantry.length ? (
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {pantry.map((it) => <div key={it.id} style={{ fontSize: 12.5, fontWeight: 600, background: CARD, border: "1px solid " + CB, borderRadius: 999, padding: "8px 14px", color: BODY }}>{cap(it.label || it.category)}</div>)}
+                {pantry.map((it) => { const on = pantrySel === it.id; return <button key={it.id} onClick={() => setPantrySel(on ? null : it.id)} style={{ fontSize: 12.5, fontWeight: 600, background: on ? CHIP_SEL : CARD, border: "1px solid " + (on ? CHIP_SEL_B : CB), borderRadius: 999, padding: "8px 14px", color: on ? ACCENT_LT : BODY, cursor: "pointer" }}>{cap(it.label || it.category)}</button>; })}
               </div>
             ) : (
               <div style={{ background: CARD, border: "1px solid " + CB, borderRadius: 18, padding: "18px 16px", textAlign: "center", fontSize: 12.5, color: MUTED }}>No staples yet. Add the products you keep at home.</div>
             )}
+            {(() => { const it = pantrySel ? pantry.find((p) => p.id === pantrySel) : null; if (!it) return null; const per = it.basis === "per_100g" ? "per 100g" : it.basis === "per_piece" ? "per piece" : "per serving"; return (
+              <div style={{ marginTop: 10, background: CARD, border: "1px solid " + CB, borderRadius: 16, padding: "13px 15px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: H }}>{cap(it.label || it.category)}</div>
+                  <div style={{ fontSize: 11, color: FAINT }}>{per}</div>
+                </div>
+                <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+                  {([["CAL", it.kcal], ["PROT", it.protein], ["CARB", it.carbs], ["FAT", it.fats], ["FIBER", it.fiber]] as [string, number][]).map(([l, v]) => (
+                    <div key={l} style={{ flex: 1, textAlign: "center" }}><div style={{ fontSize: 9.5, fontWeight: 700, color: FAINT, letterSpacing: "0.06em" }}>{l}</div><div style={{ fontSize: 14, fontWeight: 800, color: H, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>{v}</div></div>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                  <button onClick={() => editPantry(it)} style={{ flex: 1, padding: 9, borderRadius: 11, border: "1px solid " + CHIP_SEL_B, background: CHIP_SEL, color: ACCENT_LT, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Edit</button>
+                  <button onClick={() => { delPantry(it); setPantrySel(null); }} style={{ flex: 1, padding: 9, borderRadius: 11, border: "1px solid " + CB, background: CARD, color: "var(--danger)", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Remove</button>
+                </div>
+              </div>
+            ); })()}
 
             <div style={{ ...label11, margin: "20px 0 10px" }}>BEHAVIOR</div>
             <div style={{ background: CARD, border: "1px solid " + CB, borderRadius: 20, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
