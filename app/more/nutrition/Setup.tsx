@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { nutriProfile, nutriFoods, nutriPost } from "../../lib/api";
+import { nutriProfile, nutriFoods, nutriPost, nutriPicksGet, nutriPicksSet } from "../../lib/api";
 
 const CARD = "var(--surface)", INSET = "var(--bg)", CB = "var(--line)";
 const H = "var(--text)", BODY = "var(--text)", MUTED = "var(--text-2)", FAINT = "var(--muted)", FAINTER = "var(--faint)";
@@ -93,7 +93,6 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
   const [typical, setTypical] = useState(""); const [listening, setListening] = useState(false);
   const [menu, setMenu] = useState<any>(null); const [genBusy, setGenBusy] = useState(false); const [genNote, setGenNote] = useState<string | null>(null);
   const [menuPick, setMenuPick] = useState<Record<string, number>>({});
-  const [existingLikes, setExistingLikes] = useState(""); const [existingDislikes, setExistingDislikes] = useState("");
   // pantry
   const [pantry, setPantry] = useState<PantryItem[]>([]);
   const [pAdding, setPAdding] = useState(false); const [pCat, setPCat] = useState(""); const [pQ, setPQ] = useState(""); const [pFoods, setPFoods] = useState<Food[]>([]); const [pPicked, setPPicked] = useState(false);
@@ -106,17 +105,11 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
   function hydrate(d: ProfileResp) {
     setData(d);
     setCuisine(d.profile.cuisine || []); setPattern(d.profile.eating_pattern || ""); setReferDefault(d.profile.refer_pantry_default !== false);
-    setTypical(d.profile.typical_meals || ""); setExistingLikes(d.profile.likes || ""); setExistingDislikes(d.profile.dislikes || "");
+    setTypical(d.profile.typical_meals || "");
     setPantry(d.pantry || []);
-    const m = d.profile.starter_menu && (d.profile.starter_menu as any).breakfast ? d.profile.starter_menu : null;
-    setMenu(m);
-    const likeSet = new Set(String(d.profile.likes || "").split(",").map((s) => s.trim()).filter(Boolean));
-    const disSet = new Set(String(d.profile.dislikes || "").split(",").map((s) => s.trim()).filter(Boolean));
-    const mp: Record<string, number> = {};
-    if (m) for (const meal of ["breakfast", "lunch", "dinner", "snacks"]) for (const dish of ((m as any)[meal] || [])) { if (likeSet.has(dish)) mp[dish] = 1; else if (disSet.has(dish)) mp[dish] = -1; }
-    setMenuPick(mp);
+    setMenu(d.profile.starter_menu && (d.profile.starter_menu as any).breakfast ? d.profile.starter_menu : null);
   }
-  useEffect(() => { nutriProfile<ProfileResp>().then(hydrate).catch((e) => setErr(e.message)); }, []);
+  useEffect(() => { nutriProfile<ProfileResp>().then(hydrate).catch((e) => setErr(e.message)); nutriPicksGet<{ picks: Record<string, number> }>().then((r) => setMenuPick(r.picks || {})).catch(() => {}); }, []);
   useEffect(() => {
     if (!pAdding) return;
     const t = setTimeout(() => { nutriFoods<{ foods: Food[] }>(pQ).then((r) => setPFoods(r.foods || [])).catch(() => {}); }, 220);
@@ -137,23 +130,23 @@ export default function Setup({ onClose, onChanged }: { onClose: () => void; onC
   }
   async function generateMenu() {
     setGenBusy(true); setGenNote(null);
-    try { const r = await nutriPost<{ menu: any; note?: string }>("menu_generate", { cuisine, eating_pattern: pattern, typical_meals: typical }); if (r && r.menu) { setMenu(r.menu); setMenuPick({}); } else setGenNote((r && r.note) || "Couldn't generate right now."); }
-    catch (e) { setGenNote((e as Error).message); } finally { setGenBusy(false); }
+    try {
+      const likes = Object.keys(menuPick).filter((k) => menuPick[k] === 1).join("; ");
+      const dislikes = Object.keys(menuPick).filter((k) => menuPick[k] === -1).join("; ");
+      const r = await nutriPost<{ menu: any; note?: string }>("menu_generate", { cuisine, eating_pattern: pattern, typical_meals: typical, likes, dislikes });
+      if (r && r.menu) { setMenu(r.menu); setMenuPick({}); } else setGenNote((r && r.note) || "Couldn't generate right now.");
+    } catch (e) { setGenNote((e as Error).message); } finally { setGenBusy(false); }
   }
   function setPick(item: string, val: number) {
     setMenuPick((m) => { const c = { ...m }; if (c[item] === val) delete c[item]; else c[item] = val; return c; });
   }
-  function mergeCsv(existing: string, add: string[]): string {
-    const seen = new Set<string>(); const out: string[] = [];
-    for (const part of [...String(existing || "").split(","), ...add]) { const t = part.trim(); if (!t) continue; const k = t.toLowerCase(); if (seen.has(k)) continue; seen.add(k); out.push(t); }
-    return out.join(", ");
-  }
   async function savePrefs() {
     setBusy(true); setErr(null);
     try {
-      const likes = mergeCsv(existingLikes, Object.keys(menuPick).filter((k) => menuPick[k] === 1));
-      const dislikes = mergeCsv(existingDislikes, Object.keys(menuPick).filter((k) => menuPick[k] === -1));
-      const d = await nutriPost<ProfileResp>("profile_save", { cuisine, eating_pattern: pattern, refer_pantry_default: referDefault, typical_meals: typical, likes, dislikes });
+      const [d] = await Promise.all([
+        nutriPost<ProfileResp>("profile_save", { cuisine, eating_pattern: pattern, refer_pantry_default: referDefault, typical_meals: typical }),
+        nutriPicksSet(menuPick).catch(() => {}),
+      ]);
       hydrate(d); if (onChanged) onChanged();
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   }
