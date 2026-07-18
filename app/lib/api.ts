@@ -497,6 +497,22 @@ export async function nutriPost<T>(action: string, body: unknown = {}): Promise<
   return res.json();
 }
 
+// Starter-menu keep/skip picks (dedicated nutri-picks fn; JSON-safe, comma-proof).
+export async function nutriPicksGet<T>(): Promise<T> {
+  const res = await authedFetch(`/functions/v1/nutri-picks`);
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  return res.json();
+}
+export async function nutriPicksSet<T>(picks: unknown): Promise<T> {
+  const res = await authedFetch(`/functions/v1/nutri-picks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ picks }),
+  });
+  if (!res.ok) throw new Error(`Request failed (${res.status})`);
+  return res.json();
+}
+
 // GET food-DB search: { foods: [...] }. Optional category filter.
 export async function nutriFoods<T>(q: string, cat?: string): Promise<T> {
   const qs = "&q=" + encodeURIComponent(q || "") + (cat ? "&cat=" + encodeURIComponent(cat) : "");
