@@ -57,6 +57,8 @@ const T: Record<TKey, { label: string; emoji: string; color: string; cat: string
   custom: { label: "Custom", emoji: "✨", color: "#C4B5FD", cat: "workout" },
 };
 const PICK_TYPES: TKey[] = ["run", "swim", "strength", "hiit", "cycle", "yoga", "walk", "rest", "travel", "race", "social", "custom"];
+const WORKOUT_TYPES: TKey[] = ["run", "swim", "strength", "hiit", "cycle", "yoga", "walk", "rest", "custom"];
+const EVENT_TYPES: TKey[] = ["travel", "race", "social"];
 
 function normType(s: string): TKey {
   const k = (s || "").toLowerCase().replace(/[^a-z]/g, "");
@@ -88,6 +90,9 @@ function hexA(h: string, a: number) { h = h.replace("#", ""); const r = parseInt
 function chipTxt(c: string) { return `color-mix(in srgb, ${c} 68%, var(--text))`; }
 function fmtT(h: number, m: number) { return pad(h) + ":" + pad(m || 0); }                  // 24h (prototype default)
 function fmtHour(h: number) { return pad(h) + ":00"; }
+const EVENT_CATS = ["travel", "race", "social", "meeting"];
+function isEventType(k: TKey) { return EVENT_CATS.includes(T[k].cat); }
+function hmToMin(x: string) { const m = /^(\d{1,2}):(\d{2})/.exec(x || ""); return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : 0; }
 function km(m: number | null | undefined) { return m ? (m / 1000).toFixed(m % 1000 === 0 ? 0 : 1) + " km" : ""; }
 
 /* ════════════════════ unified item model ════════════════════ */
@@ -165,7 +170,7 @@ const SCOPED_CSS = `
 /* ════════════════════ component ════════════════════ */
 type View = "week" | "day" | "month" | "schedule";
 type Sheet = null | "form";
-type Draft = Partial<Session> & { tkey?: TKey; end_time?: string | null };
+type Draft = Partial<Session> & { tkey?: TKey; end_time?: string | null; allDay?: boolean };
 
 export default function SchedulePage() {
   const today = todayISO();
@@ -250,15 +255,25 @@ export default function SchedulePage() {
 
 
   /* ---- form ---- */
-  function openAdd(date = today) { setMode("add"); setDraft({ tkey: "run", session_type: "Run", activity: "", session_date: date, start_time: "07:00", planned_duration: 45, intensity: null, focus: null, distance_m: null }); setSheet("form"); }
+  function openAdd(date = today, startH?: number) {
+    const sh = startH != null ? pad(startH) + ":00" : "07:00";
+    const eh = startH != null ? pad((startH + 1) % 24) + ":00" : "08:00";
+    setMode("add"); setDraft({ tkey: "run", session_type: "Run", activity: "", session_date: date, start_time: sh, end_time: eh, allDay: false, intensity: null, focus: null, distance_m: null }); setSheet("form");
+  }
   function openEdit(it: Item) {
-    if (it.kind === "event") { // manual events editable; gcal read-only
-      if (it.source === "gcal") { showToast("Google events are read-only here"); return; }
+    if (it.source === "gcal") { showToast("Google events are read-only here"); return; }
+    const allDay = it.kind === "event" ? it.allDay : it.hour == null;
+    const st = allDay || it.hour == null ? null : fmtT(it.hour, it.min);
+    const emin = (it.hour ?? 0) * 60 + it.min + (it.dur || 0);
+    const et = st == null ? null : fmtT(Math.floor(emin / 60) % 24, emin % 60);
+    if (it.kind === "event") {
       const e = it.event!;
-      setMode("edit"); setDraft({ id: e.id, tkey: it.tkey, session_type: it.tkey, activity: e.title, session_date: it.date, start_time: e.all_day ? null : fmtT(it.hour ?? 9, it.min), planned_duration: it.dur, intensity: null, focus: null, distance_m: null, notes: "event:" + (e.kind || "event") + (e.all_day ? ":allday" : "") }); setSheet("form"); return;
+      setMode("edit"); setDraft({ id: e.id, tkey: it.tkey, session_type: T[it.tkey].label, activity: e.title, session_date: it.date, start_time: st, end_time: et, allDay, intensity: null, focus: null, distance_m: null });
+    } else {
+      const s = it.session!;
+      setMode("edit"); setDraft({ ...s, tkey: it.tkey, start_time: st, end_time: et, allDay });
     }
-    const s = it.session!;
-    setMode("edit"); setDraft({ ...s, tkey: it.tkey }); setSheet("form");
+    setSheet("form");
   }
   function setD(p: Partial<Draft>) { setDraft((d) => d ? { ...d, ...p } : d); }
   function closeSheet() { setSheet(null); setDraft(null); }
@@ -277,17 +292,19 @@ export default function SchedulePage() {
   async function saveDraft() {
     if (!draft?.session_date) return;
     setBusy(true);
-    const isEvent = typeof draft.notes === "string" && draft.notes.startsWith("event:");
+    const tkey = draft.tkey || "custom";
+    const isEvent = isEventType(tkey);
+    const allDay = !!draft.allDay;
+    const st = draft.start_time || "07:00";
+    const et = draft.end_time || "08:00";
     try {
       if (isEvent) {
-        const kind = (draft.notes || "event:event").split(":")[1] || "event";
-        const allDay = (draft.notes || "").includes(":allday") || !draft.start_time;
-        await planPost("event_save", { id: draft.id, title: draft.activity || T[draft.tkey || "travel"].label, kind, event_date: draft.session_date, all_day: allDay, start_ts: allDay ? null : `${draft.session_date}T${(draft.start_time || "09:00")}:00Z`, end_ts: allDay ? null : `${draft.session_date}T${(draft.end_time || "10:00")}:00Z`, source: "manual", busy: true });
+        await planPost("event_save", { id: draft.id, title: draft.activity || T[tkey].label, kind: tkey, event_date: draft.session_date, all_day: allDay, start_ts: allDay ? null : `${draft.session_date}T${st}:00Z`, end_ts: allDay ? null : `${draft.session_date}T${et}:00Z`, source: "manual", busy: true });
       } else {
-        const tkey = draft.tkey || "custom";
+        const dur = allDay ? (draft.planned_duration || 0) : Math.max(0, hmToMin(et) - hmToMin(st));
         await planPost("session_save", {
           id: draft.id, session_date: draft.session_date, session_type: draft.id ? draft.session_type : T[tkey].label,
-          activity: draft.activity || "", planned_duration: draft.planned_duration || 0, start_time: draft.start_time || null,
+          activity: draft.activity || "", planned_duration: dur, start_time: allDay ? null : st,
           intensity: draft.intensity || null, focus: draft.focus || null, distance_m: draft.distance_m ?? null,
           is_rest_day: tkey === "rest", notes: draft.notes || null,
         }, monOf(draft.session_date));
@@ -296,22 +313,10 @@ export default function SchedulePage() {
       setWeekOffset(Math.round((Date.parse(monOf(draft.session_date)) - Date.parse(monOf(today))) / (7 * 86400000)));
       await loadWeek(monOf(draft.session_date));
       refreshAll();
-      showToast((draft.id ? "Updated · " : (draft.activity || T[draft.tkey || "run"].label) + " added · ") + DOW[dowMon(draft.session_date)] + " " + num(draft.session_date));
+      showToast((draft.id ? "Updated · " : (draft.activity || T[tkey].label) + " added · ") + DOW[dowMon(draft.session_date)] + " " + num(draft.session_date));
     } catch (e) { showToast((e as Error).message); } finally { setBusy(false); }
   }
-  async function deleteDraft() {
-    if (!draft?.id) return; setBusy(true);
-    const isEvent = typeof draft.notes === "string" && draft.notes.startsWith("event:");
-    try { await planPost(isEvent ? "event_delete" : "session_delete", { id: draft.id }, weekMon); closeSheet(); refreshAll(); showToast("Removed from plan"); }
-    catch (e) { showToast((e as Error).message); } finally { setBusy(false); }
-  }
-  async function toggleDraftDone() {
-    if (!draft?.id) return; await planPost("complete", { id: draft.id }, weekMon);
-    setD({ completed: !draft.completed }); refreshAll();
-  }
-  async function skipDraft() {
-    if (!draft?.id) return; await planPost("skip", { id: draft.id }, weekMon); closeSheet(); refreshAll(); showToast(draft.skipped ? "Restored to plan" : "Marked as skipped");
-  }
+
 
 
   /* ════════════════════ derived ════════════════════ */
@@ -566,10 +571,7 @@ export default function SchedulePage() {
     let prevMon = -1;
     return (
       <>
-        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          <button onClick={() => openAdd(today)} style={{ flex: 1, padding: 12, borderRadius: 14, border: "none", background: A, color: "#fff", fontWeight: 700, fontSize: 13.5, cursor: "pointer" }}>＋ Activity</button>
-          <button onClick={() => { setMode("add"); setDraft({ tkey: "travel", session_type: "Travel", activity: "", session_date: today, start_time: null, planned_duration: 0, notes: "event:travel:allday" }); setSheet("form"); }} style={{ flex: 1, padding: 12, borderRadius: 14, border: "1px solid var(--line)", background: CARD2, color: T1, fontWeight: 700, fontSize: 13.5, cursor: "pointer" }}>✈️ Event</button>
-        </div>
+        <button onClick={() => openAdd(today)} style={{ width: "100%", padding: 12, borderRadius: 14, border: "none", background: A, color: "#fff", fontWeight: 700, fontSize: 13.5, cursor: "pointer", marginBottom: 12 }}>＋ Add to calendar</button>
         {gKeys.length === 0 && <div style={{ ...SS.card, textAlign: "center", padding: 24 }}><div style={{ fontSize: 28 }}>📭</div><div style={{ fontWeight: 700, margin: "6px 0 4px" }}>Nothing on your calendar</div><div style={{ color: T3, fontSize: 12 }}>Add an activity or event here, or send a session from Kai in the Coach tab.</div></div>}
         {gKeys.map((gk) => {
           const end = addDays(gk, 6); const sameM = monShort(gk) === monShort(end);
@@ -665,27 +667,21 @@ export default function SchedulePage() {
 
   function renderForm() {
     if (!draft) return null;
-    const isEvent = typeof draft.notes === "string" && draft.notes.startsWith("event:");
-    const fMon = monOf(draft.session_date || today);
     const tkey = draft.tkey || "run";
-    const [hh, mm] = (draft.start_time || "07:00").split(":").map((x) => parseInt(x, 10));
-    const [eh, em] = (draft.end_time || "10:00").split(":").map((x) => parseInt(x, 10));
-    const allDay = isEvent && (draft.notes || "").includes(":allday");
+    const isEvent = isEventType(tkey);
+    const isWorkout = T[tkey].cat === "workout";
+    const allDay = !!draft.allDay;
+    const fMon = monOf(draft.session_date || today);
+    const gridTypes = mode === "edit" ? (isEvent ? EVENT_TYPES : WORKOUT_TYPES) : PICK_TYPES;
     return (
       <>
-        <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 4 }}>{mode === "edit" ? (isEvent ? "Edit event" : "Edit activity") : isEvent ? "Add event" : "Add activity"}</div>
-        <div style={{ fontSize: 11.5, color: T3, marginBottom: 14 }}>{isEvent ? "Travel, races and social plans give the coach busy/travel context." : "Added to your Health OS calendar (committed) so a regenerate won't move it."}</div>
+        <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 4 }}>{mode === "edit" ? "Edit" : "New entry"}</div>
+        <div style={{ fontSize: 11.5, color: T3, marginBottom: 14 }}>{isEvent ? "Blocks time on your calendar and gives the coach travel/busy context." : "Added to your calendar (committed) so a plan regenerate won't move it."}</div>
 
-        {mode !== "edit" && (
-          <div style={{ display: "flex", gap: 6, padding: 3, background: CARD2, border: "1px solid var(--line)", borderRadius: 11, marginBottom: 12 }}>
-            <button onClick={() => setD({ notes: undefined, tkey: "run", session_type: "Run", start_time: "07:00" })} style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 13, ...(!isEvent ? { background: A, color: "#fff" } : { background: "transparent", color: T3 }) }}>🏃 Activity</button>
-            <button onClick={() => setD({ notes: "event:travel", tkey: "travel", session_type: "Travel", start_time: "09:00", end_time: "10:00" })} style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 13, ...(isEvent ? { background: A, color: "#fff" } : { background: "transparent", color: T3 }) }}>📅 Event</button>
-          </div>
-        )}
         <label style={fl}>Type</label>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6 }}>
-          {(isEvent ? (["travel", "race", "social", "custom"] as TKey[]) : PICK_TYPES).map((k) => { const t = T[k]; const sel = tkey === k; return (
-            <button key={k} onClick={() => setD(isEvent ? { tkey: k, session_type: t.label, notes: "event:" + k + (allDay ? ":allday" : "") } : { tkey: k, session_type: t.label })} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 2px", borderRadius: 12, cursor: "pointer", background: sel ? hexA(t.color, .18) : CHIPBG, border: "1px solid " + (sel ? hexA(t.color, .6) : "var(--line)"), color: "var(--text)" }}><span style={{ fontSize: 18 }}>{t.emoji}</span><span style={{ fontSize: 9, color: T3 }}>{t.label}</span></button>
+          {gridTypes.map((k) => { const t = T[k]; const sel = tkey === k; return (
+            <button key={k} onClick={() => setD({ tkey: k, session_type: t.label })} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "10px 2px", borderRadius: 12, cursor: "pointer", background: sel ? hexA(t.color, .18) : CHIPBG, border: "1px solid " + (sel ? hexA(t.color, .6) : "var(--line)"), color: "var(--text)" }}><span style={{ fontSize: 18 }}>{t.emoji}</span><span style={{ fontSize: 9, color: T3 }}>{t.label}</span></button>
           ); })}
         </div>
 
@@ -700,29 +696,18 @@ export default function SchedulePage() {
         </div>
         <input type="date" value={draft.session_date || ""} onChange={(e) => setD({ session_date: e.target.value })} style={{ ...inp, marginTop: 8 }} />
 
-        {isEvent && (
-          <>
-            <label style={fl}>All day</label>
-            <button onClick={() => allDay ? setD({ notes: "event:" + tkey, start_time: "09:00", end_time: "10:00" }) : setD({ notes: "event:" + tkey + ":allday", start_time: null, end_time: null })} style={{ width: "100%", padding: "12px 14px", borderRadius: 11, cursor: "pointer", fontWeight: 700, fontSize: 14, border: "1px solid " + (allDay ? "transparent" : "var(--line-2)"), background: allDay ? A : CHIPBG, color: allDay ? "#fff" : T2, display: "flex", alignItems: "center", justifyContent: "space-between" }}><span>{allDay ? "All-day event" : "Has a set start & end time"}</span><span style={{ fontSize: 12, opacity: .85 }}>{allDay ? "ON" : "OFF"}</span></button>
-          </>
-        )}
+        <label style={fl}>All day</label>
+        <button onClick={() => setD(allDay ? { allDay: false, start_time: draft.start_time || "07:00", end_time: draft.end_time || "08:00" } : { allDay: true })} style={{ width: "100%", padding: "12px 14px", borderRadius: 11, cursor: "pointer", fontWeight: 700, fontSize: 14, border: "1px solid " + (allDay ? "transparent" : "var(--line-2)"), background: allDay ? A : CHIPBG, color: allDay ? "#fff" : T2, display: "flex", alignItems: "center", justifyContent: "space-between" }}><span>{allDay ? "All-day — no set time" : "Has a start & end time"}</span><span style={{ fontSize: 12, opacity: .85 }}>{allDay ? "ON" : "OFF"}</span></button>
+
         {!allDay && (
-          <>
-            <label style={fl}>Start time</label>
-            <input type="time" value={draft.start_time || (isEvent ? "09:00" : "07:00")} onChange={(e) => setD({ start_time: e.target.value })} style={inp} />
-            {isEvent && (
-              <>
-                <label style={fl}>End time</label>
-                <input type="time" value={draft.end_time || "10:00"} onChange={(e) => setD({ end_time: e.target.value })} style={inp} />
-              </>
-            )}
-          </>
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ flex: 1 }}><label style={fl}>Start</label><input type="time" value={draft.start_time || "07:00"} onChange={(e) => setD({ start_time: e.target.value })} style={inp} /></div>
+            <div style={{ flex: 1 }}><label style={fl}>End</label><input type="time" value={draft.end_time || "08:00"} onChange={(e) => setD({ end_time: e.target.value })} style={inp} /></div>
+          </div>
         )}
 
-        {!isEvent && tkey !== "rest" && (
+        {isWorkout && (
           <>
-            <label style={fl}>Duration</label>
-            <div style={{ display: "flex", gap: 8 }}>{[30, 45, 60, 90].map((d) => <button key={d} onClick={() => setD({ planned_duration: d })} style={chipStyle(draft.planned_duration === d, { flex: 1, textAlign: "center", padding: "9px 0" })}>{d}m</button>)}</div>
             <label style={fl}>Intensity</label>
             <div style={{ display: "flex", gap: 8 }}>{["easy", "moderate", "hard"].map((k) => <button key={k} onClick={() => setD({ intensity: draft.intensity === k ? null : k })} style={chipStyle(draft.intensity === k, { flex: 1, textAlign: "center", color: draft.intensity === k ? "#fff" : INT[k] })}>{k}</button>)}</div>
             <label style={fl}>Effort</label>
@@ -732,19 +717,7 @@ export default function SchedulePage() {
           </>
         )}
 
-        {mode === "edit" && draft.id && !isEvent && (
-          <button onClick={toggleDraftDone} style={{ width: "100%", padding: 14, borderRadius: 14, cursor: "pointer", font: "700 14px 'Plus Jakarta Sans',sans-serif", marginTop: 14, border: "1px solid " + (draft.completed ? "transparent" : hexA("#34D399", .4)), background: draft.completed ? "#34D399" : hexA("#34D399", .1), color: draft.completed ? "#06281c" : "#34D399" }}>{draft.completed ? "✓ Completed — tap to undo" : "Mark as completed 🎉"}</button>
-        )}
-        {mode === "edit" && draft.id && !isEvent && draft.committed && (
-          <button onClick={async () => { if (!draft.id) return; const _m = monOf(draft.session_date || today); await planPost("uncommit", { id: draft.id }, _m); closeSheet(); await loadWeek(_m); refreshAll(); showToast("Removed from calendar"); }} style={{ width: "100%", padding: 13, borderRadius: 14, cursor: "pointer", fontWeight: 700, fontSize: 13.5, marginTop: 8, border: "1px solid var(--line-2)", background: CARD2, color: T2 }}>↩ Remove from calendar</button>
-        )}
-        <button onClick={saveDraft} disabled={busy || !draft.session_date} style={{ width: "100%", border: "none", color: "#fff", font: "700 15px 'Plus Jakarta Sans',sans-serif", padding: 15, borderRadius: 14, cursor: "pointer", background: A, marginTop: 8 }}>{busy ? "Saving…" : mode === "edit" ? "Save changes" : isEvent ? "Add event" : "Add to plan"}</button>
-        {mode === "edit" && draft.id && (
-          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-            {!isEvent && <button onClick={skipDraft} style={{ flex: 1, padding: 12, borderRadius: 12, border: "1px solid var(--line-2)", background: CARD2, color: T2, fontWeight: 700, cursor: "pointer" }}>{draft.skipped ? "Restore" : "Skip"}</button>}
-            <button onClick={deleteDraft} style={{ flex: 1, padding: 12, borderRadius: 12, border: "1px solid color-mix(in srgb, var(--danger) 40%, transparent)", background: "color-mix(in srgb, var(--danger) 12%, transparent)", color: "var(--danger)", fontWeight: 700, cursor: "pointer" }}>Delete</button>
-          </div>
-        )}
+        <button onClick={saveDraft} disabled={busy || !draft.session_date} style={{ width: "100%", border: "none", color: "#fff", font: "700 15px 'Plus Jakarta Sans',sans-serif", padding: 15, borderRadius: 14, cursor: "pointer", background: A, marginTop: 16 }}>{busy ? "Saving…" : mode === "edit" ? "Save changes" : "Add to calendar"}</button>
         <button onClick={closeSheet} style={{ width: "100%", padding: 12, borderRadius: 12, border: "none", background: "none", color: T3, fontWeight: 600, cursor: "pointer", marginTop: 8 }}>Cancel</button>
       </>
     );
