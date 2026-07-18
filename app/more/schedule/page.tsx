@@ -214,6 +214,7 @@ export default function SchedulePage() {
   const [mode, setMode] = useState<"add" | "edit">("add");
   const [draft, setDraft] = useState<Draft | null>(null);
   const [peek, setPeek] = useState<Item | null>(null);
+  const [dayCard, setDayCard] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -392,6 +393,7 @@ export default function SchedulePage() {
 
       {sheet && renderSheet()}
       {peek && renderPeek()}
+      {dayCard && renderDayCard()}
       {toast && (
         <div style={{ position: "fixed", left: "50%", bottom: 108, transform: "translateX(-50%)", background: "#222230", color: "#fff", padding: "10px 16px", borderRadius: 999, fontSize: 12.5, fontWeight: 600, zIndex: 1600, boxShadow: "0 8px 24px rgba(0,0,0,.5)", maxWidth: 340, textAlign: "center" }}>{toast}</div>
       )}
@@ -537,7 +539,6 @@ export default function SchedulePage() {
     const items = (monthData ? [...monthData.sessions.map(sessionToItem), ...monthData.events.map(eventToItem)] : []).filter(onCalendar);
     const byDay = new Map<string, Item[]>();
     items.forEach((x) => { if (!byDay.has(x.date)) byDay.set(x.date, []); byDay.get(x.date)!.push(x); });
-    const selItems = (byDay.get(selDate) || []).sort((a, b) => (a.hour ?? 99) - (b.hour ?? 99));
     return (
       <>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
@@ -555,7 +556,7 @@ export default function SchedulePage() {
               const inMonth = d.slice(0, 7) === first.slice(0, 7);
               const isToday = d === today, isSel = d === selDate;
               return (
-                <button key={d} onClick={() => setSelDate(d)} style={{ minHeight: 52, borderRadius: 9, padding: "4px 3px 0", overflow: "hidden", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "stretch", background: isSel ? "color-mix(in srgb, var(--ember) 16%, transparent)" : isToday ? "var(--surface-2)" : "var(--surface-2)", border: isSel ? "1px solid " + "color-mix(in srgb, var(--ember) 60%, transparent)" : isToday ? "1px solid " + "color-mix(in srgb, var(--ember) 45%, transparent)" : "1px solid transparent", opacity: inMonth ? 1 : .4 }}>
+                <button key={d} onClick={() => { setSelDate(d); if (evs.length === 0) openAdd(d); else setDayCard(d); }} style={{ minHeight: 52, borderRadius: 9, padding: "4px 3px 0", overflow: "hidden", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "stretch", background: isSel ? "color-mix(in srgb, var(--ember) 16%, transparent)" : isToday ? "var(--surface-2)" : "var(--surface-2)", border: isSel ? "1px solid " + "color-mix(in srgb, var(--ember) 60%, transparent)" : isToday ? "1px solid " + "color-mix(in srgb, var(--ember) 45%, transparent)" : "1px solid transparent", opacity: inMonth ? 1 : .4 }}>
                   <div style={{ fontSize: 11, fontWeight: isToday ? 800 : 600, color: isToday ? A : T2, textAlign: "center", marginBottom: 1 }}>{num(d)}</div>
                   {evs.slice(0, 2).map((x) => { const c = T[x.tkey].color; const done = x.status === "done", skip = x.status === "skipped"; return (
                     <div key={x.id} style={{ background: hexA(c, .9), color: "#0A0A0F", fontSize: 8, fontWeight: 700, padding: "1px 4px", borderRadius: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 1, opacity: skip ? .45 : done ? .7 : 1, textDecoration: skip ? "line-through" : "none" }}>{T[x.tkey].emoji} {x.title}</div>
@@ -565,13 +566,6 @@ export default function SchedulePage() {
               );
             })}
           </div>
-        </div>
-        <div style={SS.card}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-            <strong style={{ fontSize: 13 }}>{DOW[dowMon(selDate)]}, {monShort(selDate)} {num(selDate)}</strong>
-            <button style={chipStyle(false, { padding: "6px 12px" })} onClick={() => openAdd(selDate)}>＋ activity</button>
-          </div>
-          {selItems.length === 0 ? <div style={{ color: T3, fontSize: 12 }}>Nothing scheduled.</div> : selItems.map((x) => selDayRow(x))}
         </div>
       </>
     );
@@ -590,6 +584,31 @@ export default function SchedulePage() {
           {meta && <div style={{ color: T3, fontSize: 11.5, marginTop: 1 }}>{meta}</div>}
         </div>
         <span style={{ fontSize: 10, fontWeight: 700, color: tc[0], background: hexA(tc[0], tc[1]), padding: "3px 9px", borderRadius: 7, textTransform: "capitalize", flex: "none" }}>{tag}</span>
+      </div>
+    );
+  }
+
+  function renderDayCard() {
+    if (!dayCard) return null;
+    const d = dayCard;
+    const items = (monthData ? [...monthData.sessions.map(sessionToItem), ...monthData.events.map(eventToItem)] : []).filter(onCalendar).filter((x) => x.date === d).sort((a, b) => (a.hour ?? 99) - (b.hour ?? 99));
+    const rel = d === today ? "Today" : d === addDays(today, 1) ? "Tomorrow" : d === addDays(today, -1) ? "Yesterday" : MON_L[parse(d).getMonth()] + " " + parse(d).getFullYear();
+    return (
+      <div onClick={() => setDayCard(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 1550, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+        <div className="schd-sheet" onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 480, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "20px 20px 0 0", padding: "14px 16px max(18px,env(safe-area-inset-bottom))", maxHeight: "80vh", overflowY: "auto", animation: "schd-in .22s ease" }}>
+          <div style={{ width: 36, height: 4, borderRadius: 999, background: "var(--line-2)", margin: "0 auto 14px" }} />
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div>
+              <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: "-.01em" }}>{DOW[dowMon(d)]} {num(d)} {monShort(d)}</div>
+              <div style={{ fontSize: 11.5, color: T3, marginTop: 1 }}>{rel}</div>
+            </div>
+            <button onClick={() => setDayCard(null)} aria-label="Close" style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid var(--line-2)", background: CHIPBG, color: T2, fontSize: 14, cursor: "pointer", flex: "none" }}>✕</button>
+          </div>
+          <div style={{ marginTop: 6 }}>
+            {items.length === 0 ? <div style={{ color: T3, fontSize: 12.5, padding: "12px 0" }}>Nothing scheduled.</div> : items.map((x) => selDayRow(x))}
+          </div>
+          <button onClick={() => { setDayCard(null); openAdd(d); }} style={{ width: "100%", border: "none", color: "#fff", font: "800 15px 'Plus Jakarta Sans',sans-serif", padding: 14, borderRadius: 16, cursor: "pointer", background: A, marginTop: 12, boxShadow: "0 6px 18px " + hexA("#d96f4e", .35) }}>Add to this day</button>
+        </div>
       </div>
     );
   }
