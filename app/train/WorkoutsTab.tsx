@@ -5,8 +5,8 @@ import CardioBuilder from "./CardioBuilder";
 import WorkoutLogger, { RoutineBuilder } from "./WorkoutLogger";
 import TodaySuggestion from "./TodaySuggestion";
 import FuelToday from "./FuelToday";
-import { cardioList, cardioDelete, cardioPrescribe, wkRoutines, wkDeleteRoutine } from "../lib/api";
-import type { CardioRoutine, WkRoutineSummary } from "../lib/api";
+import { cardioList, cardioDelete, cardioPrescribe, wkRoutines, wkDeleteRoutine, wkActive } from "../lib/api";
+import type { CardioRoutine, WkRoutineSummary, WkBundle } from "../lib/api";
 
 /* ------------------------------------------------------------------ *
  * Workouts — four-zone home (Phase 1)
@@ -27,7 +27,7 @@ type Discipline = "strength" | "cardio";
 type Surface =
   | { k: "home" }
   | { k: "cardio"; intent: "workout" | "routine"; start: "describe" | "build" }
-  | { k: "strengthLogger"; autoStart: { plan_id?: string; routine_id?: string; title?: string } | null }
+  | { k: "strengthLogger"; autoStart: { plan_id?: string; routine_id?: string; title?: string } | null; resume?: boolean }
   | { k: "strengthBuild"; routineId: string | null };
 
 type GlyphKind = "run" | "bike" | "swim" | "brick" | "strength" | "mobility";
@@ -42,6 +42,12 @@ const SPORTS: { key: SportKey; label: string; title: string; hue: string; glyph:
 const SPORT_BY_KEY: Record<SportKey, (typeof SPORTS)[number]> = {
   run: SPORTS[0], bike: SPORTS[1], swim: SPORTS[2], brick: SPORTS[3],
 };
+
+function elapsedLabel(startTs?: string | null): string {
+  if (!startTs) return "";
+  const mins = Math.max(0, Math.round((Date.now() - Date.parse(startTs)) / 60000));
+  return mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
+}
 
 function sportOf(s: string | null | undefined): SportKey {
   const k = (s || "").toLowerCase();
@@ -114,6 +120,7 @@ export default function WorkoutsTab() {
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [active, setActive] = useState<WkBundle | null>(null);
 
   const lpTimer = useRef<number | null>(null);
 
@@ -121,6 +128,7 @@ export default function WorkoutsTab() {
     let alive = true;
     cardioList().then((r) => { if (alive) setCardio(r.routines || []); }).catch(() => { if (alive) setCardio([]); });
     wkRoutines().then((r) => { if (alive) setStrength(r.routines || []); }).catch(() => { if (alive) setStrength([]); });
+    wkActive().then((b) => { if (alive) setActive(b && b.session ? b : null); }).catch(() => { if (alive) setActive(null); });
     return () => { alive = false; };
   }, [reload]);
 
@@ -159,7 +167,7 @@ export default function WorkoutsTab() {
     return (
       <div>
         <button className="trn-sub" onClick={backHome} style={{ marginBottom: 10 }}>‹ Workouts</button>
-        <WorkoutLogger autoStart={surface.autoStart} onOpenCardio={(intent, start) => setSurface({ k: "cardio", intent, start })} />
+        <WorkoutLogger autoStart={surface.autoStart} resume={surface.resume} onExit={backHome} onOpenCardio={(intent, start) => setSurface({ k: "cardio", intent, start })} />
       </div>
     );
   }
@@ -274,6 +282,16 @@ export default function WorkoutsTab() {
 
       {note ? (
         <div onClick={() => setNote(null)} style={{ marginTop: 10, background: "var(--ember-tint)", border: "1px solid var(--line)", borderRadius: "var(--r-sm)", padding: "9px 12px", fontSize: 12, fontWeight: 600, color: "var(--text-2)", cursor: "pointer" }}>{note}</div>
+      ) : null}
+
+      {!isCardio && active && active.session ? (
+        <button className="trn-continue" type="button" onClick={() => setSurface({ k: "strengthLogger", autoStart: null, resume: true })} style={{ marginTop: 12 }}>
+          <span className="play"><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M8 5l11 7-11 7z" /></svg></span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="t">Resume: {active.session.title || "Workout"}</div>
+            <div className="s">{(active.sets || []).filter((x) => x.completed).length} sets in · {elapsedLabel(active.session.started_at)}</div>
+          </div>
+        </button>
       ) : null}
 
       {/* zone 1 — Do now / Build */}
