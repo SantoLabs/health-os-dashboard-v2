@@ -3,10 +3,10 @@
 import { useEffect, useState, useRef, type CSSProperties } from "react";
 import { nutriPost, nutriFoods, nutriTemplates, nutriHistory, nutriPantry, nutriProfile } from "../../lib/api";
 
-const CARD = "#101626", INSET = "#0e1320", CB = "#1a2232", IB = "#1f2838";
-const H = "#f3f6fb", BODY = "#e8ecf3", MUTED = "#aeb6c4", FAINT = "#7b8597", FAINTER = "#5c6573", DIS = "#4b5462";
-const ACCENT = "#4f9cf9", ACCENT_LT = "#7fb0ff", CHIP_SEL = "#13203a", CHIP_SEL_B = "#294063", CHIP_IDLE = "#141b29", CHIP_IDLE_B = "#222c3d";
-const PROT = "#5b9bff", CARB = "#f3b14e", FAT = "#f0735a", FIBR = "#46c79a";
+const CARD = "var(--surface)", INSET = "var(--bg)", CB = "var(--line)", IB = "var(--line-2)";
+const H = "var(--text)", BODY = "var(--text)", MUTED = "var(--text-2)", FAINT = "var(--muted)", FAINTER = "var(--faint)", DIS = "var(--faint)";
+const ACCENT = "var(--ember)", ACCENT_LT = "var(--ember-strong)", CHIP_SEL = "var(--ember-tint)", CHIP_SEL_B = "color-mix(in srgb, var(--ember) 35%, transparent)", CHIP_IDLE = "var(--surface-2)", CHIP_IDLE_B = "var(--line-2)";
+const PROT = "#4a86e8", CARB = "#cf8a2e", FAT = "#d85c42", FIBR = "#3aa17e";
 
 export type MealLite = { id: string; meal_type: string | null; snack_slot: string | null; name: string; kcal: number; protein: number; carbs: number; fats: number; fiber: number; quantity: number | null; unit: string | null; servings: number; food_id: string | null };
 type Food = { id: string; name: string; brand: string | null; category: string | null; basis: string; kcal: number; protein: number; carbs: number; fats: number; fiber: number; micros: Record<string, number>; unit_grams: Record<string, number>; source: string; verified: boolean };
@@ -68,7 +68,7 @@ const primaryBtn: CSSProperties = { width: "100%", marginTop: 14, padding: 13, b
 const stepBtn: CSSProperties = { width: 32, height: 32, borderRadius: 9, border: "1px solid " + CB, background: CHIP_IDLE, color: BODY, fontSize: 18, lineHeight: 1, cursor: "pointer" };
 
 function NumIn({ v, on, color }: { v: string; on: (s: string) => void; color?: string }) {
-  return <input value={v} onChange={(e) => on(e.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" placeholder="0" style={{ width: "100%", boxSizing: "border-box", padding: "9px 8px", borderRadius: 10, border: "1px solid " + (color ? "#294063" : IB), background: "#0b101b", color: BODY, fontSize: 13, outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />;
+  return <input value={v} onChange={(e) => on(e.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" placeholder="0" style={{ width: "100%", boxSizing: "border-box", padding: "9px 8px", borderRadius: 10, border: "1px solid " + (color ? CHIP_SEL_B : IB), background: "var(--surface-2)", color: BODY, fontSize: 13, outline: "none", textAlign: "center", fontVariantNumeric: "tabular-nums" }} />;
 }
 function MacroFields({ d, set }: { d: Draft; set: (p: Partial<Draft>) => void }) {
   const F: [string, keyof Draft, string | undefined][] = [["Cal", "kcal", undefined], ["Prot", "protein", PROT], ["Carb", "carbs", CARB], ["Fat", "fats", FAT], ["Fibr", "fiber", FIBR]];
@@ -84,7 +84,7 @@ function QtyCtl({ qty, onQty, step = 1, unit }: { qty: number; onQty: (n: number
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
       <button onClick={() => onQty(Math.max(0, r1(qty - step)))} style={stepBtn}>−</button>
-      <input value={String(qty)} onChange={(e) => onQty(Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0))} inputMode="decimal" style={{ width: 52, textAlign: "center", padding: "7px 4px", borderRadius: 9, border: "1px solid " + IB, background: "#0b101b", color: H, fontSize: 14, fontWeight: 800, outline: "none", fontVariantNumeric: "tabular-nums" }} />
+      <input value={String(qty)} onChange={(e) => onQty(Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0))} inputMode="decimal" style={{ width: 52, textAlign: "center", padding: "7px 4px", borderRadius: 9, border: "1px solid " + IB, background: "var(--surface-2)", color: H, fontSize: 14, fontWeight: 800, outline: "none", fontVariantNumeric: "tabular-nums" }} />
       <button onClick={() => onQty(r1(qty + step))} style={stepBtn}>+</button>
       {unit ? <span style={{ fontSize: 11.5, color: FAINT, marginLeft: 2 }}>{unit}</span> : null}
     </div>
@@ -276,7 +276,7 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
 
         {addOpen ? (
           <div style={{ background: CARD, border: "1px solid " + CB, borderRadius: 13, padding: 12, marginTop: 8 }}>
-            <input value={addName} onChange={(e) => setAddName(e.target.value)} placeholder="Add a missed item (e.g. curd, salad)…" style={{ width: "100%", boxSizing: "border-box", padding: "10px 11px", borderRadius: 10, border: "1px solid " + IB, background: "#0b101b", color: BODY, fontSize: 13, outline: "none" }} />
+            <input value={addName} onChange={(e) => setAddName(e.target.value)} placeholder="Add a missed item (e.g. curd, salad)…" style={{ width: "100%", boxSizing: "border-box", padding: "10px 11px", borderRadius: 10, border: "1px solid " + IB, background: "var(--surface-2)", color: BODY, fontSize: 13, outline: "none" }} />
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
               <QtyCtl qty={addQty} onQty={setAddQty} step={addUnit === "g" || addUnit === "ml" ? 10 : 0.5} />
               <div style={{ display: "flex", gap: 5, overflowX: "auto" }}>
@@ -323,7 +323,7 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
           </div>
         )}
 
-        {err && <div style={{ marginTop: 10, padding: 10, borderRadius: 10, border: "1px solid #5a2532", background: "#1a0f12", color: "#ff9aa5", fontSize: 12 }}>{err}</div>}
+        {err && <div style={{ marginTop: 10, padding: 10, borderRadius: 10, border: "1px solid color-mix(in srgb, var(--danger) 40%, transparent)", background: "color-mix(in srgb, var(--danger) 10%, transparent)", color: "var(--danger)", fontSize: 12 }}>{err}</div>}
 
         {/* METHOD TILES */}
         {view === "method" && (
@@ -342,7 +342,7 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
         {/* MANUAL */}
         {view === "manual" && (
           <div style={{ marginTop: 12 }}>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search foods (e.g. paneer, dal, oats)…" style={{ width: "100%", boxSizing: "border-box", padding: "11px 12px", borderRadius: 11, border: "1px solid " + IB, background: "#0b101b", color: BODY, fontSize: 13.5, outline: "none" }} />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search foods (e.g. paneer, dal, oats)…" style={{ width: "100%", boxSizing: "border-box", padding: "11px 12px", borderRadius: 11, border: "1px solid " + IB, background: "var(--surface-2)", color: BODY, fontSize: 13.5, outline: "none" }} />
             {!picked && (
               <div style={{ marginTop: 8, maxHeight: 190, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
                 {foods.map((f) => (
@@ -412,7 +412,7 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
         {/* DESCRIBE */}
         {view === "describe" && (
           <div style={{ marginTop: 12 }}>
-            <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="e.g. 3 roti, 1 katori dal, paneer bhurji, 1 katori curd" style={{ width: "100%", boxSizing: "border-box", padding: "11px 12px", borderRadius: 12, border: "1px solid " + IB, background: "#0b101b", color: BODY, fontSize: 13.5, outline: "none", resize: "vertical" }} />
+            <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="e.g. 3 roti, 1 katori dal, paneer bhurji, 1 katori curd" style={{ width: "100%", boxSizing: "border-box", padding: "11px 12px", borderRadius: 12, border: "1px solid " + IB, background: "var(--surface-2)", color: BODY, fontSize: 13.5, outline: "none", resize: "vertical" }} />
             {renderPantryToggle()}
             <button onClick={() => runEstimate("describe")} disabled={busy || !text.trim()} style={{ width: "100%", marginTop: 8, padding: 11, borderRadius: 12, border: "1px solid " + CHIP_SEL_B, background: CHIP_SEL, color: ACCENT_LT, fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: busy || !text.trim() ? 0.6 : 1 }}>{busy && !items.length ? "Estimating…" : items.length ? "↻ Re-estimate" : "✨ Estimate items"}</button>
             {renderReview("describe")}
@@ -485,7 +485,7 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
         {view === "edit" && editMeal && (
           <div style={{ marginTop: 12 }}>
             <div style={tiny}>Name</div>
-            <input value={editName} onChange={(e) => setEditName(e.target.value)} style={{ width: "100%", boxSizing: "border-box", marginTop: 4, padding: "11px 12px", borderRadius: 11, border: "1px solid " + IB, background: "#0b101b", color: BODY, fontSize: 13.5, outline: "none" }} />
+            <input value={editName} onChange={(e) => setEditName(e.target.value)} style={{ width: "100%", boxSizing: "border-box", marginTop: 4, padding: "11px 12px", borderRadius: 11, border: "1px solid " + IB, background: "var(--surface-2)", color: BODY, fontSize: 13.5, outline: "none" }} />
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 12, background: CARD, border: "1px solid " + CB, borderRadius: 12, padding: "10px 12px" }}>
               <span style={{ fontSize: 12.5, color: MUTED }}>Servings</span>
               <QtyCtl qty={servings} onQty={setServings} step={0.25} />
@@ -499,7 +499,7 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
               ))}
             </div>
             <button onClick={editSave} disabled={busy} style={{ ...primaryBtn, opacity: busy ? 0.6 : 1 }}>{busy ? "Saving…" : "Save"}</button>
-            <button onClick={editDelete} disabled={busy} style={{ width: "100%", marginTop: 8, padding: 12, borderRadius: 14, border: "1px solid #5a2532", background: "#1a0f12", color: "#ff9aa5", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Delete entry</button>
+            <button onClick={editDelete} disabled={busy} style={{ width: "100%", marginTop: 8, padding: 12, borderRadius: 14, border: "1px solid color-mix(in srgb, var(--danger) 40%, transparent)", background: "color-mix(in srgb, var(--danger) 10%, transparent)", color: "var(--danger)", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Delete entry</button>
           </div>
         )}
       </div>
