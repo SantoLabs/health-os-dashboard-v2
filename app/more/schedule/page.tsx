@@ -401,7 +401,7 @@ export default function SchedulePage() {
   const mergeAct = useCallback((planItems: Item[]): Item[] => {
     if (actualItems.length === 0) return planItems;
     const planKeys = new Set<string>();
-    for (const p of planItems) { const sp = sportOf(p.tkey); if (sp) planKeys.add(p.date + "|" + sp); }
+    for (const p of planItems) { if (!onCalendar(p)) continue; const sp = sportOf(p.tkey); if (sp) planKeys.add(p.date + "|" + sp); }
     const extra = actualItems.filter((a) => { const sp = sportOf(a.tkey); return !(sp && planKeys.has(a.date + "|" + sp)); });
     return [...planItems, ...extra];
   }, [actualItems]);
