@@ -137,7 +137,7 @@ function stepTypeLabel(t: StepType, sport: Sport): string {
   if (t === "active") return sportName(sport);
   return t === "warmup" ? "Warm Up" : t === "walk" ? "Walk" : t === "recover" ? "Recover" : t === "rest" ? "Rest" : t === "cooldown" ? "Cool Down" : "Other";
 }
-const stepAccent: Record<StepType, string> = { warmup: "#cc9a3d", active: "#d9704e", walk: "#5f9d8a", recover: "#8a7f73", rest: "#8a7f73", cooldown: "#82a05a", other: "#a89a8a" };
+const stepAccent: Record<StepType, string> = { warmup: "var(--gold)", active: "var(--ember-strong)", walk: "var(--success)", recover: "var(--line-2)", rest: "var(--line-2)", cooldown: "var(--success)", other: "var(--faint)" };
 
 const TARGET_TYPES: { id: TargetType; label: string }[] = [
   { id: "none", label: "No Target" }, { id: "pace", label: "Pace" }, { id: "cadence", label: "Cadence" }, { id: "hr", label: "Custom Heart Rate" }, { id: "power", label: "Custom Power" }, { id: "rpe", label: "Effort (RPE)" },
@@ -437,7 +437,7 @@ function DurationWheel({ initial, onCancel, onOk }: { initial: number; onCancel:
 }
 
 // ---------- component ----------
-export default function CardioBuilder({ sportHint = "running", onExit, intent = "workout", startMode = "build" }: { sportHint?: string; onExit?: () => void; intent?: "workout" | "routine"; startMode?: "describe" | "build" }) {
+export default function CardioBuilder({ sportHint = "running", onExit, intent = "workout", startMode = "build", editRoutineId }: { sportHint?: string; onExit?: () => void; intent?: "workout" | "routine"; startMode?: "describe" | "build"; editRoutineId?: string }) {
   const [view, setView] = useState<"pick" | "overview" | "build" | "step">("pick");
   const [mode, setMode] = useState<"single" | "multi">("single");
   const [sport, setSport] = useState<Sport>(normSport(sportHint));
@@ -592,6 +592,14 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
       }
     } finally { setBusy(false); }
   }
+  // Deep-link: when opened from the Workouts tile's Edit action, jump straight into that saved routine (one-shot, once routines load).
+  const cardioEditRef = useRef(false);
+  useEffect(() => {
+    if (cardioEditRef.current || !editRoutineId) return;
+    const rt = routines.find((r) => r.id === editRoutineId);
+    if (rt) { cardioEditRef.current = true; loadRoutine(rt); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editRoutineId, routines]);
   async function delRoutine(rt: CardioRoutine) {
     if (busy) return; setBusy(true);
     try { await cardioDelete(rt.id); setRoutines((r) => r.filter((x) => x.id !== rt.id)); } finally { setBusy(false); }
@@ -672,7 +680,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
       {editingId ? <div className="subtle tiny" style={{ marginTop: 12, color: "var(--text-2)" }}>Editing a saved routine — <button onClick={startNew} style={{ background: "none", border: "none", color: "var(--ember)", cursor: "pointer", fontSize: 11, padding: 0, textDecoration: "underline" }}>start new</button></div> : null}
       <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ background: "var(--surface-2)", color: "inherit", border: "1px solid var(--line)", borderRadius: 8, padding: "7px 9px", fontSize: 12, fontFamily: "inherit", marginRight: "auto" }} />
-        <button onClick={doPrescribe} disabled={busy || !hasBlocks} style={pill("color-mix(in srgb, var(--success) 90%, transparent)")}>Add to calendar</button>
+        <button onClick={doPrescribe} disabled={busy || !hasBlocks} style={pill("color-mix(in srgb, var(--success) 90%, transparent)")}>Schedule</button>
         {editingId ? <button onClick={() => doSave(true)} disabled={busy || !hasBlocks} className="trn-sub" style={{ fontSize: 11 }}>Save as copy</button> : null}
       </div>
       {msg ? <div className="subtle tiny" style={{ marginTop: 8, color: "var(--success)" }}>{msg}</div> : null}
@@ -1077,7 +1085,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
       {/* add step / repeat */}
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
         <button onClick={() => setCurItems((a) => [...a, blankStep("active")])} style={{ ...pill("color-mix(in srgb, var(--ember) 90%, transparent)"), flex: 1, padding: 11 }}>+ Add Step</button>
-        <button onClick={() => setCurItems((a) => [...a, { uid: uid(), loop: true, reps: 6, steps: [blankStep("active"), blankStep("recover")], skipLast: false }])} style={{ ...pill("color-mix(in srgb, var(--ember) 90%, transparent)"), flex: 1, padding: 11 }}>⟳ Add Repeat</button>
+        <button onClick={() => setCurItems((a) => [...a, { uid: uid(), loop: true, reps: 6, steps: [blankStep("active"), blankStep("recover")], skipLast: false }])} style={{ flex: 1, padding: 11, borderRadius: 9, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 12, background: "color-mix(in srgb, var(--ember) 16%, transparent)", color: "var(--ember)" }}>⟳ Add Repeat</button>
       </div>
 
       {inLeg ? (
