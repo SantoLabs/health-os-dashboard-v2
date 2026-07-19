@@ -612,14 +612,13 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
   const pill = (bg: string): React.CSSProperties => ({ padding: "9px 13px", borderRadius: 9, border: "none", cursor: "pointer", color: "#fff", fontWeight: 700, fontSize: 12, background: bg });
   const dashBtn = (c: string): React.CSSProperties => ({ background: "none", border: `1px dashed ${c}`, color: c, cursor: "pointer", fontSize: 12, borderRadius: 8, padding: "8px 12px", fontWeight: 600 });
   const ACCENT = "var(--t-grad)";
-  const rowLabel: React.CSSProperties = { fontSize: 13, color: "var(--muted)", fontWeight: 600 };
   const ctrlBtn: React.CSSProperties = { background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 12, padding: "2px 3px", lineHeight: 1 };
 
   // ---- shared render blocks ----
   const poolRow = () => (
-    <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 12 }}>
-      <span style={rowLabel}>Pool length</span>
-      <select value={`${poolM}|${poolUnit}`} onChange={(e) => { const [pm, pu] = e.target.value.split("|"); setPoolM(Number(pm)); setPoolUnit(pu === "yd" ? "yd" : "m"); }} style={{ ...sel, minWidth: 110 }}>
+    <label style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 16, padding: "13px 16px" }}>
+      <span style={{ flex: 1, fontSize: 13, fontWeight: 800 }}>Pool length</span>
+      <select value={`${poolM}|${poolUnit}`} onChange={(e) => { const [pm, pu] = e.target.value.split("|"); setPoolM(Number(pm)); setPoolUnit(pu === "yd" ? "yd" : "m"); }} style={{ background: "var(--bg)", color: "inherit", border: "1px solid var(--line)", borderRadius: 10, padding: "8px 13px", fontSize: 12.5, fontWeight: 800, fontFamily: "inherit", cursor: "pointer" }}>
         {POOL_OPTS.map((o) => <option key={o.label} value={`${o.m}|${o.unit}`}>{o.label}</option>)}
       </select>
     </label>
@@ -773,22 +772,32 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
 
   // ---------- OVERVIEW VIEW (multisport root) ----------
   if (view === "overview") {
+    const sportHue: Record<Sport, string> = { run: "#c98a2d", bike: "#97934b", swim: "#5e93a6" };
+    const legPath: Record<Sport, JSX.Element> = {
+      run: <><path d="M4 20c8 0 2-14 10-14 5 0 4 7 6 7" /><circle cx="3" cy="20" r="1.3" /><circle cx="20" cy="13" r="1.3" /></>,
+      bike: <><circle cx="6" cy="17" r="3.5" /><circle cx="18" cy="17" r="3.5" /><path d="M6 17l4-8h5M15 9l3 8M9 9h5M13 8h3" /></>,
+      swim: <path d="M2 9c2-2 4-2 6 0s4 2 6 0 4-2 6 0M2 15c2-2 4-2 6 0s4 2 6 0 4-2 6 0" />,
+    };
+    const stat = (val: string, label: string) => (
+      <div><div style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>{val}</div><div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: "var(--muted)", marginTop: 2 }}>{label}</div></div>
+    );
     return (
       <div className="card" style={{ marginBottom: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <button className="trn-sub" onClick={() => setView("pick")}>‹ Multisport</button>
-          <button onClick={() => doSave()} disabled={busy || !hasBlocks} className="trn-sub" style={savedOk ? { color: "var(--success)" } : { color: "var(--ember)" }}>{savedOk ? (editingId ? "UPDATED ✓" : "SAVED ✓") : editingId ? "UPDATE" : "SAVE"}</button>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button onClick={() => setView("pick")} style={{ fontSize: 12.5, fontWeight: 700, color: "var(--muted)", background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 999, padding: "8px 16px", cursor: "pointer" }}>‹ Multisport</button>
+          <div style={{ flex: 1 }} />
+          <button onClick={() => doSave()} disabled={busy || !hasBlocks} style={{ fontSize: 12.5, fontWeight: 800, borderRadius: 999, padding: "8px 18px", border: "none", cursor: "pointer", background: savedOk ? "var(--success)" : "var(--inverse-surface)", color: savedOk ? "var(--on-ember)" : "var(--on-inverse)" }}>{savedOk ? (editingId ? "Updated ✓" : "Saved ✓") : editingId ? "Update" : "Save"}</button>
         </div>
 
-        <div style={{ display: "flex", gap: 20, marginTop: 12 }}>
-          <div><div style={{ fontSize: 24, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{est.secs ? `${est.estimated && est.complete ? "~" : ""}${fmtDur(est.secs)}` : "—"}{est.secs && !est.complete ? "+" : ""}</div><div className="subtle tiny">Total Time</div></div>
-          <div><div style={{ fontSize: 24, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{est.meters ? fmtDist(est.meters) : "—"}</div><div className="subtle tiny">Est Distance</div></div>
+        <div style={{ display: "flex", gap: 24, marginTop: 16, alignItems: "baseline" }}>
+          {stat(est.secs ? `${est.estimated && est.complete ? "~" : ""}${fmtDur(est.secs)}${!est.complete ? "+" : ""}` : "—", "TOTAL TIME")}
+          {stat(est.meters ? fmtDist(est.meters) : "—", "EST DISTANCE")}
         </div>
         {est.secs ? (!est.complete ? <div className="subtle tiny" style={{ marginTop: 4, opacity: 0.8 }}>+ some legs need a pace target to time their distance steps</div> : est.estimated ? <div className="subtle tiny" style={{ marginTop: 4, opacity: 0.8 }}>~ time estimated from your recent pace</div> : null) : null}
 
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Workout name" style={{ ...field, fontWeight: 700, marginTop: 12 }} />
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Workout name" style={{ width: "100%", marginTop: 14, background: "var(--surface-2)", color: "inherit", border: "1px solid var(--line)", borderRadius: 14, padding: "13px 16px", fontSize: 13, fontWeight: 700, fontFamily: "inherit" }} />
 
-        <div className="eyebrow" style={{ marginTop: 14, marginBottom: 6 }}>Legs</div>
+        <div className="eyebrow" style={{ marginTop: 18, marginBottom: 6 }}>Legs</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {legs.map((leg, i) => {
             const lt = estimateTotals(leg.items, leg.sport, typicalPace[leg.sport]);
@@ -800,10 +809,10 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
                     <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, padding: "2px 9px", borderRadius: 999, background: "color-mix(in srgb, var(--gold) 14%, transparent)", color: "var(--gold)" }}>T{i} · transition</span>
                   </div>
                 ) : null}
-                <div style={{ display: "flex", alignItems: "stretch", gap: 0, borderRadius: 9, background: "var(--surface-2)", border: "1px solid var(--line)", overflow: "hidden" }}>
-                  <div style={{ width: 4, background: stepAccent.active, flex: "0 0 auto" }} />
+                <div style={{ display: "flex", alignItems: "stretch", gap: 0, borderRadius: 12, background: "var(--surface-2)", border: "1px solid var(--line)", overflow: "hidden" }}>
+                  <div style={{ width: 4, background: sportHue[leg.sport], flex: "0 0 auto" }} />
                   <div style={{ flex: 1, padding: "10px 12px", minWidth: 0, cursor: "pointer" }} onClick={() => openLeg(leg.uid)}>
-                    <div style={{ fontSize: 13.5, fontWeight: 700 }}>{sportIcon(leg.sport)} Leg {i + 1} · {sportName(leg.sport)}</div>
+                    <div style={{ fontSize: 13.5, fontWeight: 700 }}>Leg {i + 1} · {sportName(leg.sport)}</div>
                     <div className="subtle tiny tnum" style={{ marginTop: 2 }}>{nSteps} {nSteps === 1 ? "block" : "blocks"}{lt.secs ? ` · ${lt.estimated && lt.complete ? "~" : ""}${fmtDur(lt.secs)}` : ""}{lt.meters ? ` · ${fmtDist(lt.meters)}` : ""}</div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 2, paddingLeft: 4 }}>
@@ -824,23 +833,27 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
 
         <div style={{ marginTop: 10 }}>
           {!addLegOpen ? (
-            <button onClick={() => setAddLegOpen(true)} style={{ ...pill(ACCENT), width: "100%", padding: 11 }}>+ Add Leg</button>
+            <button onClick={() => setAddLegOpen(true)} style={{ ...pill(ACCENT), width: "100%", padding: 12 }}>+ Add Leg</button>
           ) : (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: 10, borderRadius: 10, background: "color-mix(in srgb, var(--ember) 6%, transparent)", border: "1px solid color-mix(in srgb, var(--ember) 20%, transparent)" }}>
-              {(["run", "bike", "swim"] as Sport[]).map((sp) => (
-                <button key={sp} onClick={() => addLeg(sp)} style={{ ...pill("color-mix(in srgb, var(--ember) 90%, transparent)"), flex: 1, minWidth: 80 }}>{sportIcon(sp)} {sp === "swim" ? "Pool Swim" : sportName(sp)}</button>
-              ))}
-              <button onClick={() => setAddLegOpen(false)} className="trn-sub" style={{ width: "100%", textAlign: "center", marginTop: 2 }}>Cancel</button>
+            <div style={{ padding: 14, borderRadius: 18, background: "var(--bg)", border: "1.5px dashed var(--line-2)" }}>
+              <div style={{ display: "flex", gap: 8 }}>
+                {(["run", "bike", "swim"] as Sport[]).map((sp) => (
+                  <button key={sp} onClick={() => addLeg(sp)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, background: `color-mix(in srgb, ${sportHue[sp]} 16%, transparent)`, border: "none", borderRadius: 12, padding: "12px 0", fontSize: 12.5, fontWeight: 800, color: sportHue[sp], cursor: "pointer" }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={sportHue[sp]} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">{legPath[sp]}</svg>{sportName(sp)}
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => setAddLegOpen(false)} style={{ display: "block", width: "100%", marginTop: 10, textAlign: "center", background: "none", border: "none", color: "var(--muted)", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
             </div>
           )}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 14 }}>
-          <div>
-            <div style={rowLabel}>Auto transitions (T1 / T2…)</div>
-            <div className="subtle tiny">Adds a transition between each leg</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 16, padding: "13px 16px" }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 800 }}>Auto transitions (T1 / T2…)</div>
+            <div className="subtle tiny" style={{ marginTop: 1 }}>Adds a transition between each leg</div>
           </div>
-          <button onClick={() => setTransitions((t) => !t)} style={{ width: 46, height: 26, borderRadius: 999, background: transitions ? "var(--ember)" : "var(--surface-2)", border: "none", cursor: "pointer", position: "relative", flex: "0 0 auto" }}>
+          <button onClick={() => setTransitions((t) => !t)} style={{ width: 46, height: 26, borderRadius: 999, background: transitions ? "var(--ember)" : "var(--surface-3)", border: "none", cursor: "pointer", position: "relative", flex: "0 0 auto" }}>
             <span style={{ position: "absolute", top: 3, left: transitions ? 23 : 3, width: 20, height: 20, borderRadius: 999, background: "#fff", transition: "left 0.15s" }} />
           </button>
         </div>
