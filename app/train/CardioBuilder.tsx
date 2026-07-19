@@ -717,29 +717,53 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
 
   // ---------- PICK VIEW ----------
   if (view === "pick") {
-    const active: Sport[] = ["run", "bike", "swim"];
-    const soon = [{ label: "Yoga", icon: "🧘" }, { label: "HIIT", icon: "⚡" }];
+    const sportHue: Record<Sport, string> = { run: "#c98a2d", bike: "#97934b", swim: "#5e93a6" };
+    const sportPath: Record<Sport, JSX.Element> = {
+      run: <><path d="M4 20c8 0 2-14 10-14 5 0 4 7 6 7" /><circle cx="3" cy="20" r="1.3" /><circle cx="20" cy="13" r="1.3" /></>,
+      bike: <><circle cx="6" cy="17" r="3.5" /><circle cx="18" cy="17" r="3.5" /><path d="M6 17l4-8h5M15 9l3 8M9 9h5M13 8h3" /></>,
+      swim: <path d="M2 9c2-2 4-2 6 0s4 2 6 0 4-2 6 0M2 15c2-2 4-2 6 0s4 2 6 0 4-2 6 0" />,
+    };
+    const chip = (bg: string, stroke: string, path: JSX.Element) => (
+      <span style={{ width: 38, height: 38, borderRadius: 13, background: bg, display: "flex", alignItems: "center", justifyContent: "center", flex: "0 0 auto" }}>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">{path}</svg>
+      </span>
+    );
+    const chevron = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" strokeWidth={2.4} strokeLinecap="round"><path d="M9 6l6 6-6 6" /></svg>;
+    const rowStyle = (accent: boolean): React.CSSProperties => ({ display: "flex", alignItems: "center", gap: 14, padding: 16, borderRadius: 18, border: `1px solid ${accent ? "color-mix(in srgb, var(--ember) 35%, transparent)" : "var(--line)"}`, background: "var(--surface-2)", color: "inherit", cursor: "pointer", textAlign: "left" });
+    const soon: { label: string; path: JSX.Element }[] = [
+      { label: "Yoga", path: <path d="M3 8h10a3 3 0 1 0-3-3M3 13h14a3 3 0 1 1-3 3M3 18h7" /> },
+      { label: "HIIT", path: <path d="M13 2L5 13h5l-1 9 8-11h-5z" /> },
+    ];
     return (
       <div className="card" style={{ marginBottom: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <div style={{ fontSize: 14, fontWeight: 800 }}>Create a Workout</div>
-          <button className="trn-sub" onClick={() => { if (onExit) onExit(); }}>‹ Back</button>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ flex: 1, fontSize: 18, fontWeight: 800 }}>Create a workout</div>
+          <button onClick={() => { if (onExit) onExit(); }} style={{ fontSize: 12.5, fontWeight: 700, color: "var(--muted)", background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 999, padding: "8px 16px", cursor: "pointer" }}>‹ Back</button>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
-          {active.map((sp) => (
-            <button key={sp} onClick={() => pickSport(sp)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 14px", borderRadius: 11, border: "1px solid var(--line)", background: "var(--surface-2)", color: "inherit", cursor: "pointer", textAlign: "left" }}>
-              <span style={{ fontSize: 20 }}>{sportIcon(sp)}</span><span style={{ fontSize: 14, fontWeight: 700 }}>{sp === "swim" ? "Pool Swim" : sportName(sp)}</span>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16 }}>
+          {(["run", "bike", "swim"] as Sport[]).map((sp) => (
+            <button key={sp} onClick={() => pickSport(sp)} style={rowStyle(false)}>
+              {chip(`color-mix(in srgb, ${sportHue[sp]} 18%, transparent)`, sportHue[sp], sportPath[sp])}
+              <span style={{ flex: 1, fontSize: 15, fontWeight: 800 }}>{sp === "swim" ? "Pool Swim" : sportName(sp)}</span>
+              {chevron}
             </button>
           ))}
-          <button onClick={pickMulti} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 14px", borderRadius: 11, border: "1px solid color-mix(in srgb, var(--ember) 35%, transparent)", background: "color-mix(in srgb, var(--ember) 8%, transparent)", color: "inherit", cursor: "pointer", textAlign: "left" }}>
-            <span style={{ fontSize: 20 }}>🔗</span><span style={{ fontSize: 14, fontWeight: 700 }}>Multisport</span>
-            <span className="subtle tiny" style={{ marginLeft: "auto" }}>swim · bike · run + transitions</span>
+          <button onClick={pickMulti} style={rowStyle(true)}>
+            {chip("var(--surface-3)", "var(--text-2)", <><path d="M12 3l9 5-9 5-9-5z" /><path d="M3 13l9 5 9-5" /></>)}
+            <span style={{ flex: 1 }}>
+              <span style={{ display: "block", fontSize: 15, fontWeight: 800 }}>Multisport</span>
+              <span style={{ display: "block", fontSize: 10.5, color: "var(--muted)", marginTop: 1 }}>swim · bike · run + transitions</span>
+            </span>
+            {chevron}
           </button>
-          <div className="eyebrow" style={{ marginTop: 6 }}>Coming soon</div>
+        </div>
+        <div className="eyebrow" style={{ marginTop: 20 }}>Coming soon</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
           {soon.map((a) => (
-            <div key={a.label} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 14px", borderRadius: 11, border: "1px solid var(--line)", background: "var(--surface-2)", color: "var(--muted)" }}>
-              <span style={{ fontSize: 20, opacity: 0.5 }}>{a.icon}</span><span style={{ fontSize: 14, fontWeight: 600 }}>{a.label}</span>
-              <span style={{ marginLeft: "auto", fontSize: 9, fontWeight: 700, letterSpacing: 0.3, padding: "2px 7px", borderRadius: 999, background: "color-mix(in srgb, var(--ember) 16%, transparent)", color: "var(--ember)" }}>SOON</span>
+            <div key={a.label} style={{ display: "flex", alignItems: "center", gap: 14, padding: 16, borderRadius: 18, border: "1px solid var(--line)", background: "var(--surface-2)", opacity: 0.55 }}>
+              {chip("var(--bg)", "var(--muted)", a.path)}
+              <span style={{ flex: 1, fontSize: 15, fontWeight: 800 }}>{a.label}</span>
+              <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.4, padding: "4px 9px", borderRadius: 999, background: "color-mix(in srgb, var(--gold) 16%, transparent)", color: "var(--gold)" }}>SOON</span>
             </div>
           ))}
         </div>
