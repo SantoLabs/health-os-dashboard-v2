@@ -436,7 +436,7 @@ function DurationWheel({ initial, onCancel, onOk }: { initial: number; onCancel:
 }
 
 // ---------- component ----------
-export default function CardioBuilder({ sportHint = "running", onExit, intent = "workout", startMode = "build", editRoutineId }: { sportHint?: string; onExit?: () => void; intent?: "workout" | "routine"; startMode?: "describe" | "build"; editRoutineId?: string }) {
+export default function CardioBuilder({ sportHint = "running", onExit, intent = "workout", startMode = "build", editRoutineId, presetStructure, presetName, presetSport }: { sportHint?: string; onExit?: () => void; intent?: "workout" | "routine"; startMode?: "describe" | "build"; editRoutineId?: string; presetStructure?: CardioStructure; presetName?: string; presetSport?: string }) {
   const [view, setView] = useState<"pick" | "overview" | "build" | "step">("pick");
   const [mode, setMode] = useState<"single" | "multi">("single");
   const [sport, setSport] = useState<Sport>(normSport(sportHint));
@@ -599,6 +599,24 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
     if (rt) { cardioEditRef.current = true; loadRoutine(rt); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editRoutineId, routines]);
+  // Preset load: mount from a shipped preset structure as a FRESH, unsaved session (no editingId → Save creates the user's own routine). One-shot.
+  function loadPreset(structure: CardioStructure, pName: string, pSport: string) {
+    setErr(null); setMsg(null); setSavedOk(false); setEditingId(null); setName(pName);
+    if (isMultiStructure(structure)) {
+      const { legs: lg, transitions: tr } = splitToLegs(structure);
+      setMode("multi"); setLegs(lg); setTransitions(tr); setActiveLegUid(null); setAddLegOpen(false);
+      setReminders(remindersFromUnified(structure.reminders)); { const p = readPool(structure); setPoolM(p.m); setPoolUnit(p.unit); } setShowDescribe(false); setView("overview");
+    } else {
+      const sp = normSport(pSport); setMode("single"); setSport(sp);
+      const { items: its, rem } = loadStructure(structure); setItems(its.length ? its : [blankStep("active")]); setReminders(rem); { const p = readPool(structure); setPoolM(p.m); setPoolUnit(p.unit); } setShowDescribe(false); setView("build");
+    }
+  }
+  const presetRef = useRef(false);
+  useEffect(() => {
+    if (presetRef.current || !presetStructure) return;
+    presetRef.current = true; loadPreset(presetStructure, presetName || "", presetSport || "run");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presetStructure]);
   async function delRoutine(rt: CardioRoutine) {
     if (busy) return; setBusy(true);
     try { await cardioDelete(rt.id); setRoutines((r) => r.filter((x) => x.id !== rt.id)); } finally { setBusy(false); }
