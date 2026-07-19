@@ -108,7 +108,7 @@ const Wave = ({ c }: { c: string }) => (<svg width={16} height={16} viewBox="0 0
 
 const trayIco = (c: string) => ({ width: 13, height: 13, viewBox: "0 0 24 24", fill: "none", stroke: c, strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const });
 
-export default function WorkoutsTab() {
+export default function WorkoutsTab({ onAskCoach }: { onAskCoach?: () => void }) {
   const [discipline, setDiscipline] = useState<Discipline>("cardio");
   const [surface, setSurface] = useState<Surface>({ k: "home" });
 
@@ -368,7 +368,7 @@ export default function WorkoutsTab() {
       ) : null}
 
       <div style={{ margin: "16px 4px 4px", textAlign: "center", fontSize: 12, color: "var(--muted)" }}>
-        Want a full plan? <span style={{ fontWeight: 700, color: "var(--ember-strong)" }}>Ask your coach</span> in the Coach tab.
+        Want a full plan? <button onClick={() => onAskCoach?.()} style={{ background: "none", border: "none", padding: 0, font: "inherit", fontWeight: 700, color: "var(--ember-strong)", cursor: "pointer" }}>Ask your coach →</button>
       </div>
     </div>
   );
