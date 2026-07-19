@@ -642,7 +642,16 @@ function MonthGrid({ start, cells, today, onDay }: { start: string; cells: Map<s
   );
 }
 
-function SportBlocks({ from, to, str, car }: { from: string; to: string; str: StrengthSession[]; car: CardioActivityLite[] }) {
+function VolDelta({ cur, prev }: { cur: number; prev: number }) {
+  if (!prev) return null;
+  const d = cur - prev;
+  if (d === 0) return <span className="subtle tiny">±0</span>;
+  const up = d > 0;
+  const pct = Math.round((d / prev) * 100);
+  return <span style={{ fontSize: 11, fontWeight: 700, color: up ? "var(--success)" : "var(--danger)" }}>{up ? "▲" : "▼"} {Math.abs(pct)}%</span>;
+}
+
+function SportBlocks({ from, to, prevFrom, prevTo, str, car }: { from: string; to: string; prevFrom: string; prevTo: string; str: StrengthSession[]; car: CardioActivityLite[] }) {
   const blocks = useMemo(() => {
     const acc: Partial<Record<Sport, { sport: Sport; sessions: number; vol: number; km: number }>> = {};
     const bump = (sp: Sport) => (acc[sp] ??= { sport: sp, sessions: 0, vol: 0, km: 0 });
@@ -650,6 +659,12 @@ function SportBlocks({ from, to, str, car }: { from: string; to: string; str: St
     for (const a of car) { if (a.date < from || a.date > to) continue; const sp = normCardio(a.sport); if (!sp) continue; const b = bump(sp); b.sessions++; b.km += a.distance_km || 0; }
     return (["strength", "run", "cycle", "swim", "walk"] as Sport[]).map((o) => acc[o]).filter((b): b is { sport: Sport; sessions: number; vol: number; km: number } => !!b);
   }, [from, to, str, car]);
+  const prevVol = useMemo(() => {
+    const acc: Partial<Record<Sport, number>> = {};
+    for (const s of str) if (s.date >= prevFrom && s.date <= prevTo) acc.strength = (acc.strength || 0) + (s.volume || 0);
+    for (const a of car) { if (a.date < prevFrom || a.date > prevTo) continue; const sp = normCardio(a.sport); if (!sp) continue; acc[sp] = (acc[sp] || 0) + (a.distance_km || 0); }
+    return acc;
+  }, [prevFrom, prevTo, str, car]);
   if (!blocks.length) return <div className="subtle tiny center" style={{ padding: "16px 0" }}>No sessions logged in this window yet.</div>;
   return (
     <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2, scrollbarWidth: "none", msOverflowStyle: "none", WebkitOverflowScrolling: "touch" }}>
@@ -665,6 +680,7 @@ function SportBlocks({ from, to, str, car }: { from: string; to: string; str: St
             <div className="tnum" style={{ marginTop: 5, fontWeight: 800, fontSize: vfont, color: "var(--text)", letterSpacing: "-0.4px", lineHeight: 1.1, whiteSpace: "nowrap" }}>
               {val}<span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", marginLeft: 2 }}>{unit}</span>
             </div>
+            <div style={{ height: 15, marginTop: 2, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}><VolDelta cur={isStr ? b.vol : b.km} prev={prevVol[b.sport] || 0} /></div>
             <div style={{ marginTop: 3, fontSize: 12, fontWeight: 600, color: "var(--text-2)", whiteSpace: "nowrap" }}>{s.label}</div>
             <div className="subtle tiny" style={{ whiteSpace: "nowrap" }}>{b.sessions} session{b.sessions === 1 ? "" : "s"}</div>
           </div>
@@ -748,9 +764,9 @@ function Summary() {
     return () => { a = false; };
   }, []);
 
-  const { from, to } = useMemo(() => {
-    if (mode === "Week") { const st = isoAdd(mondayOf(today), -off * 7); return { from: st, to: isoAdd(st, 6) }; }
-    const st = isoAddMonths(today.slice(0, 8) + "01", -off); return { from: st, to: isoAdd(isoAddMonths(st, 1), -1) };
+  const { from, to, prevFrom, prevTo } = useMemo(() => {
+    if (mode === "Week") { const st = isoAdd(mondayOf(today), -off * 7); const en = isoAdd(st, 6); return { from: st, to: en, prevFrom: isoAdd(st, -7), prevTo: isoAdd(en, -7) }; }
+    const st = isoAddMonths(today.slice(0, 8) + "01", -off); const en = isoAdd(isoAddMonths(st, 1), -1); return { from: st, to: en, prevFrom: isoAddMonths(st, -1), prevTo: isoAdd(st, -1) };
   }, [mode, off, today]);
 
   useEffect(() => {
@@ -792,7 +808,7 @@ function Summary() {
       {loading ? <div className="muted center pad">Loading…</div> : (
         <>
           {/* 2 · summary boxes */}
-          <SportBlocks from={from} to={to} str={str ?? []} car={car ?? []} />
+          <SportBlocks from={from} to={to} prevFrom={prevFrom} prevTo={prevTo} str={str ?? []} car={car ?? []} />
           {/* 3 · calendar */}
           <div className="eyebrow">Calendar</div>
           {mode === "Week"
