@@ -164,7 +164,7 @@ function describeTarget(t: UITarget, sport: Sport): string {
     if (sport === "bike" && t.speed) return `${speedFromPace(t.lo) || "?"}–${speedFromPace(t.hi) || "?"} km/h`;
     return `${t.lo || "?"}–${t.hi || "?"}${paceUnit(sport)}`;
   }
-  if (t.type === "rpe") return `RPE ${t.lo || "?"}–${t.hi || "?"}`;
+  if (t.type === "rpe") { const a = t.lo || "?", b = t.hi || "?"; return a === b ? `RPE ${a}` : `RPE ${a}–${b}`; }
   return `${t.lo || "?"}–${t.hi || "?"} ${metricUnit(t.type, sport)}`;
 }
 function readPool(struct: CardioStructure | undefined): { m: number; unit: "m" | "yd" } {
@@ -860,39 +860,55 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
     const set = (patch: Partial<UIStep>) => mapStep(editUid, (s) => ({ ...s, ...patch }));
     const setTarget = (patch: Partial<UITarget>) => mapStep(editUid, (s) => ({ ...s, target: { ...s.target, ...patch } }));
     const setTarget2 = (patch: Partial<UITarget>) => mapStep(editUid, (s) => ({ ...s, target2: { ...s.target2, ...patch } }));
+    const sCard: React.CSSProperties = { display: "flex", alignItems: "center", gap: 12, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 16, padding: "13px 16px", marginTop: 8 };
+    const sLabel: React.CSSProperties = { flex: 1, fontSize: 13, fontWeight: 700, color: "var(--text-2)" };
+    const sChip: React.CSSProperties = { background: "var(--bg)", color: "inherit", border: "1px solid var(--line)", borderRadius: 10, padding: "8px 13px", fontSize: 12.5, fontWeight: 800, fontFamily: "inherit", cursor: "pointer" };
+    const sNum: React.CSSProperties = { ...sChip, width: 66, textAlign: "center", cursor: "text" };
     const targetTypeSelect = (t: UITarget, setT: (p: Partial<UITarget>) => void) => (
-      <select value={t.type} onChange={(e) => setT({ type: e.target.value as TargetType, lo: "", hi: "", speed: e.target.value === "pace" && curSport === "bike" })} style={{ ...sel, minWidth: 150 }}>
+      <select value={t.type} onChange={(e) => setT({ type: e.target.value as TargetType, lo: "", hi: "", speed: e.target.value === "pace" && curSport === "bike" })} style={{ ...sChip, minWidth: 150 }}>
         {TARGET_TYPES.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
         <option value="__hrz" disabled>HR Zone (needs thresholds)</option>
         <option value="__pwz" disabled>Power Zone (needs thresholds)</option>
       </select>
     );
+    const rpeQuick: { v: string; label: string }[] = [{ v: "4", label: "RPE 4 · easy" }, { v: "6", label: "RPE 6 · steady" }, { v: "8", label: "RPE 8 · hard" }];
+    const rpePills = (t: UITarget, setT: (p: Partial<UITarget>) => void) => (
+      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+        {rpeQuick.map((o) => {
+          const on = t.lo === o.v && t.hi === o.v;
+          return (
+            <button key={o.v} onClick={() => setT({ lo: o.v, hi: o.v })} style={{ flex: 1, textAlign: "center", fontSize: 11, fontWeight: on ? 800 : 700, borderRadius: 999, padding: "8px 0", cursor: "pointer", border: on ? "none" : "1px solid var(--line)", background: on ? "var(--inverse-surface)" : "var(--surface-2)", color: on ? "var(--on-inverse)" : "var(--text-2)" }}>{o.label}</button>
+          );
+        })}
+      </div>
+    );
     const targetValueRow = (t: UITarget, setT: (p: Partial<UITarget>) => void) => {
       if (t.type === "none") return null;
+      if (t.type === "rpe") return rpePills(t, setT);
       const bikeSpeed = t.type === "pace" && curSport === "bike" && !!t.speed;
       return (
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
           {t.type === "pace" && !bikeSpeed ? (
             <>
-              <select value={t.lo} onChange={(e) => setT({ lo: e.target.value })} style={{ ...sel, width: 84 }}><option value="">—</option>{paceOpts.map((p) => <option key={p} value={p}>{p}</option>)}</select>
+              <select value={t.lo} onChange={(e) => setT({ lo: e.target.value })} style={{ ...sChip, width: 90 }}><option value="">—</option>{paceOpts.map((p) => <option key={p} value={p}>{p}</option>)}</select>
               <span className="subtle tiny">–</span>
-              <select value={t.hi} onChange={(e) => setT({ hi: e.target.value })} style={{ ...sel, width: 84 }}><option value="">—</option>{paceOpts.map((p) => <option key={p} value={p}>{p}</option>)}</select>
+              <select value={t.hi} onChange={(e) => setT({ hi: e.target.value })} style={{ ...sChip, width: 90 }}><option value="">—</option>{paceOpts.map((p) => <option key={p} value={p}>{p}</option>)}</select>
               <span className="subtle tiny">{paceUnit(curSport)}</span>
               {curSport === "bike" ? <button onClick={() => setT({ speed: true })} style={{ background: "none", border: "none", color: "var(--ember)", cursor: "pointer", fontSize: 11 }}>km/h</button> : null}
             </>
           ) : bikeSpeed ? (
             <>
-              <input type="number" min={1} value={speedFromPace(t.lo)} placeholder="min" onChange={(e) => setT({ lo: paceFromSpeed(e.target.value) })} style={{ ...mini, width: 64 }} />
+              <input type="number" min={1} value={speedFromPace(t.lo)} placeholder="min" onChange={(e) => setT({ lo: paceFromSpeed(e.target.value) })} style={sNum} />
               <span className="subtle tiny">–</span>
-              <input type="number" min={1} value={speedFromPace(t.hi)} placeholder="max" onChange={(e) => setT({ hi: paceFromSpeed(e.target.value) })} style={{ ...mini, width: 64 }} />
+              <input type="number" min={1} value={speedFromPace(t.hi)} placeholder="max" onChange={(e) => setT({ hi: paceFromSpeed(e.target.value) })} style={sNum} />
               <span className="subtle tiny">km/h</span>
               <button onClick={() => setT({ speed: false })} style={{ background: "none", border: "none", color: "var(--ember)", cursor: "pointer", fontSize: 11 }}>/km</button>
             </>
           ) : (
             <>
-              <input type="number" min={t.type === "rpe" ? 1 : 0} max={t.type === "rpe" ? 10 : undefined} value={t.lo} placeholder={t.type === "rpe" ? "1" : "min"} onChange={(e) => setT({ lo: e.target.value })} style={{ ...mini, width: 68 }} />
+              <input type="number" min={0} value={t.lo} placeholder="min" onChange={(e) => setT({ lo: e.target.value })} style={sNum} />
               <span className="subtle tiny">–</span>
-              <input type="number" min={t.type === "rpe" ? 1 : 0} max={t.type === "rpe" ? 10 : undefined} value={t.hi} placeholder={t.type === "rpe" ? "10" : "max"} onChange={(e) => setT({ hi: e.target.value })} style={{ ...mini, width: 68 }} />
+              <input type="number" min={0} value={t.hi} placeholder="max" onChange={(e) => setT({ hi: e.target.value })} style={sNum} />
               <span className="subtle tiny">{metricUnit(t.type, curSport)}</span>
             </>
           )}
@@ -901,67 +917,66 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
     };
     return (
       <div className="card" style={{ marginBottom: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <button className="trn-sub" onClick={() => setView("build")}>‹ {stepTypeLabel(st.stepType, curSport)}</button>
-          <button onClick={() => { removeItem(editUid); setView("build"); }} className="trn-sub" style={{ color: "var(--danger)" }}>REMOVE</button>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button onClick={() => setView("build")} style={{ fontSize: 12.5, fontWeight: 700, color: "var(--muted)", background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 999, padding: "8px 16px", cursor: "pointer" }}>‹ {stepTypeLabel(st.stepType, curSport)}</button>
+          <div style={{ flex: 1 }} />
+          <button onClick={() => { removeItem(editUid); setView("build"); }} style={{ fontSize: 12, fontWeight: 800, color: "var(--danger)", background: "color-mix(in srgb, var(--danger) 14%, transparent)", border: "none", borderRadius: 999, padding: "8px 16px", cursor: "pointer" }}>Remove</button>
         </div>
 
-        <div className="eyebrow" style={{ marginTop: 14 }}>Step info</div>
-        <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
-          <span style={rowLabel}>Step Type</span>
-          <select value={st.stepType} onChange={(e) => set({ stepType: e.target.value as StepType })} style={{ ...sel, minWidth: 140 }}>
+        <div className="eyebrow" style={{ marginTop: 18 }}>Step info</div>
+        <label style={sCard}>
+          <span style={sLabel}>Step type</span>
+          <select value={st.stepType} onChange={(e) => set({ stepType: e.target.value as StepType })} style={{ ...sChip, minWidth: 140 }}>
             {STEP_TYPES.map((t) => <option key={t} value={t}>{stepTypeLabel(t, curSport)}</option>)}
           </select>
         </label>
         {curSport === "swim" ? (
           <>
-            <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
-              <span style={rowLabel}>Stroke</span>
-              <select value={st.stroke} onChange={(e) => set({ stroke: e.target.value as Stroke })} style={{ ...sel, minWidth: 140 }}>{STROKE_OPTS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</select>
+            <label style={sCard}>
+              <span style={sLabel}>Stroke</span>
+              <select value={st.stroke} onChange={(e) => set({ stroke: e.target.value as Stroke })} style={{ ...sChip, minWidth: 140 }}>{STROKE_OPTS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</select>
             </label>
-            <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
-              <span style={rowLabel}>Equipment</span>
-              <select value={st.equipment} onChange={(e) => set({ equipment: e.target.value as Equipment })} style={{ ...sel, minWidth: 140 }}>{EQUIP_OPTS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</select>
+            <label style={sCard}>
+              <span style={sLabel}>Equipment</span>
+              <select value={st.equipment} onChange={(e) => set({ equipment: e.target.value as Equipment })} style={{ ...sChip, minWidth: 140 }}>{EQUIP_OPTS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</select>
             </label>
             {st.stroke === "drill" ? (
-              <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, gap: 8 }}>
-                <span style={rowLabel}>Drill name</span>
-                <input value={st.drill} onChange={(e) => set({ drill: e.target.value })} placeholder="e.g. catch-up" style={{ ...field, flex: 1, maxWidth: 180 }} />
+              <label style={{ ...sCard, gap: 8 }}>
+                <span style={sLabel}>Drill name</span>
+                <input value={st.drill} onChange={(e) => set({ drill: e.target.value })} placeholder="e.g. catch-up" style={{ ...sChip, flex: 1, maxWidth: 180, fontWeight: 700, cursor: "text" }} />
               </label>
             ) : null}
           </>
         ) : null}
 
-        <div className="eyebrow" style={{ marginTop: 16 }}>Duration</div>
-        <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
-          <span style={rowLabel}>Duration Type</span>
-          <select value={st.durType} onChange={(e) => set({ durType: e.target.value as DurType })} style={{ ...sel, minWidth: 140 }}>
+        <div className="eyebrow" style={{ marginTop: 18 }}>Duration</div>
+        <label style={sCard}>
+          <span style={sLabel}>Duration type</span>
+          <select value={st.durType} onChange={(e) => set({ durType: e.target.value as DurType })} style={{ ...sChip, minWidth: 140 }}>
             <option value="time">Time</option><option value="distance">Distance</option><option value="lap">Lap Button Press</option>
           </select>
         </label>
         {st.durType === "time" ? (
-          <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
-            <span style={rowLabel}>Duration</span>
-            <button onClick={() => setWheelUid(editUid)} style={{ ...sel, minWidth: 100, textAlign: "center", cursor: "pointer", fontVariantNumeric: "tabular-nums" }}>{fmtDur(st.secs) || "0:00"}</button>
+          <label style={sCard}>
+            <span style={sLabel}>Duration</span>
+            <button onClick={() => setWheelUid(editUid)} style={{ ...sChip, minWidth: 100, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>{fmtDur(st.secs) || "0:00"}</button>
           </label>
         ) : null}
         {st.durType === "distance" ? (
           <>
-          <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10, gap: 8 }}>
-            <span style={rowLabel}>Distance</span>
-            <span style={{ display: "inline-flex", gap: 6 }}>
-              <input type="number" min={0} value={st.dist} placeholder="0" onChange={(e) => set({ dist: e.target.value })} style={{ ...mini, width: 80 }} />
-              <select value={st.distUnit} onChange={(e) => set({ distUnit: e.target.value as "m" | "km" })} style={sel}><option value="m">m</option><option value="km">km</option></select>
-            </span>
+          <label style={{ ...sCard, gap: 8 }}>
+            <span style={sLabel}>Distance</span>
+            <input type="number" min={0} value={st.dist} placeholder="0" onChange={(e) => set({ dist: e.target.value })} style={{ ...sNum, width: 80 }} />
+            <select value={st.distUnit} onChange={(e) => set({ distUnit: e.target.value as "m" | "km" })} style={sChip}><option value="m">m</option><option value="km">km</option></select>
           </label>
           {curSport === "swim" && st.dist ? (() => { const meters = st.distUnit === "km" ? (num(st.dist) || 0) * 1000 : (num(st.dist) || 0); const laps = meters / poolM; const whole = Math.abs(laps - Math.round(laps)) < 0.02; return meters > 0 ? <div className="subtle tiny" style={{ marginTop: 6, textAlign: "right", opacity: 0.8 }}>{whole ? `= ${Math.round(laps)} laps` : `≈ ${laps.toFixed(1)} laps`}</div> : null; })() : null}
           </>
         ) : null}
         {st.durType === "lap" ? <div className="subtle tiny" style={{ marginTop: 10 }}>Ends when you press the lap button.</div> : null}
 
-        <div className="eyebrow" style={{ marginTop: 16 }}>Intensity target</div>
-        <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
-          <span style={rowLabel}>Target Type</span>
+        <div className="eyebrow" style={{ marginTop: 18 }}>Intensity target</div>
+        <label style={sCard}>
+          <span style={sLabel}>Target type</span>
           {targetTypeSelect(st.target, setTarget)}
         </label>
         {targetValueRow(st.target, setTarget)}
@@ -970,8 +985,8 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
             <button onClick={() => setTarget2({ type: curSport === "bike" ? "cadence" : "hr", lo: "", hi: "" })} style={{ ...dashBtn("color-mix(in srgb, var(--ember) 40%, transparent)"), marginTop: 10, fontSize: 11 }}>+ Add a secondary target</button>
           ) : (
             <>
-              <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 12 }}>
-                <span style={rowLabel}>Secondary</span>
+              <label style={{ ...sCard, gap: 8 }}>
+                <span style={sLabel}>Secondary</span>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                   {targetTypeSelect(st.target2, setTarget2)}
                   <button onClick={() => setTarget2({ type: "none", lo: "", hi: "" })} title="Remove secondary" style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 15 }}>×</button>
@@ -981,7 +996,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
             </>
           )
         ) : null}
-        <div className="subtle tiny" style={{ marginTop: 12, opacity: 0.7 }}>Effort (RPE) works now. HR/Power zone targets unlock once your thresholds are computed.</div>
+        <div className="subtle tiny" style={{ marginTop: 14, opacity: 0.7 }}>Effort (RPE) works now. HR/Power zone targets unlock once your thresholds are computed.</div>
 
         {wheelUid === editUid ? <DurationWheel initial={st.secs || 0} onCancel={() => setWheelUid(null)} onOk={(secs) => { set({ secs }); setWheelUid(null); }} /> : null}
       </div>
