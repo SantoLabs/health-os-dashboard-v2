@@ -26,7 +26,7 @@ type Discipline = "strength" | "cardio";
 
 type Surface =
   | { k: "home" }
-  | { k: "cardio"; intent: "workout" | "routine"; start: "describe" | "build" }
+  | { k: "cardio"; intent: "workout" | "routine"; start: "describe" | "build"; editRoutineId?: string }
   | { k: "strengthLogger"; autoStart: { plan_id?: string; routine_id?: string; title?: string } | null; resume?: boolean }
   | { k: "strengthBuild"; routineId: string | null };
 
@@ -161,7 +161,7 @@ export default function WorkoutsTab() {
 
   // ---------- sub-surfaces (delegate to existing builders/loggers) ----------
   if (surface.k === "cardio") {
-    return <CardioBuilder onExit={backHome} intent={surface.intent} startMode={surface.start} />;
+    return <CardioBuilder onExit={backHome} intent={surface.intent} startMode={surface.start} editRoutineId={surface.editRoutineId} />;
   }
   if (surface.k === "strengthLogger") {
     return (
@@ -184,7 +184,7 @@ export default function WorkoutsTab() {
   const isCardio = discipline === "cardio";
 
   const editAction = (id: string) => {
-    if (isCardio) setSurface({ k: "cardio", intent: "routine", start: "build" });
+    if (isCardio) setSurface({ k: "cardio", intent: "routine", start: "build", editRoutineId: id });
     else setSurface({ k: "strengthBuild", routineId: id });
   };
 
