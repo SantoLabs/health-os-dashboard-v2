@@ -30,7 +30,7 @@ export default function TrainPage() {
         {primary === "Train" && (
           <>
             <SubPills items={TRAIN_SUBS} value={trainSub} onChange={setTrainSub} />
-            {trainSub === "Workouts" && <WorkoutsTab />}
+            {trainSub === "Workouts" && <WorkoutsTab onAskCoach={() => setPrimary("Coach")} />}
             {trainSub === "Strength" && <StrengthTab />}
             {trainSub === "Cardio" && <CardioTab />}
           </>
