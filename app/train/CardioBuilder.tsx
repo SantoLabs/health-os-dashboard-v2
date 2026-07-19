@@ -25,7 +25,6 @@ type Sport = "run" | "bike" | "swim";
 function normSport(h?: string): Sport { const s = (h || "").toLowerCase(); if (s.startsWith("swim") || s.startsWith("pool")) return "swim"; if (s.startsWith("bik") || s.startsWith("cyc") || s.startsWith("rid")) return "bike"; return "run"; }
 const paceUnit = (sp: Sport) => (sp === "swim" ? "/100m" : "/km");
 const sportName = (sp: Sport) => (sp === "run" ? "Run" : sp === "bike" ? "Bike" : "Swim");
-const sportIcon = (sp: Sport) => (sp === "run" ? "🏃" : sp === "bike" ? "🚴" : "🏊");
 
 type StepType = "warmup" | "active" | "walk" | "recover" | "rest" | "cooldown" | "other";
 type DurType = "time" | "distance" | "lap";
@@ -1023,7 +1022,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
     const tgt = [describeTarget(st.target, curSport), st.target2.type !== "none" ? describeTarget(st.target2, curSport) : ""].filter(Boolean).join(" + ");
     const dur = st.durType === "lap" ? "Lap" : st.durType === "time" ? fmtDur(st.secs) : (st.dist ? `${st.dist} ${st.distUnit}` : "—");
     return (
-      <div key={st.uid} onClick={() => { setEditUid(st.uid); setView("step"); }} style={{ display: "flex", alignItems: "stretch", gap: 0, borderRadius: 9, background: "var(--surface-2)", border: "1px solid var(--line)", cursor: "pointer", overflow: "hidden", marginLeft: insideRepeat ? 10 : 0 }}>
+      <div key={st.uid} onClick={() => { setEditUid(st.uid); setView("step"); }} style={{ display: "flex", alignItems: "stretch", gap: 0, borderRadius: 14, background: "var(--surface-2)", border: "1px solid var(--line)", cursor: "pointer", overflow: "hidden", marginLeft: insideRepeat ? 10 : 0 }}>
         <div style={{ width: 4, background: stepAccent[st.stepType], flex: "0 0 auto" }} />
         <div style={{ flex: 1, padding: "10px 12px", minWidth: 0 }}>
           <div style={{ fontSize: 13.5, fontWeight: 700 }}>{stepTypeLabel(st.stepType, curSport)}</div>
@@ -1080,7 +1079,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
   const renderNode = (it: UIItem, depth: number): JSX.Element => {
     if (!isRepeat(it)) return stepRow(it, depth > 0);
     return (
-      <div key={it.uid} style={{ borderRadius: 10, border: "1px solid color-mix(in srgb, var(--ember) 28%, transparent)", background: "color-mix(in srgb, var(--ember) 5%, transparent)", padding: 8, marginLeft: depth > 0 ? 10 : 0 }}>
+      <div key={it.uid} style={{ borderRadius: 18, border: "1px solid color-mix(in srgb, var(--ember) 28%, transparent)", background: "color-mix(in srgb, var(--ember) 5%, transparent)", padding: 10, marginLeft: depth > 0 ? 10 : 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
           <select value={it.reps} onChange={(e) => patchRepeat(it.uid, { reps: Math.max(1, Math.round(Number(e.target.value) || 1)) })} style={{ ...sel, width: 62, color: "var(--ember)", fontWeight: 800 }}>{Array.from({ length: Math.max(20, it.reps) }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}</select>
           <span style={{ fontSize: 13, fontWeight: 700, color: "var(--ember)" }}>Times{depth > 0 ? " · nested" : ""}</span>
@@ -1105,26 +1104,27 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
   return (
     <div className="card" style={{ marginBottom: 12 }}>
       {/* header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <button className="trn-sub" onClick={() => setView(inLeg ? "overview" : "pick")}>‹ {inLeg ? "Legs" : `${curSport === "swim" ? "Pool Swim" : sportName(curSport)} Workout`}</button>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <button onClick={() => setView(inLeg ? "overview" : "pick")} style={{ fontSize: 12.5, fontWeight: 700, color: "var(--muted)", background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 999, padding: "8px 16px", cursor: "pointer" }}>‹ {inLeg ? "Legs" : `${curSport === "swim" ? "Pool Swim" : sportName(curSport)} Workout`}</button>
+        <div style={{ flex: 1 }} />
         {inLeg ? (
-          <button onClick={() => setView("overview")} className="trn-sub" style={{ color: "var(--ember)" }}>DONE</button>
+          <button onClick={() => setView("overview")} style={{ fontSize: 12.5, fontWeight: 800, borderRadius: 999, padding: "8px 18px", border: "none", cursor: "pointer", background: "color-mix(in srgb, var(--ember) 16%, transparent)", color: "var(--ember)" }}>Done</button>
         ) : (
-          <button onClick={() => doSave()} disabled={busy || !hasBlocks} className="trn-sub" style={savedOk ? { color: "var(--success)" } : { color: "var(--ember)" }}>{savedOk ? (editingId ? "UPDATED ✓" : "SAVED ✓") : editingId ? "UPDATE" : "SAVE"}</button>
+          <button onClick={() => doSave()} disabled={busy || !hasBlocks} style={{ fontSize: 12.5, fontWeight: 800, borderRadius: 999, padding: "8px 18px", border: "none", cursor: "pointer", background: savedOk ? "var(--success)" : "var(--inverse-surface)", color: savedOk ? "var(--on-ember)" : "var(--on-inverse)" }}>{savedOk ? (editingId ? "Updated ✓" : "Saved ✓") : editingId ? "Update" : "Save"}</button>
         )}
       </div>
 
-      {inLeg ? <div className="subtle tiny" style={{ marginTop: 6 }}>{sportIcon(curSport)} {sportName(curSport)} leg</div> : null}
+      {inLeg ? <div className="subtle tiny" style={{ marginTop: 6 }}>{sportName(curSport)} leg</div> : null}
 
       {/* totals */}
-      <div style={{ display: "flex", gap: 20, marginTop: 12 }}>
-        <div><div style={{ fontSize: 24, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{curEst.secs ? `${curEst.estimated && curEst.complete ? "~" : ""}${fmtDur(curEst.secs)}` : "—"}{curEst.secs && !curEst.complete ? "+" : ""}</div><div className="subtle tiny">{inLeg ? "Leg Time" : "Total Time"}</div></div>
-        <div><div style={{ fontSize: 24, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{curEst.meters ? fmtDist(curEst.meters) : "—"}</div><div className="subtle tiny">Est Distance</div></div>
+      <div style={{ display: "flex", gap: 24, marginTop: 16, alignItems: "baseline" }}>
+        <div><div style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>{curEst.secs ? `${curEst.estimated && curEst.complete ? "~" : ""}${fmtDur(curEst.secs)}${!curEst.complete ? "+" : ""}` : "—"}</div><div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: "var(--muted)", marginTop: 2 }}>{inLeg ? "LEG TIME" : "TOTAL TIME"}</div></div>
+        <div><div style={{ fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>{curEst.meters ? fmtDist(curEst.meters) : "—"}</div><div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: "var(--muted)", marginTop: 2 }}>EST DISTANCE</div></div>
       </div>
       {curEst.secs ? (!curEst.complete ? <div className="subtle tiny" style={{ marginTop: 4, opacity: 0.8 }}>+ set a pace target on distance steps to estimate their time</div> : curEst.estimated ? <div className="subtle tiny" style={{ marginTop: 4, opacity: 0.8 }}>~ time estimated from your recent {curSport} pace</div> : null) : null}
 
       {!inLeg && curSport === "swim" ? poolRow() : null}
-      {!inLeg ? <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Workout name" style={{ ...field, fontWeight: 700, marginTop: 12 }} /> : null}
+      {!inLeg ? <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Workout name" style={{ width: "100%", marginTop: 12, background: "var(--surface-2)", color: "inherit", border: "1px solid var(--line)", borderRadius: 14, padding: "13px 16px", fontSize: 13, fontWeight: 700, fontFamily: "inherit" }} /> : null}
 
       {describeBlock()}
 
@@ -1136,8 +1136,8 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
 
       {/* add step / repeat */}
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-        <button onClick={() => setCurItems((a) => [...a, blankStep("active")])} style={{ ...pill("color-mix(in srgb, var(--ember) 90%, transparent)"), flex: 1, padding: 11 }}>+ Add Step</button>
-        <button onClick={() => setCurItems((a) => [...a, { uid: uid(), loop: true, reps: 6, steps: [blankStep("active"), blankStep("recover")], skipLast: false }])} style={{ flex: 1, padding: 11, borderRadius: 9, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 12, background: "color-mix(in srgb, var(--ember) 16%, transparent)", color: "var(--ember)" }}>⟳ Add Repeat</button>
+        <button onClick={() => setCurItems((a) => [...a, blankStep("active")])} style={{ ...pill("color-mix(in srgb, var(--ember) 90%, transparent)"), flex: 1, padding: 13, borderRadius: 999, fontSize: 13, fontWeight: 800 }}>+ Add step</button>
+        <button onClick={() => setCurItems((a) => [...a, { uid: uid(), loop: true, reps: 6, steps: [blankStep("active"), blankStep("recover")], skipLast: false }])} style={{ flex: 1, padding: 13, borderRadius: 999, border: "none", cursor: "pointer", fontWeight: 800, fontSize: 13, background: "color-mix(in srgb, var(--ember) 16%, transparent)", color: "var(--ember)" }}>⟳ Add repeat</button>
       </div>
 
       {inLeg ? (
