@@ -48,6 +48,17 @@ function ttPayload(tt: string | undefined, v: { kg: string; reps: string; secs: 
   if (tt === "distance") return { distance_m: n(v.dist) };
   return { weight_kg: n(v.kg), reps: n(v.reps) };
 }
+// A completed set must carry its defining metric: reps (weight/reps + bodyweight), duration (time), or distance. kg may be 0/blank.
+function setHasData(tt: string | undefined, v: { kg: string; reps: string; secs: string; dist: string }): boolean {
+  if (tt === "time") return Number(v.secs) > 0;
+  if (tt === "distance") return Number(v.dist) > 0;
+  return Number(v.reps) > 0;
+}
+function setMetricLabel(tt: string | undefined): string {
+  if (tt === "time") return "duration";
+  if (tt === "distance") return "distance";
+  return "reps";
+}
 function DetailOverlay({ title, onClose, media }: { title: string; onClose: () => void; media?: WkMedia | null }) {
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 400, background: "var(--bg)", overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
@@ -207,7 +218,9 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
   const [restPickerOpen, setRestPickerOpen] = useState(false);
   const [guided, setGuided] = useState(false);
   const [gTab, setGTab] = useState<"video" | "steps">("video");
-  const [gLast, setGLast] = useState<{ kg: string; reps: string; dReps: number | null } | null>(null);
+  const [gLast, setGLast] = useState<{ text: string; dReps: number | null } | null>(null);
+  const [emptyConfirm, setEmptyConfirm] = useState<WkSet | null>(null);
+  const [exDel, setExDel] = useState<{ name: string; count: number; ids: string[] } | null>(null);
   useEffect(() => { try { setGuided(localStorage.getItem("hos_guided") === "1"); } catch { /* */ } }, []);
   const toggleGuided = () => setGuided((g) => { const n = !g; try { localStorage.setItem("hos_guided", n ? "1" : "0"); } catch { /* */ } if (!n) setGLast(null); return n; });
   const [liveTimer, setLiveTimer] = useState<{ id: string; startedAt: number } | null>(null);
@@ -390,6 +403,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
       setLiveTimer(null);
     }
     const target = !s.completed;
+    if (target && !override && !setHasData(s.tracking_type, v)) { setEmptyConfirm(s); return; }
     if (target) {
       const sets = bundle?.sets || [];
       const moreLeft = sets.some((x) => x.id !== s.id && !x.completed && !isTemp(x.id));
@@ -415,6 +429,13 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
     const snap = bundle.sets;
     patchSets((list) => list.filter((x) => x.id !== s.id));
     try { await wkDeleteSet(s.id); } catch { setBundle((b) => (b ? { ...b, sets: snap } : b)); }
+  }
+  async function removeExercise(ids: string[]) {
+    if (!bundle) return;
+    const snap = bundle.sets;
+    const real = ids.filter((id) => !isTemp(id));
+    patchSets((list) => list.filter((x) => !ids.includes(x.id)));
+    try { for (const id of real) await wkDeleteSet(id); } catch { setBundle((b) => (b ? { ...b, sets: snap } : b)); }
   }
   async function addExercise(e: { name: string; muscle_group: string; tracking_type?: string | null }) {
     if (!bundle?.session) return;
@@ -668,9 +689,16 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
     if (guided && groups.length) {
       const cur = (() => { for (let i = 0; i < groups.length; i++) { const st = groups[i].sets.find((x) => !x.completed && !isTemp(x.id)); if (st) return { exIdx: i, ex: groups[i], set: st, setIdx: groups[i].sets.indexOf(st) }; } return null; })();
       const restTotalG = cur ? (restMap[cur.ex.name] ?? restLen) : restLen;
-      const hdrBtn: React.CSSProperties = { width: 34, height: 34, borderRadius: 9, flex: "0 0 auto", cursor: "pointer", background: "var(--surface-2)", border: "1px solid var(--line)", color: "var(--text)", fontSize: 20, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" };
       const stepBtn: React.CSSProperties = { width: 42, height: 42, borderRadius: 12, flex: "0 0 auto", cursor: "pointer", background: "var(--surface)", border: "1px solid var(--line)", color: "var(--text)", fontSize: 22, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" };
+      const numInput: React.CSSProperties = { width: "100%", textAlign: "center", background: "transparent", border: "none", outline: "none", color: "var(--text)", fontSize: 22, fontWeight: 800, fontFamily: "inherit", fontVariantNumeric: "tabular-nums", padding: 0 };
+      const cellStyle: React.CSSProperties = { flex: 1, minWidth: 0, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 16, padding: "12px 10px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 };
       const finishNow = () => { const un = (bundle.sets || []).filter((x) => !x.completed && !isTemp(x.id)).length; if (done === 0) setFinishConfirm({ type: "empty", n: 0 }); else if (un > 0) setFinishConfirm({ type: "partial", n: un }); else setFinishing(true); };
+      const guidedSwitch = (
+        <button onClick={toggleGuided} aria-label="Turn off guided split" style={{ display: "flex", alignItems: "center", gap: 7, background: "rgba(0,0,0,0.5)", border: "none", borderRadius: 999, padding: "5px 8px 5px 11px", cursor: "pointer", flex: "0 0 auto" }}>
+          <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.04em", color: "#F0E7DB" }}>Guided</span>
+          <span style={{ width: 32, height: 19, borderRadius: 999, background: ACCENT, padding: 2.5, display: "flex", justifyContent: "flex-end", boxSizing: "border-box" }}><span style={{ width: 14, height: 14, borderRadius: 999, background: "#fff" }} /></span>
+        </button>
+      );
 
       if (resting && gLast) {
         const RAD = 54, CIRC = 2 * Math.PI * RAD;
@@ -678,7 +706,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
         return (
           <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "var(--bg)", display: "flex", flexDirection: "column", color: "var(--text)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", maxWidth: 480, margin: "0 auto", width: "100%" }}>
-              <button onClick={toggleGuided} aria-label="Exit guided" style={hdrBtn}>‹</button>
+              {guidedSwitch}
               <div style={{ flex: 1, textAlign: "center", fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sessTitle.toUpperCase()}{cur ? ` · ${cur.exIdx + 1} OF ${groups.length}` : ""}</div>
               <button onClick={finishNow} style={btn("color-mix(in srgb, var(--success) 90%, transparent)")} disabled={busy}>Finish</button>
             </div>
@@ -694,7 +722,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
                   <div className="subtle" style={{ fontSize: 11 }}>of {fmtSecs(restTotalG)}</div>
                 </div>
               </div>
-              <div className="subtle" style={{ fontSize: 13 }}>Logged · <span style={{ color: "var(--text)", fontWeight: 700 }}>{gLast.kg || "0"} kg × {gLast.reps || "0"}</span>{gLast.dReps != null && gLast.dReps !== 0 ? <span style={{ color: gLast.dReps > 0 ? "var(--success)" : "var(--muted)", fontWeight: 700 }}>{" "}{gLast.dReps > 0 ? "▲ +" : "▼ "}{gLast.dReps} rep</span> : null}</div>
+              <div className="subtle" style={{ fontSize: 13 }}>Logged · <span style={{ color: "var(--text)", fontWeight: 700 }}>{gLast.text}</span>{gLast.dReps != null && gLast.dReps !== 0 ? <span style={{ color: gLast.dReps > 0 ? "var(--success)" : "var(--muted)", fontWeight: 700 }}>{" "}{gLast.dReps > 0 ? "▲ +" : "▼ "}{gLast.dReps} rep</span> : null}</div>
               {cur ? (
                 <div style={{ width: "100%", maxWidth: 360, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 16, padding: "14px 16px", textAlign: "center" }}>
                   <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.08em", color: "var(--muted)" }}>NEXT · SET {cur.setIdx + 1} OF {cur.ex.sets.length}</div>
@@ -714,34 +742,47 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
         return (
           <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "var(--bg)", display: "flex", flexDirection: "column", color: "var(--text)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", maxWidth: 480, margin: "0 auto", width: "100%" }}>
-              <button onClick={toggleGuided} aria-label="Exit guided" style={hdrBtn}>‹</button>
+              {guidedSwitch}
               <div style={{ flex: 1, textAlign: "center", fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", color: "var(--muted)" }}>{sessTitle.toUpperCase()}</div>
             </div>
             <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 24 }}>
               <div style={{ fontSize: 40 }}>✓</div>
               <div style={{ fontWeight: 800, fontSize: 18 }}>All sets logged</div>
               <button onClick={finishNow} style={btn("color-mix(in srgb, var(--success) 90%, transparent)")}>Finish workout</button>
-              <button onClick={toggleGuided} className="subtle tiny" style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}>Back to list</button>
             </div>
           </div>
         );
       }
 
       const gEx = cur.ex, gCur = cur.set, gMedia = bundle.media?.[gEx.name];
+      const tt = gCur.tracking_type || "weight_reps";
       const gPrevList = prevMap[gEx.name] || [];
       const gPrev = gPrevList[Math.min(cur.setIdx, gPrevList.length - 1)] || gPrevList[0] || null;
       const gv = inputs[gCur.id] || emptyInput();
+      const setF = (field: "kg" | "reps" | "secs" | "dist", val: string) => setInputs((m) => ({ ...m, [gCur.id]: { ...(m[gCur.id] || emptyInput()), [field]: val } }));
       const kgShown = gv.kg !== "" ? gv.kg : (gPrev?.weight_kg != null ? String(gPrev.weight_kg) : "");
       const repsShown = gv.reps !== "" ? gv.reps : (gPrev?.reps != null ? String(gPrev.reps) : "");
-      const setKgV = (val: string) => setInputs((m) => ({ ...m, [gCur.id]: { ...(m[gCur.id] || emptyInput()), kg: val } }));
-      const setRepsV = (val: string) => setInputs((m) => ({ ...m, [gCur.id]: { ...(m[gCur.id] || emptyInput()), reps: val } }));
-      const bumpKg = (d: number) => { const c = parseFloat(kgShown || "0") || 0; setKgV(String(Math.max(0, Math.round((c + d) * 4) / 4))); };
-      const bumpReps = (d: number) => { const c = parseInt(repsShown || "0", 10) || 0; setRepsV(String(Math.max(0, c + d))); };
+      const distShown = gv.dist;
+      const bumpKg = (d: number) => { const c = parseFloat(kgShown || "0") || 0; setF("kg", String(Math.max(0, Math.round((c + d) * 4) / 4))); };
+      const bumpReps = (d: number) => { const c = parseInt(repsShown || "0", 10) || 0; setF("reps", String(Math.max(0, c + d))); };
+      const running = liveTimer?.id === gCur.id;
+      const timerShown = Number(gv.secs || 0) + (running ? Math.max(0, Math.floor((Date.now() - (liveTimer as { startedAt: number }).startedAt) / 1000)) : 0);
+      const valid = tt === "time" ? timerShown > 0 : tt === "distance" ? Number(distShown) > 0 : Number(repsShown) > 0;
       const nextEx = groups[cur.exIdx + 1] || null;
       const upNextTxt = cur.setIdx + 1 < gEx.sets.length ? `${gEx.name} · set ${cur.setIdx + 2}` : (nextEx ? `${nextEx.name} · ${nextEx.sets.length} set${nextEx.sets.length > 1 ? "s" : ""}` : "Finish");
       const cueSteps = gMedia?.cue_steps || [];
       const cueLine = cueSteps.length ? cueSteps[0] : (gEx.muscle || "");
-      const logAndRest = () => { const dReps = gPrev?.reps != null && repsShown !== "" ? (parseInt(repsShown, 10) - gPrev.reps) : null; setGLast({ kg: kgShown, reps: repsShown, dReps }); toggleComplete(gCur, { kg: kgShown, reps: repsShown }); };
+      const lastTime = tt === "time" || tt === "distance" ? "" : tt === "reps" ? (gPrev ? `Last time · ${gPrev.reps ?? "—"} reps` : "First time logging this") : (gPrev ? `Last time · ${gPrev.weight_kg ?? "—"} kg × ${gPrev.reps ?? "—"}` : "First time logging this");
+      const skipSet = () => { deleteSetRow(gCur); };
+      const logAndRest = () => {
+        if (!valid) return;
+        let text = ""; let dReps: number | null = null;
+        if (tt === "time") { text = fmtSecs(timerShown); toggleComplete(gCur, { secs: gv.secs || "0" }); }
+        else if (tt === "distance") { text = `${distShown} m`; toggleComplete(gCur, { dist: distShown }); }
+        else if (tt === "reps") { if (gPrev?.reps != null && repsShown !== "") dReps = parseInt(repsShown, 10) - gPrev.reps; text = `${repsShown} reps`; toggleComplete(gCur, { reps: repsShown }); }
+        else { if (gPrev?.reps != null && repsShown !== "") dReps = parseInt(repsShown, 10) - gPrev.reps; text = `${kgShown || "0"} kg × ${repsShown || "0"}`; toggleComplete(gCur, { kg: kgShown, reps: repsShown }); }
+        setGLast({ text, dReps });
+      };
       return (
         <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "var(--bg)", display: "flex", flexDirection: "column", color: "var(--text)" }}>
           <div style={{ position: "relative", height: 300, flex: "0 0 auto", background: "#000", overflow: "hidden" }}>
@@ -767,7 +808,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
                 ) : <div className="subtle tiny">No cue steps for this exercise yet.</div>}
               </div>
             )}
-            <button onClick={toggleGuided} aria-label="Exit guided" style={{ position: "absolute", top: 14, left: 14, width: 36, height: 36, borderRadius: 11, background: "rgba(0,0,0,0.5)", border: "none", color: "#fff", fontSize: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
+            <div style={{ position: "absolute", top: 14, left: 14 }}>{guidedSwitch}</div>
             <div style={{ position: "absolute", top: 20, left: "50%", transform: "translateX(-50%)", fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", color: "#F0E7DB", background: "rgba(0,0,0,0.55)", borderRadius: 999, padding: "6px 14px", pointerEvents: "none", whiteSpace: "nowrap" }}>EXERCISE {cur.exIdx + 1} OF {groups.length}</div>
             <div style={{ position: "absolute", top: 14, right: 14, display: "flex", background: "rgba(0,0,0,0.5)", borderRadius: 999, padding: 3 }}>
               {(["video", "steps"] as const).map((t) => (
@@ -785,19 +826,53 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
               </div>
             </div>
             <div style={{ display: "flex", gap: 12, marginTop: 14 }}>
-              <div style={{ flex: 1, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 16, padding: "12px 10px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <button onClick={() => bumpKg(-2.5)} style={stepBtn}>−</button>
-                <div style={{ textAlign: "center" }}><div className="tnum" style={{ fontSize: 22, fontWeight: 800 }}>{kgShown || "0"}</div><div className="subtle" style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em" }}>KG</div></div>
-                <button onClick={() => bumpKg(2.5)} style={stepBtn}>+</button>
-              </div>
-              <div style={{ flex: 1, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 16, padding: "12px 10px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <button onClick={() => bumpReps(-1)} style={stepBtn}>−</button>
-                <div style={{ textAlign: "center" }}><div className="tnum" style={{ fontSize: 22, fontWeight: 800 }}>{repsShown || "0"}</div><div className="subtle" style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em" }}>REPS</div></div>
-                <button onClick={() => bumpReps(1)} style={stepBtn}>+</button>
-              </div>
+              {tt === "time" ? (
+                <div style={{ ...cellStyle, justifyContent: "center", gap: 16, padding: "14px 10px" }}>
+                  <button onClick={() => (running ? pauseTimer(gCur) : startTimer(gCur.id))} aria-label={running ? "pause timer" : "start timer"} style={{ width: 46, height: 46, borderRadius: "50%", flex: "0 0 auto", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: "2px solid var(--ember)", color: "var(--ember)", fontSize: 15, padding: 0 }}>{running ? "❚❚" : "▶"}</button>
+                  <div className="tnum" style={{ fontSize: 30, fontWeight: 800, letterSpacing: "-0.02em" }}>{fmtSecs(timerShown)}</div>
+                </div>
+              ) : tt === "distance" ? (
+                <div style={cellStyle}>
+                  <div style={{ flex: 1, minWidth: 0, textAlign: "center" }}>
+                    <input inputMode="decimal" value={distShown} placeholder="0" onChange={(e) => setF("dist", e.target.value)} style={numInput} />
+                    <div className="subtle" style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em" }}>METERS</div>
+                  </div>
+                </div>
+              ) : tt === "reps" ? (
+                <div style={cellStyle}>
+                  <button onClick={() => bumpReps(-1)} style={stepBtn}>−</button>
+                  <div style={{ flex: 1, minWidth: 0, textAlign: "center" }}>
+                    <input inputMode="numeric" value={repsShown} placeholder="0" onChange={(e) => setF("reps", e.target.value)} style={numInput} />
+                    <div className="subtle" style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em" }}>REPS</div>
+                  </div>
+                  <button onClick={() => bumpReps(1)} style={stepBtn}>+</button>
+                </div>
+              ) : (
+                <>
+                  <div style={cellStyle}>
+                    <button onClick={() => bumpKg(-2.5)} style={stepBtn}>−</button>
+                    <div style={{ flex: 1, minWidth: 0, textAlign: "center" }}>
+                      <input inputMode="decimal" value={kgShown} placeholder="0" onChange={(e) => setF("kg", e.target.value)} style={numInput} />
+                      <div className="subtle" style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em" }}>KG</div>
+                    </div>
+                    <button onClick={() => bumpKg(2.5)} style={stepBtn}>+</button>
+                  </div>
+                  <div style={cellStyle}>
+                    <button onClick={() => bumpReps(-1)} style={stepBtn}>−</button>
+                    <div style={{ flex: 1, minWidth: 0, textAlign: "center" }}>
+                      <input inputMode="numeric" value={repsShown} placeholder="0" onChange={(e) => setF("reps", e.target.value)} style={numInput} />
+                      <div className="subtle" style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em" }}>REPS</div>
+                    </div>
+                    <button onClick={() => bumpReps(1)} style={stepBtn}>+</button>
+                  </div>
+                </>
+              )}
             </div>
-            <div className="subtle" style={{ textAlign: "center", fontSize: 11.5, marginTop: 8 }}>{gPrev ? `Last time · ${gPrev.weight_kg ?? "—"} kg × ${gPrev.reps ?? "—"}` : "First time logging this"}</div>
-            <button onClick={logAndRest} style={{ marginTop: 14, width: "100%", background: ACCENT, border: "none", borderRadius: 999, padding: "16px 0", fontSize: 15.5, fontWeight: 800, color: "#fff", cursor: "pointer", boxShadow: "0 8px 20px rgba(217,111,78,0.28)" }}>Log set · start rest</button>
+            {lastTime ? <div className="subtle" style={{ textAlign: "center", fontSize: 11.5, marginTop: 8 }}>{lastTime}</div> : null}
+            <button onClick={logAndRest} disabled={!valid} style={{ marginTop: 14, width: "100%", background: ACCENT, border: "none", borderRadius: 999, padding: "16px 0", fontSize: 15.5, fontWeight: 800, color: "#fff", cursor: valid ? "pointer" : "default", opacity: valid ? 1 : 0.4, boxShadow: valid ? "0 8px 20px rgba(217,111,78,0.28)" : "none" }}>Log set · start rest</button>
+            <div style={{ display: "flex", justifyContent: "center", marginTop: 10 }}>
+              <button onClick={skipSet} style={{ background: "none", border: "1px solid var(--line)", borderRadius: 999, padding: "7px 18px", cursor: "pointer", color: "var(--muted)", fontSize: 12, fontWeight: 700 }}>Skip set</button>
+            </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 20px", borderTop: "1px solid var(--line)", background: "var(--surface-2)" }}>
             <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.08em", color: "var(--muted)" }}>UP NEXT</span>
@@ -864,7 +939,8 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
                       <div onClick={() => setExMenu(null)} style={{ position: "fixed", inset: 0, zIndex: 420 }} />
                       <div style={{ position: "absolute", top: 28, right: 0, zIndex: 421, minWidth: 168, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 10, padding: 6, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
                         <button onClick={() => { setExMenu(null); setSsPick(groups.filter((x) => x.ssg != null && x.ssg === g.ssg && x.idx !== g.idx).map((x) => x.idx)); setSsFor(g.idx); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "var(--text)", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Add to superset</button>
-                        {g.ssg != null ? <button onClick={() => { setExMenu(null); ungroup(g.idx); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "var(--danger)", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Remove from superset</button> : null}
+                        {g.ssg != null ? <button onClick={() => { setExMenu(null); ungroup(g.idx); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "var(--text)", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Remove from superset</button> : null}
+                        <button onClick={() => { setExMenu(null); setExDel({ name: g.name, count: g.sets.length, ids: g.sets.map((x) => x.id) }); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", color: "var(--danger)", fontSize: 13, fontWeight: 600, padding: "8px 10px", borderRadius: 8 }}>Remove exercise</button>
                       </div>
                     </>) : null}
                   </div>
@@ -930,6 +1006,30 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
           <ExercisePicker onPick={addExercise} onPickMany={addExercises} />
         </div>
 
+        {emptyConfirm ? (
+          <div onClick={() => setEmptyConfirm(null)} style={{ position: "fixed", inset: 0, zIndex: 430, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 340, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 14, padding: 18 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>Empty set</div>
+              <div className="subtle tiny" style={{ marginBottom: 14 }}>This set has no {setMetricLabel(emptyConfirm.tracking_type)} entered. Add a value, or delete the set.</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => setEmptyConfirm(null)} style={{ flex: 1, padding: 11, borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface-2)", color: "var(--text)", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Enter values</button>
+                <button onClick={() => { deleteSetRow(emptyConfirm); setEmptyConfirm(null); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "none", background: "var(--danger)", color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>Delete set</button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {exDel ? (
+          <div onClick={() => setExDel(null)} style={{ position: "fixed", inset: 0, zIndex: 430, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 340, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 14, padding: 18 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6 }}>Remove exercise</div>
+              <div className="subtle tiny" style={{ marginBottom: 14 }}>Remove {exDel.name} and its {exDel.count} set{exDel.count > 1 ? "s" : ""} from this workout?</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => setExDel(null)} style={{ flex: 1, padding: 11, borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface-2)", color: "var(--text)", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Cancel</button>
+                <button onClick={() => { removeExercise(exDel.ids); setExDel(null); }} style={{ flex: 1, padding: 11, borderRadius: 10, border: "none", background: "var(--danger)", color: "#fff", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>Remove</button>
+              </div>
+            </div>
+          </div>
+        ) : null}
         {finishConfirm ? (
           <div onClick={() => setFinishConfirm(null)} style={{ position: "fixed", inset: 0, zIndex: 430, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
             <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 340, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 14, padding: 18 }}>
