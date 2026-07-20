@@ -9,8 +9,6 @@ const RANGES = [
 ] as const;
 
 function HowTo({ title, cat, media }: { title: string; cat: WkExercise | null; media?: WkMedia | null }) {
-  const [playing, setPlaying] = useState(false);
-  useEffect(() => { setPlaying(false); }, [title]);
   const rows: [string, string | null | undefined][] = cat ? [
     ["Primary muscle", cat.muscle_group],
     ["Also works", cat.secondary],
@@ -26,18 +24,9 @@ function HowTo({ title, cat, media }: { title: string; cat: WkExercise | null; m
   return (
     <>
       {video ? (
-        playing ? (
-          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-            <video src={video} poster={thumb || undefined} controls autoPlay loop playsInline style={{ width: "100%", display: "block", background: "#000" }} />
-          </div>
-        ) : (
-          <button onClick={() => setPlaying(true)} aria-label={`Play ${title} form video`} style={{ position: "relative", display: "block", width: "100%", padding: 0, border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden", cursor: "pointer", background: "var(--surface-2)", minHeight: thumb ? undefined : 160 }}>
-            {thumb ? <img src={thumb} alt={title} style={{ width: "100%", display: "block" }} /> : null}
-            <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <span style={{ width: 54, height: 54, borderRadius: "50%", background: "rgba(0,0,0,0.55)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, paddingLeft: 4 }}>▶</span>
-            </span>
-          </button>
-        )
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <video src={video} poster={thumb || undefined} autoPlay loop muted playsInline controls style={{ width: "100%", display: "block", background: "#000" }} />
+        </div>
       ) : thumb ? (
         <div className="card" style={{ padding: 0, overflow: "hidden" }}><img src={thumb} alt={title} style={{ width: "100%", display: "block" }} /></div>
       ) : (
