@@ -7,7 +7,7 @@ import {
   wkActive, wkStart, wkAddSet, wkCompleteSet, wkEditSet, wkDeleteSet, wkAddExercise, wkFinish, wkDiscard,
   wkRoutines, wkRoutine, wkSaveRoutine, wkSaveAsRoutine, wkUpdateRoutineFromSession, wkDuplicateRoutine, wkDeleteRoutine, wkParseRoutine, wkExercises, planWeek, fmtVolume, wkRename, cardioList, cardioPrescribe, recoveryGet, wkSession, wkRecompute, wkReorder, wkSetSuperset,
 } from "../lib/api";
-import type { WkBundle, WkSession, WkSet, WkFinish, WkRoutineSummary, WkRoutineItem, WkExercise, WkFacets, WkPrevSet, CardioRoutine } from "../lib/api";
+import type { WkBundle, WkSession, WkSet, WkFinish, WkRoutineSummary, WkRoutineItem, WkExercise, WkFacets, WkPrevSet, WkMedia, CardioRoutine } from "../lib/api";
 import ExerciseDetail from "./ExerciseDetail";
 
 type View = "home" | "log" | "celebrate" | "build";
@@ -48,11 +48,11 @@ function ttPayload(tt: string | undefined, v: { kg: string; reps: string; secs: 
   if (tt === "distance") return { distance_m: n(v.dist) };
   return { weight_kg: n(v.kg), reps: n(v.reps) };
 }
-function DetailOverlay({ title, onClose }: { title: string; onClose: () => void }) {
+function DetailOverlay({ title, onClose, media }: { title: string; onClose: () => void; media?: WkMedia | null }) {
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 400, background: "var(--bg)", overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
       <div style={{ maxWidth: 480, margin: "0 auto", padding: 14 }}>
-        <ExerciseDetail title={title} onBack={onClose} />
+        <ExerciseDetail title={title} onBack={onClose} media={media} />
       </div>
     </div>
   );
@@ -697,6 +697,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
               <div key={g.idx} data-gidx={gi} style={{ padding: 12, borderRadius: 12, background: dragG !== null && overG === gi ? "color-mix(in srgb, var(--ember) 14%, transparent)" : "var(--surface-2)", border: "1px solid var(--line)", borderLeft: sc ? `3px solid ${sc}` : "1px solid var(--line)", opacity: dragG === gi ? 0.55 : 1 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <span onPointerDown={(e) => { setDragG(gi); setOverG(gi); (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); }} onPointerMove={(e) => { if (dragG === null) return; const el = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)?.closest("[data-gidx]") as HTMLElement | null; if (el && el.dataset.gidx != null) setOverG(Number(el.dataset.gidx)); }} onPointerUp={(e) => { (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId); if (dragG !== null && overG !== null) moveGroup(dragG, overG); setDragG(null); setOverG(null); }} style={{ cursor: "grab", touchAction: "none", userSelect: "none", color: "var(--muted)", fontSize: 15, padding: "0 2px", flex: "0 0 auto" }} aria-label="Drag to reorder">⠿</span>
+                  {(() => { const th = bundle.media?.[g.name]?.thumbnail_url; return th ? (<button onClick={() => setDetail(g.name)} aria-label={`${g.name} guide`} style={{ flex: "0 0 auto", width: 30, height: 30, borderRadius: 7, overflow: "hidden", border: "1px solid var(--line)", padding: 0, cursor: "pointer", background: "var(--surface)", position: "relative" }}><img src={th} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /><span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 9, textShadow: "0 1px 3px rgba(0,0,0,0.9)" }}>▶</span></button>) : null; })()}
                   <button onClick={() => setDetail(g.name)} style={{ flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, cursor: "pointer", color: "inherit", textAlign: "left", fontWeight: 700, fontSize: 13, display: "flex", alignItems: "center", gap: 5 }}>{g.name}<span className="subtle" style={{ fontSize: 11, fontWeight: 400 }}>ⓘ</span>{g.muscle ? <span className="subtle tiny" style={{ fontWeight: 400 }}> · {g.muscle}</span> : null}</button>
                   {sc ? <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.4, textTransform: "uppercase", color: sc, border: `1px solid ${sc}`, borderRadius: 5, padding: "1px 5px", flex: "0 0 auto" }}>Superset</span> : null}
                   <div style={{ position: "relative", flex: "0 0 auto" }}>
@@ -829,7 +830,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
             </div>
           )}
         </div>
-        {detail ? <DetailOverlay title={detail} onClose={() => setDetail(null)} /> : null}
+        {detail ? <DetailOverlay title={detail} onClose={() => setDetail(null)} media={bundle?.media?.[detail]} /> : null}
         {discarding ? (
           <div onClick={() => !busy && setDiscarding(false)} style={{ position: "fixed", inset: 0, zIndex: 430, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
             <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 340, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 14, padding: 16 }}>
