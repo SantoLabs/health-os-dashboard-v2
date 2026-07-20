@@ -5,6 +5,7 @@ import CardioBuilder from "./CardioBuilder";
 import WorkoutLogger, { RoutineBuilder } from "./WorkoutLogger";
 import TodaySuggestion from "./TodaySuggestion";
 import FuelToday from "./FuelToday";
+import { CARDIO_PRESETS, type CardioPreset, type PresetSport, type GlyphKey } from "./presets";
 import { cardioList, cardioDelete, cardioPrescribe, wkRoutines, wkDeleteRoutine, wkActive } from "../lib/api";
 import type { CardioRoutine, WkRoutineSummary, WkBundle } from "../lib/api";
 
@@ -26,7 +27,8 @@ type Discipline = "strength" | "cardio";
 
 type Surface =
   | { k: "home" }
-  | { k: "cardio"; intent: "workout" | "routine"; start: "describe" | "build"; editRoutineId?: string }
+  | { k: "cardio"; intent: "workout" | "routine"; start: "describe" | "build"; editRoutineId?: string; preset?: CardioPreset }
+  | { k: "presets" }
   | { k: "strengthLogger"; autoStart: { plan_id?: string; routine_id?: string; title?: string } | null; resume?: boolean }
   | { k: "strengthBuild"; routineId: string | null };
 
@@ -108,9 +110,71 @@ const Wave = ({ c }: { c: string }) => (<svg width={16} height={16} viewBox="0 0
 
 const trayIco = (c: string) => ({ width: 13, height: 13, viewBox: "0 0 24 24", fill: "none", stroke: c, strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const });
 
+// ---- preset library ----
+const PRESET_HUE: Record<PresetSport, string> = { run: "#c98a2d", bike: "#97934b", swim: "#5e93a6", brick: "var(--muted)" };
+const PRESET_GLYPH: Record<GlyphKey, JSX.Element> = {
+  run: (<><path d="M4 20c8 0 2-14 10-14 5 0 4 7 6 7" /><circle cx="3" cy="20" r="1.6" /><circle cx="21" cy="13" r="1.6" /></>),
+  runEasy: (<path d="M2 14c3-4 5-4 8 0s5 4 8 0" />),
+  bike: (<><circle cx="6" cy="17" r="3.5" /><circle cx="18" cy="17" r="3.5" /><path d="M6 17l4-8h5M15 9l3 8M9 9h5M13 6h3" /></>),
+  swim: (<><path d="M2 9c2-2 4-2 6 0s4 2 6 0 4-2 6 0" /><path d="M2 15c2-2 4-2 6 0s4 2 6 0 4-2 6 0" /></>),
+  brick: (<><path d="M12 3l9 5-9 5-9-5z" /><path d="M3 13l9 5 9-5" /></>),
+  stopwatch: (<><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2.5M10 2h4" /></>),
+  bolt: (<path d="M13 2L5 13h5l-1 9 8-11h-5z" />),
+  hill: (<path d="M3 18l5-9 4 5 3-6 6 10" />),
+};
+
+function PresetTile({ preset, onLoad }: { preset: CardioPreset; onLoad: () => void }) {
+  const hue = PRESET_HUE[preset.sport];
+  return (
+    <button onClick={onLoad}
+      style={{ position: "relative", overflow: "hidden", textAlign: "left", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 20, padding: 14, minHeight: 136, display: "flex", flexDirection: "column", cursor: "pointer", color: "inherit" }}>
+      <svg width="100" height="100" viewBox="0 0 24 24" fill="none" stroke={hue} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" style={{ position: "absolute", top: -16, right: -20, opacity: 0.14, transform: "rotate(-8deg)", pointerEvents: "none" }}>{PRESET_GLYPH[preset.glyph]}</svg>
+      <div style={{ flex: 1, minHeight: 44 }} />
+      <div style={{ position: "relative" }}>
+        <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)" }}>{preset.name}</div>
+        <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 2 }}>{preset.meta}</div>
+      </div>
+      <div style={{ position: "relative", marginTop: 10 }}>
+        <span style={{ display: "inline-block", fontSize: 11.5, fontWeight: 800, color: "var(--on-inverse)", background: "var(--inverse-surface)", borderRadius: 999, padding: "6px 14px" }}>Load</span>
+      </div>
+    </button>
+  );
+}
+
+const PRESET_SECTIONS: { sport: PresetSport; label: string }[] = [
+  { sport: "run", label: "RUN" }, { sport: "bike", label: "BIKE" }, { sport: "swim", label: "SWIM" }, { sport: "brick", label: "BRICK" },
+];
+
+function PresetLibrary({ onExit, onLoad }: { onExit: () => void; onLoad: (p: CardioPreset) => void }) {
+  return (
+    <div className="card" style={{ marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <button onClick={onExit} style={{ width: 36, height: 36, borderRadius: 999, background: "var(--surface-2)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flex: "0 0 auto" }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6" /></svg>
+        </button>
+        <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em" }}>Preset library</div>
+      </div>
+      <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 8 }}>Load a preset and make it yours — it opens in the builder, ready to tweak and save.</div>
+      {PRESET_SECTIONS.map((sec) => {
+        const list = CARDIO_PRESETS.filter((p) => p.sport === sec.sport);
+        if (!list.length) return null;
+        return (
+          <div key={sec.sport}>
+            <div className="eyebrow" style={{ marginTop: 18, marginBottom: 8 }}>{sec.label}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              {list.map((p) => <PresetTile key={p.id} preset={p} onLoad={() => onLoad(p)} />)}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function WorkoutsTab({ onAskCoach }: { onAskCoach?: () => void }) {
   const [discipline, setDiscipline] = useState<Discipline>("cardio");
   const [surface, setSurface] = useState<Surface>({ k: "home" });
+  const [presetFilter, setPresetFilter] = useState<"all" | PresetSport>("all");
 
   const [cardio, setCardio] = useState<CardioRoutine[] | null>(null);
   const [strength, setStrength] = useState<WkRoutineSummary[] | null>(null);
@@ -161,7 +225,10 @@ export default function WorkoutsTab({ onAskCoach }: { onAskCoach?: () => void })
 
   // ---------- sub-surfaces (delegate to existing builders/loggers) ----------
   if (surface.k === "cardio") {
-    return <CardioBuilder onExit={backHome} intent={surface.intent} startMode={surface.start} editRoutineId={surface.editRoutineId} />;
+    return <CardioBuilder onExit={backHome} intent={surface.intent} startMode={surface.start} editRoutineId={surface.editRoutineId} presetStructure={surface.preset?.structure} presetName={surface.preset?.name} presetSport={surface.preset?.sport} />;
+  }
+  if (surface.k === "presets") {
+    return <PresetLibrary onExit={backHome} onLoad={(p) => setSurface({ k: "cardio", intent: "routine", start: "build", preset: p })} />;
   }
   if (surface.k === "strengthLogger") {
     return (
@@ -351,14 +418,51 @@ export default function WorkoutsTab({ onAskCoach }: { onAskCoach?: () => void })
         </div>
       )}
 
-      {/* zone 3 — Presets (placeholder until Phase 3) */}
+      {/* zone 3 — Presets */}
       <span className="eyebrow">Presets</span>
-      <div style={{ border: "1.5px dashed var(--line-2)", borderRadius: "var(--r-md)", padding: 18, textAlign: "center" }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-2)" }}>Curated presets are coming soon</div>
-        <div style={{ marginTop: 5, fontSize: 12, color: "var(--muted)", lineHeight: 1.5 }}>
-          For now, {isCardio ? "build a session above" : "build a routine above"} — anything you save lands in Your routines.
+      {isCardio ? (
+        cardio && cardio.length > 0 ? (
+          <button onClick={() => setSurface({ k: "presets" })}
+            style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--r-md)", padding: "13px 16px", cursor: "pointer", textAlign: "left" }}>
+            <span style={{ width: 34, height: 34, borderRadius: 12, background: "var(--surface-2)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", flex: "0 0 auto" }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round"><rect x="4" y="4" width="7" height="7" rx="2" /><rect x="13" y="4" width="7" height="7" rx="2" /><rect x="4" y="13" width="7" height="7" rx="2" /><rect x="13" y="13" width="7" height="7" rx="2" /></svg>
+            </span>
+            <span style={{ flex: 1 }}>
+              <span style={{ display: "block", fontSize: 13.5, fontWeight: 800, color: "var(--text)" }}>Browse presets</span>
+              <span style={{ display: "block", fontSize: 11.5, color: "var(--muted)", marginTop: 1 }}>Intervals · tempo · long · threshold · brick</span>
+            </span>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" strokeWidth="2.4" strokeLinecap="round"><path d="M9 6l6 6-6 6" /></svg>
+          </button>
+        ) : (
+          <>
+            <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 10 }}>
+              {(["all", "swim", "bike", "run", "brick"] as const).map((f) => {
+                const on = presetFilter === f;
+                const dot = f === "swim" ? "#5e93a6" : f === "bike" ? "#97934b" : f === "run" ? "#c98a2d" : f === "brick" ? "var(--muted)" : null;
+                return (
+                  <button key={f} onClick={() => setPresetFilter(f)}
+                    style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: on ? 800 : 600, cursor: "pointer", borderRadius: 999, padding: "7px 14px", border: on ? "none" : "1px solid var(--line)", background: on ? "var(--inverse-surface)" : "var(--surface-2)", color: on ? "var(--on-inverse)" : "var(--text-2)" }}>
+                    {dot ? <span style={{ width: 7, height: 7, borderRadius: 2.5, background: dot }} /> : null}
+                    {f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              {CARDIO_PRESETS.filter((p) => presetFilter === "all" || p.sport === presetFilter).map((p) => (
+                <PresetTile key={p.id} preset={p} onLoad={() => setSurface({ k: "cardio", intent: "routine", start: "build", preset: p })} />
+              ))}
+            </div>
+          </>
+        )
+      ) : (
+        <div style={{ border: "1.5px dashed var(--line-2)", borderRadius: "var(--r-md)", padding: 18, textAlign: "center" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-2)" }}>Strength presets are coming soon</div>
+          <div style={{ marginTop: 5, fontSize: 12, color: "var(--muted)", lineHeight: 1.5 }}>
+            For now, build a routine above — anything you save lands in Your routines.
+          </div>
         </div>
-      </div>
+      )}
 
       {!isCardio ? (
         <div style={{ marginTop: 4 }}>
