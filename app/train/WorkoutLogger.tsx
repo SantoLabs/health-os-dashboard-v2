@@ -205,6 +205,8 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
   const [newRoutinePick, setNewRoutinePick] = useState(false); // home: new-routine domain chooser
   const [menuOpen, setMenuOpen] = useState(false);
   const [restPickerOpen, setRestPickerOpen] = useState(false);
+  const [focus, setFocus] = useState(false);
+  const [focusIdx, setFocusIdx] = useState(0);
   const [liveTimer, setLiveTimer] = useState<{ id: string; startedAt: number } | null>(null);
   const [editSecs, setEditSecs] = useState<string | null>(null);
   const [finishConfirm, setFinishConfirm] = useState<{ type: "empty" | "partial"; n: number } | null>(null);
@@ -656,6 +658,9 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
     const restRemain = restEnd ? Math.max(0, Math.ceil((restEnd - Date.now()) / 1000)) : 0;
     const resting = restRemain > 0;
     const upNext = (() => { for (const g of groups) { const gi = g.sets.findIndex((x) => !x.completed && !isTemp(x.id)); if (gi >= 0) return { name: g.name, n: gi + 1 }; } return null; })();
+    const fIdx = Math.max(0, Math.min(focusIdx, groups.length - 1));
+    const focusG = groups.length ? groups[fIdx] : null;
+    const focusMedia = focusG ? bundle.media?.[focusG.name] : null;
     const SS_COLORS = ["#d9704e", "#cc9a3d", "#5f9d8a", "#c2544a", "#d98a5a", "#a07a4a"];
     const ssColor = (v: number | null | undefined) => (v == null ? null : SS_COLORS[((v % SS_COLORS.length) + SS_COLORS.length) % SS_COLORS.length]);
 
@@ -691,12 +696,36 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
           <div className="trn-cell"><div className="v tnum">{done}</div><div className="l">sets</div></div>
         </div>
 
+        {groups.length > 0 && !focus ? (
+          <button onClick={() => { const uni = groups.findIndex((gg) => gg.sets.some((x) => !x.completed && !isTemp(x.id))); setFocusIdx(uni >= 0 ? uni : 0); setFocus(true); }} className="trn-sub" style={{ marginTop: 12, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "10px 0", fontWeight: 700 }}>⛶ Focus mode</button>
+        ) : null}
+
+        {focus && focusG ? (
+          <div style={{ marginTop: 12, borderRadius: 12, overflow: "hidden", border: "1px solid var(--line)", background: "var(--surface-2)" }}>
+            {focusMedia?.video_url ? (
+              <video src={focusMedia.video_url} poster={focusMedia.thumbnail_url || undefined} autoPlay loop muted playsInline disablePictureInPicture controlsList="nodownload nofullscreen noremoteplayback" style={{ width: "100%", display: "block", background: "#000", pointerEvents: "none" }} />
+            ) : focusMedia?.thumbnail_url ? (
+              <img src={focusMedia.thumbnail_url} alt="" style={{ width: "100%", display: "block" }} />
+            ) : null}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px" }}>
+              <button onClick={() => setFocusIdx(Math.max(0, fIdx - 1))} disabled={fIdx === 0} aria-label="Previous exercise" style={{ width: 36, height: 36, borderRadius: 9, flex: "0 0 auto", cursor: fIdx === 0 ? "default" : "pointer", background: "var(--surface)", border: "1px solid var(--line)", color: "var(--text)", opacity: fIdx === 0 ? 0.4 : 1, fontSize: 20, lineHeight: 1 }}>‹</button>
+              <button onClick={() => setDetail(focusG.name)} style={{ flex: 1, minWidth: 0, textAlign: "center", background: "none", border: "none", cursor: "pointer", color: "inherit", padding: 0 }}>
+                <div style={{ fontWeight: 800, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{focusG.name}<span className="subtle" style={{ fontSize: 11, fontWeight: 400, marginLeft: 5 }}>ⓘ</span></div>
+                <div className="subtle tiny">Exercise {fIdx + 1} of {groups.length}{focusG.muscle ? ` · ${focusG.muscle}` : ""}</div>
+              </button>
+              <button onClick={() => setFocusIdx(Math.min(groups.length - 1, fIdx + 1))} disabled={fIdx >= groups.length - 1} aria-label="Next exercise" style={{ width: 36, height: 36, borderRadius: 9, flex: "0 0 auto", cursor: fIdx >= groups.length - 1 ? "default" : "pointer", background: "var(--surface)", border: "1px solid var(--line)", color: "var(--text)", opacity: fIdx >= groups.length - 1 ? 0.4 : 1, fontSize: 20, lineHeight: 1 }}>›</button>
+            </div>
+            <button onClick={() => setFocus(false)} className="subtle tiny" style={{ width: "100%", background: "none", borderLeft: "none", borderRight: "none", borderBottom: "none", borderTop: "1px solid var(--line)", cursor: "pointer", color: "inherit", padding: "9px 0", fontWeight: 600 }}>Exit focus</button>
+          </div>
+        ) : null}
+
         {groups.length === 0 ? <div className="subtle tiny" style={{ marginTop: 12 }}>Add your first exercise below.</div> : null}
 
         <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
           {groups.map((g, gi) => {
             const prevList: WkPrevSet[] = prevMap[g.name] || [];
             const sc = ssColor(g.ssg);
+            if (focus && gi !== fIdx) return null;
             return (
               <div key={g.idx} data-gidx={gi} style={{ padding: 12, borderRadius: 12, background: dragG !== null && overG === gi ? "color-mix(in srgb, var(--ember) 14%, transparent)" : "var(--surface-2)", border: "1px solid var(--line)", borderLeft: sc ? `3px solid ${sc}` : "1px solid var(--line)", opacity: dragG === gi ? 0.55 : 1 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -771,7 +800,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
           })}
         </div>
 
-        <div style={{ marginTop: 12 }}>
+        <div style={{ marginTop: 12, display: focus && groups.length > 0 ? "none" : undefined }}>
           <div className="eyebrow" style={{ marginBottom: 6 }}>Add exercise</div>
           <ExercisePicker onPick={addExercise} onPickMany={addExercises} />
         </div>
