@@ -178,7 +178,7 @@ function ExercisePicker({ onPick, onPickMany, placeholder }: { onPick: (e: { nam
   );
 }
 
-export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio, autoStart, resume, onExit }: { editSessionId?: string; onExitEdit?: () => void; onOpenCardio?: (intent: "workout" | "routine", startMode: "describe" | "build") => void; autoStart?: { plan_id?: string; routine_id?: string; title?: string } | null; resume?: boolean; onExit?: () => void } = {}) {
+export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio, autoStart, resume, onExit }: { editSessionId?: string; onExitEdit?: () => void; onOpenCardio?: (intent: "workout" | "routine", startMode: "describe" | "build") => void; autoStart?: { plan_id?: string; routine_id?: string; title?: string; items?: WkRoutineItem[] } | null; resume?: boolean; onExit?: () => void } = {}) {
   const [view, setView] = useState<View>(editSessionId ? "log" : "home");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -324,7 +324,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
   function patchSets(fn: (s: WkSet[]) => WkSet[]) { setBundle((b) => (b && b.session ? { ...b, sets: fn(b.sets) } : b)); }
   const reloadActive = useCallback(async () => { const b = editSessionId ? await wkSession(editSessionId) : await wkActive(); setBundle(b); mergeSeed(b.sets); }, [mergeSeed, editSessionId]);
 
-  async function startFrom(opts: { plan_id?: string; routine_id?: string; title?: string }) {
+  async function startFrom(opts: { plan_id?: string; routine_id?: string; title?: string; items?: WkRoutineItem[] }) {
     setBusy(true);
     try {
       const b = await wkStart(opts); setBundle(b); seedInputs(b.sets); setView("log");
