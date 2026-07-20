@@ -130,6 +130,8 @@ function ExercisePicker({ onPick, onPickMany, placeholder }: { onPick: (e: { nam
     setSheet(null);
   };
   const listItems = filtered ? opts.map((o) => ({ name: o.name, muscle_group: o.muscle_group, tracking_type: o.tracking_type ?? null, thumbnail_url: o.thumbnail_url ?? null })) : recents;
+  const thumbByName = new Map<string, string | null>();
+  for (const e of opts) thumbByName.set(e.name, e.thumbnail_url ?? null);
   return (
     <div style={{ position: "relative" }}>
       <div style={{ display: "flex", gap: 6 }}>
@@ -159,10 +161,11 @@ function ExercisePicker({ onPick, onPickMany, placeholder }: { onPick: (e: { nam
             <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 260, overflowY: "auto" }}>
               {listItems.map((o) => {
                 const on = isSel(o.name);
+                const th = (o as { thumbnail_url?: string | null }).thumbnail_url || thumbByName.get(o.name) || null;
                 return (
                   <button key={o.name} onClick={() => toggleSel(o)} style={{ display: "flex", alignItems: "center", gap: 8, textAlign: "left", padding: "8px 10px", borderRadius: 8, cursor: "pointer", border: on ? "1px solid color-mix(in srgb, var(--ember) 55%, transparent)" : "1px solid var(--line)", background: on ? "color-mix(in srgb, var(--ember) 14%, transparent)" : "var(--surface-2)", color: "inherit" }}>
                     <span style={{ flex: "0 0 auto", width: 18, height: 18, borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, background: on ? ACCENT : "var(--surface-2)", color: "#fff" }}>{on ? "✓" : ""}</span>
-                    <span style={{ flex: "0 0 auto", width: 32, height: 32, borderRadius: "50%", overflow: "hidden", background: "var(--surface)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center" }}>{(o as { thumbnail_url?: string | null }).thumbnail_url ? <img src={(o as { thumbnail_url?: string | null }).thumbnail_url as string} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /> : null}</span>
+                    <span style={{ flex: "0 0 auto", width: 32, height: 32, borderRadius: "50%", overflow: "hidden", background: "var(--surface)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center" }}>{th ? <img src={th} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /> : null}</span>
                     <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600 }}>{o.name}</span>
                     {o.muscle_group ? <span className="subtle tiny" style={{ textTransform: "capitalize" }}>{o.muscle_group}</span> : null}
                   </button>
