@@ -205,8 +205,11 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
   const [newRoutinePick, setNewRoutinePick] = useState(false); // home: new-routine domain chooser
   const [menuOpen, setMenuOpen] = useState(false);
   const [restPickerOpen, setRestPickerOpen] = useState(false);
-  const [focus, setFocus] = useState(false);
-  const [focusIdx, setFocusIdx] = useState(0);
+  const [guided, setGuided] = useState(false);
+  const [gTab, setGTab] = useState<"video" | "steps">("video");
+  const [gLast, setGLast] = useState<{ kg: string; reps: string; dReps: number | null } | null>(null);
+  useEffect(() => { try { setGuided(localStorage.getItem("hos_guided") === "1"); } catch { /* */ } }, []);
+  const toggleGuided = () => setGuided((g) => { const n = !g; try { localStorage.setItem("hos_guided", n ? "1" : "0"); } catch { /* */ } if (!n) setGLast(null); return n; });
   const [liveTimer, setLiveTimer] = useState<{ id: string; startedAt: number } | null>(null);
   const [editSecs, setEditSecs] = useState<string | null>(null);
   const [finishConfirm, setFinishConfirm] = useState<{ type: "empty" | "partial"; n: number } | null>(null);
@@ -376,9 +379,10 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
     setInputs((m) => { const total = Number(m[s.id]?.secs || 0) + el; if (s.completed) wkEditSet({ id: s.id, duration_s: total }).catch(() => {}); return { ...m, [s.id]: { ...(m[s.id] || emptyInput()), secs: String(total) } }; });
     setLiveTimer(null);
   };
-  async function toggleComplete(s: WkSet) {
+  async function toggleComplete(s: WkSet, override?: { kg?: string; reps?: string; secs?: string; dist?: string }) {
     if (isTemp(s.id)) return;
-    let v = inputs[s.id] || emptyInput();
+    let v = { ...(inputs[s.id] || emptyInput()), ...(override || {}) };
+    if (override) setInputs((m) => ({ ...m, [s.id]: v }));
     if (s.tracking_type === "time" && liveTimer?.id === s.id) {
       const el = Math.max(0, Math.floor((Date.now() - liveTimer.startedAt) / 1000));
       v = { ...v, secs: String(Number(v.secs || 0) + el) };
@@ -658,11 +662,150 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
     const restRemain = restEnd ? Math.max(0, Math.ceil((restEnd - Date.now()) / 1000)) : 0;
     const resting = restRemain > 0;
     const upNext = (() => { for (const g of groups) { const gi = g.sets.findIndex((x) => !x.completed && !isTemp(x.id)); if (gi >= 0) return { name: g.name, n: gi + 1 }; } return null; })();
-    const fIdx = Math.max(0, Math.min(focusIdx, groups.length - 1));
-    const focusG = groups.length ? groups[fIdx] : null;
-    const focusMedia = focusG ? bundle.media?.[focusG.name] : null;
     const SS_COLORS = ["#d9704e", "#cc9a3d", "#5f9d8a", "#c2544a", "#d98a5a", "#a07a4a"];
     const ssColor = (v: number | null | undefined) => (v == null ? null : SS_COLORS[((v % SS_COLORS.length) + SS_COLORS.length) % SS_COLORS.length]);
+
+    if (guided && groups.length) {
+      const cur = (() => { for (let i = 0; i < groups.length; i++) { const st = groups[i].sets.find((x) => !x.completed && !isTemp(x.id)); if (st) return { exIdx: i, ex: groups[i], set: st, setIdx: groups[i].sets.indexOf(st) }; } return null; })();
+      const restTotalG = cur ? (restMap[cur.ex.name] ?? restLen) : restLen;
+      const hdrBtn: React.CSSProperties = { width: 34, height: 34, borderRadius: 9, flex: "0 0 auto", cursor: "pointer", background: "var(--surface-2)", border: "1px solid var(--line)", color: "var(--text)", fontSize: 20, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" };
+      const stepBtn: React.CSSProperties = { width: 42, height: 42, borderRadius: 12, flex: "0 0 auto", cursor: "pointer", background: "var(--surface)", border: "1px solid var(--line)", color: "var(--text)", fontSize: 22, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" };
+      const finishNow = () => { const un = (bundle.sets || []).filter((x) => !x.completed && !isTemp(x.id)).length; if (done === 0) setFinishConfirm({ type: "empty", n: 0 }); else if (un > 0) setFinishConfirm({ type: "partial", n: un }); else setFinishing(true); };
+
+      if (resting && gLast) {
+        const RAD = 54, CIRC = 2 * Math.PI * RAD;
+        const frac = restTotalG > 0 ? Math.min(1, restRemain / restTotalG) : 0;
+        return (
+          <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "var(--bg)", display: "flex", flexDirection: "column", color: "var(--text)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", maxWidth: 480, margin: "0 auto", width: "100%" }}>
+              <button onClick={toggleGuided} aria-label="Exit guided" style={hdrBtn}>‹</button>
+              <div style={{ flex: 1, textAlign: "center", fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sessTitle.toUpperCase()}{cur ? ` · ${cur.exIdx + 1} OF ${groups.length}` : ""}</div>
+              <button onClick={finishNow} style={btn("color-mix(in srgb, var(--success) 90%, transparent)")} disabled={busy}>Finish</button>
+            </div>
+            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 22, padding: 24, maxWidth: 480, margin: "0 auto", width: "100%" }}>
+              <div style={{ position: "relative", width: 150, height: 150 }}>
+                <svg width="150" height="150" viewBox="0 0 128 128" style={{ transform: "rotate(-90deg)" }}>
+                  <circle cx="64" cy="64" r={RAD} fill="none" stroke="var(--line)" strokeWidth="9" />
+                  <circle cx="64" cy="64" r={RAD} fill="none" stroke="var(--success)" strokeWidth="9" strokeLinecap="round" strokeDasharray={CIRC} strokeDashoffset={CIRC * (1 - frac)} />
+                </svg>
+                <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.14em", color: "var(--success)" }}>REST</div>
+                  <div className="tnum" style={{ fontSize: 40, fontWeight: 800, letterSpacing: "-0.02em" }}>{fmtSecs(restRemain)}</div>
+                  <div className="subtle" style={{ fontSize: 11 }}>of {fmtSecs(restTotalG)}</div>
+                </div>
+              </div>
+              <div className="subtle" style={{ fontSize: 13 }}>Logged · <span style={{ color: "var(--text)", fontWeight: 700 }}>{gLast.kg || "0"} kg × {gLast.reps || "0"}</span>{gLast.dReps != null && gLast.dReps !== 0 ? <span style={{ color: gLast.dReps > 0 ? "var(--success)" : "var(--muted)", fontWeight: 700 }}>{" "}{gLast.dReps > 0 ? "▲ +" : "▼ "}{gLast.dReps} rep</span> : null}</div>
+              {cur ? (
+                <div style={{ width: "100%", maxWidth: 360, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 16, padding: "14px 16px", textAlign: "center" }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.08em", color: "var(--muted)" }}>NEXT · SET {cur.setIdx + 1} OF {cur.ex.sets.length}</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, marginTop: 3 }}>{cur.ex.name}</div>
+                </div>
+              ) : null}
+              <div style={{ display: "flex", gap: 10, width: "100%", maxWidth: 360 }}>
+                <button onClick={() => bumpRest(30)} style={{ flex: 1, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 999, padding: "13px 0", fontWeight: 800, color: "var(--text)", cursor: "pointer" }}>+30 s</button>
+                <button onClick={() => setRestEnd(null)} style={{ flex: 1.6, background: ACCENT, border: "none", borderRadius: 999, padding: "13px 0", fontWeight: 800, color: "#fff", cursor: "pointer" }}>Skip rest · go</button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      if (!cur) {
+        return (
+          <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "var(--bg)", display: "flex", flexDirection: "column", color: "var(--text)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", maxWidth: 480, margin: "0 auto", width: "100%" }}>
+              <button onClick={toggleGuided} aria-label="Exit guided" style={hdrBtn}>‹</button>
+              <div style={{ flex: 1, textAlign: "center", fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", color: "var(--muted)" }}>{sessTitle.toUpperCase()}</div>
+            </div>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 24 }}>
+              <div style={{ fontSize: 40 }}>✓</div>
+              <div style={{ fontWeight: 800, fontSize: 18 }}>All sets logged</div>
+              <button onClick={finishNow} style={btn("color-mix(in srgb, var(--success) 90%, transparent)")}>Finish workout</button>
+              <button onClick={toggleGuided} className="subtle tiny" style={{ background: "none", border: "none", cursor: "pointer", color: "inherit" }}>Back to list</button>
+            </div>
+          </div>
+        );
+      }
+
+      const gEx = cur.ex, gCur = cur.set, gMedia = bundle.media?.[gEx.name];
+      const gPrevList = prevMap[gEx.name] || [];
+      const gPrev = gPrevList[Math.min(cur.setIdx, gPrevList.length - 1)] || gPrevList[0] || null;
+      const gv = inputs[gCur.id] || emptyInput();
+      const kgShown = gv.kg !== "" ? gv.kg : (gPrev?.weight_kg != null ? String(gPrev.weight_kg) : "");
+      const repsShown = gv.reps !== "" ? gv.reps : (gPrev?.reps != null ? String(gPrev.reps) : "");
+      const setKgV = (val: string) => setInputs((m) => ({ ...m, [gCur.id]: { ...(m[gCur.id] || emptyInput()), kg: val } }));
+      const setRepsV = (val: string) => setInputs((m) => ({ ...m, [gCur.id]: { ...(m[gCur.id] || emptyInput()), reps: val } }));
+      const bumpKg = (d: number) => { const c = parseFloat(kgShown || "0") || 0; setKgV(String(Math.max(0, Math.round((c + d) * 4) / 4))); };
+      const bumpReps = (d: number) => { const c = parseInt(repsShown || "0", 10) || 0; setRepsV(String(Math.max(0, c + d))); };
+      const nextEx = groups[cur.exIdx + 1] || null;
+      const upNextTxt = cur.setIdx + 1 < gEx.sets.length ? `${gEx.name} · set ${cur.setIdx + 2}` : (nextEx ? `${nextEx.name} · ${nextEx.sets.length} set${nextEx.sets.length > 1 ? "s" : ""}` : "Finish");
+      const cueSteps = gMedia?.cue_steps || [];
+      const cueLine = cueSteps.length ? cueSteps[0] : (gEx.muscle || "");
+      const logAndRest = () => { const dReps = gPrev?.reps != null && repsShown !== "" ? (parseInt(repsShown, 10) - gPrev.reps) : null; setGLast({ kg: kgShown, reps: repsShown, dReps }); toggleComplete(gCur, { kg: kgShown, reps: repsShown }); };
+      return (
+        <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "var(--bg)", display: "flex", flexDirection: "column", color: "var(--text)" }}>
+          <div style={{ position: "relative", height: 300, flex: "0 0 auto", background: "#000", overflow: "hidden" }}>
+            {gTab === "video" ? (
+              gMedia?.video_url ? (
+                <video src={gMedia.video_url} poster={gMedia.thumbnail_url || undefined} autoPlay loop muted playsInline disablePictureInPicture controlsList="nodownload nofullscreen noremoteplayback" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block", pointerEvents: "none" }} />
+              ) : gMedia?.thumbnail_url ? (
+                <img src={gMedia.thumbnail_url} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
+              ) : (
+                <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted)", fontSize: 30 }}>🎬</div>
+              )
+            ) : (
+              <div style={{ position: "absolute", inset: 0, overflowY: "auto", padding: "58px 18px 18px", background: "var(--surface)" }}>
+                {cueSteps.length ? (
+                  <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
+                    {cueSteps.map((st, i) => (
+                      <li key={i} style={{ display: "flex", gap: 10, padding: "7px 0", borderTop: i === 0 ? "none" : "1px solid var(--line)", fontSize: 13, lineHeight: 1.5 }}>
+                        <span style={{ flex: "0 0 auto", width: 20, height: 20, borderRadius: "50%", background: "var(--surface-2)", border: "1px solid var(--line)", color: "var(--ember)", fontWeight: 800, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}>{i + 1}</span>
+                        <span>{st}</span>
+                      </li>
+                    ))}
+                  </ol>
+                ) : <div className="subtle tiny">No cue steps for this exercise yet.</div>}
+              </div>
+            )}
+            <button onClick={toggleGuided} aria-label="Exit guided" style={{ position: "absolute", top: 14, left: 14, width: 36, height: 36, borderRadius: 11, background: "rgba(0,0,0,0.5)", border: "none", color: "#fff", fontSize: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
+            <div style={{ position: "absolute", top: 20, left: "50%", transform: "translateX(-50%)", fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", color: "#F0E7DB", background: "rgba(0,0,0,0.55)", borderRadius: 999, padding: "6px 14px", pointerEvents: "none", whiteSpace: "nowrap" }}>EXERCISE {cur.exIdx + 1} OF {groups.length}</div>
+            <div style={{ position: "absolute", top: 14, right: 14, display: "flex", background: "rgba(0,0,0,0.5)", borderRadius: 999, padding: 3 }}>
+              {(["video", "steps"] as const).map((t) => (
+                <button key={t} onClick={() => setGTab(t)} style={{ border: "none", cursor: "pointer", borderRadius: 999, padding: "6px 12px", fontSize: 11.5, fontWeight: 700, textTransform: "capitalize", background: gTab === t ? "#F0E7DB" : "transparent", color: gTab === t ? "#14100C" : "#F0E7DB" }}>{t}</button>
+              ))}
+            </div>
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", padding: "18px 20px", maxWidth: 480, margin: "0 auto", width: "100%" }}>
+            <div style={{ fontSize: 22, fontWeight: 800 }}>{gEx.name}</div>
+            {cueLine ? <div className="subtle" style={{ fontSize: 12.5, marginTop: 3, textTransform: cueSteps.length ? undefined : "capitalize" }}>{cueLine}</div> : null}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 18 }}>
+              <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.08em", color: "var(--muted)", flex: "0 0 auto" }}>SET {cur.setIdx + 1} OF {gEx.sets.length}</div>
+              <div style={{ flex: 1, display: "flex", gap: 4 }}>
+                {gEx.sets.map((st, i) => (<div key={i} style={{ flex: 1, height: 4, borderRadius: 2, background: st.completed ? "var(--success)" : (i === cur.setIdx ? "var(--ember)" : "var(--line)") }} />))}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 12, marginTop: 14 }}>
+              <div style={{ flex: 1, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 16, padding: "12px 10px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <button onClick={() => bumpKg(-2.5)} style={stepBtn}>−</button>
+                <div style={{ textAlign: "center" }}><div className="tnum" style={{ fontSize: 22, fontWeight: 800 }}>{kgShown || "0"}</div><div className="subtle" style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em" }}>KG</div></div>
+                <button onClick={() => bumpKg(2.5)} style={stepBtn}>+</button>
+              </div>
+              <div style={{ flex: 1, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 16, padding: "12px 10px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <button onClick={() => bumpReps(-1)} style={stepBtn}>−</button>
+                <div style={{ textAlign: "center" }}><div className="tnum" style={{ fontSize: 22, fontWeight: 800 }}>{repsShown || "0"}</div><div className="subtle" style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.08em" }}>REPS</div></div>
+                <button onClick={() => bumpReps(1)} style={stepBtn}>+</button>
+              </div>
+            </div>
+            <div className="subtle" style={{ textAlign: "center", fontSize: 11.5, marginTop: 8 }}>{gPrev ? `Last time · ${gPrev.weight_kg ?? "—"} kg × ${gPrev.reps ?? "—"}` : "First time logging this"}</div>
+            <button onClick={logAndRest} style={{ marginTop: 14, width: "100%", background: ACCENT, border: "none", borderRadius: 999, padding: "16px 0", fontSize: 15.5, fontWeight: 800, color: "#fff", cursor: "pointer", boxShadow: "0 8px 20px rgba(217,111,78,0.28)" }}>Log set · start rest</button>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 20px", borderTop: "1px solid var(--line)", background: "var(--surface-2)" }}>
+            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.08em", color: "var(--muted)" }}>UP NEXT</span>
+            <span style={{ flex: 1, fontSize: 12.5, fontWeight: 700, color: "var(--text)" }}>{upNextTxt}</span>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "var(--bg)", display: "flex", flexDirection: "column" }}>
@@ -690,34 +833,17 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
         </div>
         <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", padding: 14, width: "100%", maxWidth: 480, margin: "0 auto" }}>
 
-        <div className="trn-statgrid" style={{ gridTemplateColumns: "repeat(3,1fr)", marginTop: 12 }}>
+        <button onClick={toggleGuided} style={{ marginTop: 12, width: "100%", display: "flex", alignItems: "center", gap: 12, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 16, padding: "11px 14px", cursor: "pointer", color: "var(--text)", textAlign: "left" }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="4"></rect><path d="M3 12h18"></path></svg>
+          <span style={{ flex: 1 }}><span style={{ display: "block", fontSize: 12.5, fontWeight: 800 }}>Guided split</span><span className="subtle" style={{ display: "block", fontSize: 10.5, marginTop: 1 }}>Form video + one set at a time</span></span>
+          <span style={{ width: 42, height: 25, borderRadius: 999, background: guided ? ACCENT : "var(--line)", padding: 3, display: "flex", justifyContent: guided ? "flex-end" : "flex-start", boxSizing: "border-box" }}><span style={{ width: 19, height: 19, borderRadius: 999, background: guided ? "#fff" : "var(--muted)" }} /></span>
+        </button>
+
+        <div className="trn-statgrid" style={{ gridTemplateColumns: "repeat(3,1fr)", marginTop: 10 }}>
           <div className="trn-cell"><div className="v tnum" style={{ color: "var(--ember)" }}>{editSessionId ? (bundle.session.duration_mins != null ? bundle.session.duration_mins + "m" : "—") : fmtClock(bundle.session.started_at)}</div><div className="l">duration</div></div>
           <div className="trn-cell"><div className="v tnum" style={{ fontSize: 15 }}>{fmtVolume(liveVol)}</div><div className="l">volume</div></div>
           <div className="trn-cell"><div className="v tnum">{done}</div><div className="l">sets</div></div>
         </div>
-
-        {groups.length > 0 && !focus ? (
-          <button onClick={() => { const uni = groups.findIndex((gg) => gg.sets.some((x) => !x.completed && !isTemp(x.id))); setFocusIdx(uni >= 0 ? uni : 0); setFocus(true); }} className="trn-sub" style={{ marginTop: 12, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "10px 0", fontWeight: 700 }}>⛶ Focus mode</button>
-        ) : null}
-
-        {focus && focusG ? (
-          <div style={{ marginTop: 12, borderRadius: 12, overflow: "hidden", border: "1px solid var(--line)", background: "var(--surface-2)" }}>
-            {focusMedia?.video_url ? (
-              <video src={focusMedia.video_url} poster={focusMedia.thumbnail_url || undefined} autoPlay loop muted playsInline disablePictureInPicture controlsList="nodownload nofullscreen noremoteplayback" style={{ width: "100%", display: "block", background: "#000", pointerEvents: "none" }} />
-            ) : focusMedia?.thumbnail_url ? (
-              <img src={focusMedia.thumbnail_url} alt="" style={{ width: "100%", display: "block" }} />
-            ) : null}
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px" }}>
-              <button onClick={() => setFocusIdx(Math.max(0, fIdx - 1))} disabled={fIdx === 0} aria-label="Previous exercise" style={{ width: 36, height: 36, borderRadius: 9, flex: "0 0 auto", cursor: fIdx === 0 ? "default" : "pointer", background: "var(--surface)", border: "1px solid var(--line)", color: "var(--text)", opacity: fIdx === 0 ? 0.4 : 1, fontSize: 20, lineHeight: 1 }}>‹</button>
-              <button onClick={() => setDetail(focusG.name)} style={{ flex: 1, minWidth: 0, textAlign: "center", background: "none", border: "none", cursor: "pointer", color: "inherit", padding: 0 }}>
-                <div style={{ fontWeight: 800, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{focusG.name}<span className="subtle" style={{ fontSize: 11, fontWeight: 400, marginLeft: 5 }}>ⓘ</span></div>
-                <div className="subtle tiny">Exercise {fIdx + 1} of {groups.length}{focusG.muscle ? ` · ${focusG.muscle}` : ""}</div>
-              </button>
-              <button onClick={() => setFocusIdx(Math.min(groups.length - 1, fIdx + 1))} disabled={fIdx >= groups.length - 1} aria-label="Next exercise" style={{ width: 36, height: 36, borderRadius: 9, flex: "0 0 auto", cursor: fIdx >= groups.length - 1 ? "default" : "pointer", background: "var(--surface)", border: "1px solid var(--line)", color: "var(--text)", opacity: fIdx >= groups.length - 1 ? 0.4 : 1, fontSize: 20, lineHeight: 1 }}>›</button>
-            </div>
-            <button onClick={() => setFocus(false)} className="subtle tiny" style={{ width: "100%", background: "none", borderLeft: "none", borderRight: "none", borderBottom: "none", borderTop: "1px solid var(--line)", cursor: "pointer", color: "inherit", padding: "9px 0", fontWeight: 600 }}>Exit focus</button>
-          </div>
-        ) : null}
 
         {groups.length === 0 ? <div className="subtle tiny" style={{ marginTop: 12 }}>Add your first exercise below.</div> : null}
 
@@ -725,7 +851,6 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
           {groups.map((g, gi) => {
             const prevList: WkPrevSet[] = prevMap[g.name] || [];
             const sc = ssColor(g.ssg);
-            if (focus && gi !== fIdx) return null;
             return (
               <div key={g.idx} data-gidx={gi} style={{ padding: 12, borderRadius: 12, background: dragG !== null && overG === gi ? "color-mix(in srgb, var(--ember) 14%, transparent)" : "var(--surface-2)", border: "1px solid var(--line)", borderLeft: sc ? `3px solid ${sc}` : "1px solid var(--line)", opacity: dragG === gi ? 0.55 : 1 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -800,7 +925,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
           })}
         </div>
 
-        <div style={{ marginTop: 12, display: focus && groups.length > 0 ? "none" : undefined }}>
+        <div style={{ marginTop: 12 }}>
           <div className="eyebrow" style={{ marginBottom: 6 }}>Add exercise</div>
           <ExercisePicker onPick={addExercise} onPickMany={addExercises} />
         </div>
