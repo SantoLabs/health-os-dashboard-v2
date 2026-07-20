@@ -712,7 +712,7 @@ export function wkExercises(q: string, filters?: { equipment?: string; muscle?: 
   if (filters?.type) qs.push(`type=${encodeURIComponent(filters.type)}`);
   return wkGet<{ exercises: WkExercise[]; facets?: WkFacets; source?: string }>(`exercises&${qs.join("&")}`);
 }
-export function wkStart(body: { plan_id?: string; routine_id?: string; title?: string }) { return wkPost<WkBundle>("start", body); }
+export function wkStart(body: { plan_id?: string; routine_id?: string; title?: string; items?: WkRoutineItem[] }) { return wkPost<WkBundle>("start", body); }
 export function wkLogSet(body: { session_id: string; exercise_name: string; muscle_group?: string | null; weight_kg?: number | null; reps?: number | null; duration_s?: number | null; distance_m?: number | null; rpe?: number | null; rir?: number | null; set_type?: string }) { return wkPost<{ ok: boolean; set?: WkSet; error?: string }>("log_set", body); }
 export function wkCompleteSet(body: { id: string; weight_kg?: number | null; reps?: number | null; duration_s?: number | null; distance_m?: number | null; rpe?: number | null; rir?: number | null }) { return wkPost<{ ok: boolean; set?: WkSet; error?: string }>("complete_set", body); }
 export function wkEditSet(body: { id: string; weight_kg?: number | null; reps?: number | null; duration_s?: number | null; distance_m?: number | null; rpe?: number | null; set_type?: string; completed?: boolean }) { return wkPost<{ ok: boolean; set?: WkSet }>("edit_set", body); }
