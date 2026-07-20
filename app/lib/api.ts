@@ -755,6 +755,35 @@ export function cardioSave(body: { id?: string; name: string; sport?: string; st
 export function cardioDelete(id: string) { return cardPost<{ ok: boolean }>("delete", { id }); }
 export function cardioPrescribe(body: { sport?: string; date?: string; routine_id?: string; structure?: CardioStructure; name?: string; duration_min?: number; distance_m?: number }) { return cardPost<{ ok: boolean; plan_id?: string; session_type?: string; date?: string; planned_duration?: number | null; distance_m?: number | null; error?: string }>("prescribe", body); }
 
+// ---- cardio-live (in-app recorded sessions) ----
+const CLIVE = "/functions/v1/cardio-live";
+export type CardioLapIn = { lap_index?: number; distance_m?: number | null; duration_s?: number | null; avg_hr?: number | null; avg_speed_mps?: number | null; avg_power?: number | null; intensity_type?: string | null };
+export type CardioCompleteBody = { sport: string; name?: string; date?: string; duration_s: number; distance_m?: number; avg_hr?: number | null; calories?: number | null; elevation_gain_m?: number | null; route_polyline?: string | null; laps?: CardioLapIn[]; stream?: { dist_m: number[]; t_s: number[] } };
+export async function cardioComplete(body: CardioCompleteBody): Promise<{ ok: boolean; activity_id?: string; error?: string }> {
+  const res = await authedFetch(CLIVE, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "complete", ...body }) });
+  if (!res.ok) throw new Error(`Couldn't save session (${res.status})`);
+  return res.json();
+}
+export async function cardioRenameActivity(activity_id: string, name: string): Promise<{ ok: boolean }> {
+  const res = await authedFetch(CLIVE, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "rename", activity_id, name }) });
+  if (!res.ok) throw new Error(`Couldn't rename (${res.status})`);
+  return res.json();
+}
+export async function cardioDeleteActivity(activity_id: string): Promise<{ ok: boolean }> {
+  const res = await authedFetch(CLIVE, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "delete", activity_id }) });
+  if (!res.ok) throw new Error(`Couldn't delete (${res.status})`);
+  return res.json();
+}
+export type CardioSourceRow = { activity_id: string; source: string; name: string | null };
+export async function cardioSources(): Promise<Record<string, { source: string; name: string | null }>> {
+  const res = await authedFetch(`${CLIVE}?api=sources`);
+  if (!res.ok) throw new Error(`Couldn't load sources (${res.status})`);
+  const j = (await res.json()) as { sources: CardioSourceRow[] };
+  const map: Record<string, { source: string; name: string | null }> = {};
+  for (const s of j.sources || []) map[s.activity_id] = { source: s.source, name: s.name };
+  return map;
+}
+
 // ---- coach-compose (Phase 4 · U2a: Kai composes ONE structured, threshold-aware session) ----
 export type ComposeTarget = { metric: string; low: number | null; high: number | null; zone: number | null; unit: string };
 export type ComposeMeasure = { type: string; seconds?: number; meters?: number };
