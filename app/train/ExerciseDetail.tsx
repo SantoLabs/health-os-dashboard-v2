@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useTrain, wkExercises, type TrnLift, type WkExercise } from "../lib/api";
+import { useTrain, wkExercises, type TrnLift, type WkExercise, type WkMedia } from "../lib/api";
 import { Spark, Delta, BackHead, kg, dShort } from "./ui";
 
 const RANGES = [
   { k: "6W", days: 42 }, { k: "3M", days: 92 }, { k: "1Y", days: 366 },
 ] as const;
 
-function HowTo({ title, cat }: { title: string; cat: WkExercise | null }) {
+function HowTo({ title, cat, media }: { title: string; cat: WkExercise | null; media?: WkMedia | null }) {
+  const [playing, setPlaying] = useState(false);
+  useEffect(() => { setPlaying(false); }, [title]);
   const rows: [string, string | null | undefined][] = cat ? [
     ["Primary muscle", cat.muscle_group],
     ["Also works", cat.secondary],
@@ -17,13 +19,49 @@ function HowTo({ title, cat }: { title: string; cat: WkExercise | null }) {
     ["Mechanic", cat.mechanic],
     ["Difficulty", cat.difficulty],
   ] : [];
+  const video = media?.video_url || cat?.video_url || null;
+  const thumb = media?.thumbnail_url || cat?.thumbnail_url || null;
+  const cueSrc = (media?.cue_steps && media.cue_steps.length) ? media.cue_steps : (cat?.cue_steps && cat.cue_steps.length ? cat.cue_steps : null);
+  const cues = cueSrc;
   return (
     <>
-      <div className="card" style={{ textAlign: "center", padding: "26px 16px" }}>
-        <div style={{ fontSize: 30 }}>🎬</div>
-        <div style={{ fontWeight: 700, margin: "8px 0 4px" }}>Form guide coming soon</div>
-        <div className="subtle tiny" style={{ lineHeight: 1.5 }}>A reviewed demo clip for {title} is on the way. Until then, here&apos;s the movement profile.</div>
-      </div>
+      {video ? (
+        playing ? (
+          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+            <video src={video} poster={thumb || undefined} controls autoPlay loop playsInline style={{ width: "100%", display: "block", background: "#000" }} />
+          </div>
+        ) : (
+          <button onClick={() => setPlaying(true)} aria-label={`Play ${title} form video`} style={{ position: "relative", display: "block", width: "100%", padding: 0, border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden", cursor: "pointer", background: "var(--surface-2)", minHeight: thumb ? undefined : 160 }}>
+            {thumb ? <img src={thumb} alt={title} style={{ width: "100%", display: "block" }} /> : null}
+            <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span style={{ width: 54, height: 54, borderRadius: "50%", background: "rgba(0,0,0,0.55)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, paddingLeft: 4 }}>▶</span>
+            </span>
+          </button>
+        )
+      ) : thumb ? (
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}><img src={thumb} alt={title} style={{ width: "100%", display: "block" }} /></div>
+      ) : (
+        <div className="card" style={{ textAlign: "center", padding: "26px 16px" }}>
+          <div style={{ fontSize: 30 }}>🎬</div>
+          <div style={{ fontWeight: 700, margin: "8px 0 4px" }}>No form clip yet</div>
+          <div className="subtle tiny" style={{ lineHeight: 1.5 }}>A demo clip for {title} isn&apos;t in your library yet. Here&apos;s the movement profile.</div>
+        </div>
+      )}
+
+      {cues ? (
+        <div className="card">
+          <div className="eyebrow" style={{ marginBottom: 10 }}>How to perform</div>
+          <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
+            {cues.map((step, i) => (
+              <li key={i} style={{ display: "flex", gap: 10, padding: "7px 0", borderTop: i === 0 ? "none" : "1px solid var(--line)", fontSize: 13, lineHeight: 1.5 }}>
+                <span style={{ flex: "0 0 auto", width: 20, height: 20, borderRadius: "50%", background: "var(--surface-2)", border: "1px solid var(--line)", color: "var(--ember)", fontWeight: 800, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center" }}>{i + 1}</span>
+                <span>{step}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      ) : null}
+
       {cat ? (
         <div className="card">
           <div className="eyebrow" style={{ marginBottom: 8 }}>{cat.name}</div>
@@ -42,7 +80,7 @@ function HowTo({ title, cat }: { title: string; cat: WkExercise | null }) {
   );
 }
 
-export default function ExerciseDetail({ title, onBack }: { title: string; onBack: () => void }) {
+export default function ExerciseDetail({ title, onBack, media }: { title: string; onBack: () => void; media?: WkMedia | null }) {
   const [range, setRange] = useState<(typeof RANGES)[number]["k"]>("3M");
   const [tab, setTab] = useState<"history" | "howto">("history");
   const [cat, setCat] = useState<WkExercise | null>(null);
@@ -61,7 +99,7 @@ export default function ExerciseDetail({ title, onBack }: { title: string; onBac
           <button className={tab === "history" ? "trn-sub on" : "trn-sub"} onClick={() => setTab("history")}>History</button>
           <button className={tab === "howto" ? "trn-sub on" : "trn-sub"} onClick={() => setTab("howto")}>How-to</button>
         </div>
-        {tab === "howto" ? <HowTo title={title} cat={cat} /> : (
+        {tab === "howto" ? <HowTo title={title} cat={cat} media={media} /> : (
           <div className="card"><div className="subtle tiny" style={{ lineHeight: 1.5 }}>No logged strength history for {title} yet — once you log a set here, your e1RM and trends will show up. Check the How-to tab for the movement profile.</div></div>
         )}
       </>
@@ -97,7 +135,7 @@ export default function ExerciseDetail({ title, onBack }: { title: string; onBac
         <button className={tab === "howto" ? "trn-sub on" : "trn-sub"} onClick={() => setTab("howto")}>How-to</button>
       </div>
 
-      {tab === "howto" ? <HowTo title={title} cat={cat} /> : (
+      {tab === "howto" ? <HowTo title={title} cat={cat} media={media} /> : (
       <>
 
       <div className="trn-hero">
