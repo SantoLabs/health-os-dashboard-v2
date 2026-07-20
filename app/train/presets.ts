@@ -1,4 +1,4 @@
-import type { CardioStructure, CardioStep, CardioLoop, CardioStepOrLoop, CardioTarget } from "../lib/api";
+import type { CardioStructure, CardioStep, CardioLoop, CardioStepOrLoop, CardioTarget, WkRoutineItem } from "../lib/api";
 
 // ------------------------------------------------------------------ //
 // Cardio preset library — shipped seed templates (Phase 3).
@@ -147,5 +147,132 @@ export const CARDIO_PRESETS: CardioPreset[] = [
       trans("run"),
       loop(4, [tSec("run", "segment", "work", min(2), rpe(7)), tSec("run", "segment", "recovery", min(1), rpe(2))]),
     ] },
+  },
+];
+
+// ------------------------------------------------------------------ //
+// Strength & mobility presets (Phase 3 unit 2). Same "shipped seed
+// template" model — "Load" opens one in the strength RoutineBuilder as
+// a fresh, unsaved routine (Save makes it the user's own). Items
+// reference real exercise_catalog names + muscle groups; sets/reps are
+// starting points to tweak. Mobility presets carry focus "Mobility" so
+// the app classifies + glyphs them as recovery work. No media needed —
+// this is authoring, not the guided engine (that's P4/P5, media-blocked).
+// ------------------------------------------------------------------ //
+
+export type StrengthGlyph = "strength" | "mobility";
+export type StrengthPreset = {
+  id: string;
+  name: string;
+  focus: string;
+  glyph: StrengthGlyph;
+  meta: string;
+  items: WkRoutineItem[];
+};
+
+const ex = (exercise_name: string, muscle_group: string | null, target_sets: number, target_reps: string): WkRoutineItem =>
+  ({ exercise_name, muscle_group, target_sets, target_reps });
+
+export const STRENGTH_PRESETS: StrengthPreset[] = [
+  // ---------------- STRENGTH ----------------
+  {
+    id: "str-push", name: "Push day", focus: "Push", glyph: "strength", meta: "Chest · shoulders · triceps · 5 moves",
+    items: [
+      ex("Barbell Bench Press", "Chest", 4, "5-8"),
+      ex("Dumbbell Shoulder Press", "Shoulders", 3, "8-12"),
+      ex("Dumbbell Bench Press", "Chest", 3, "8-12"),
+      ex("Dumbbell Lateral Raise", "Side Delts", 3, "12-15"),
+      ex("Triceps Pushdown", "Triceps", 3, "10-15"),
+    ],
+  },
+  {
+    id: "str-pull", name: "Pull day", focus: "Pull", glyph: "strength", meta: "Back · biceps · 5 moves",
+    items: [
+      ex("Pull Up", "Lats", 4, "6-10"),
+      ex("Cable Lat Pulldown", "Lats", 3, "8-12"),
+      ex("Dumbbell Row", "Lats", 3, "8-12"),
+      ex("Face Pull", "Rear Delts", 3, "12-15"),
+      ex("Barbell Bicep Curl", "Biceps", 3, "10-12"),
+    ],
+  },
+  {
+    id: "str-legs", name: "Leg day", focus: "Legs", glyph: "strength", meta: "Quads · hams · glutes · 5 moves",
+    items: [
+      ex("Barbell Squat", "Quads", 4, "5-8"),
+      ex("Barbell Romanian Deadlift", "Hamstrings", 3, "8-10"),
+      ex("Machine Leg Press", "Quads", 3, "10-12"),
+      ex("Machine Seated Leg Curl", "Hamstrings", 3, "10-12"),
+      ex("Standing Calf Raise", "Calves", 4, "12-15"),
+    ],
+  },
+  {
+    id: "str-upper", name: "Upper body", focus: "Upper", glyph: "strength", meta: "4-day split · A · 7 moves",
+    items: [
+      ex("Barbell Bench Press", "Chest", 4, "5-8"),
+      ex("Barbell Overhead Press", "Shoulders", 3, "6-10"),
+      ex("Dumbbell Row", "Lats", 3, "8-12"),
+      ex("Cable Lat Pulldown", "Lats", 3, "8-12"),
+      ex("Dumbbell Lateral Raise", "Side Delts", 3, "12-15"),
+      ex("Barbell Bicep Curl", "Biceps", 3, "10-12"),
+      ex("Triceps Pushdown", "Triceps", 3, "10-15"),
+    ],
+  },
+  {
+    id: "str-lower", name: "Lower body", focus: "Lower", glyph: "strength", meta: "4-day split · B · 6 moves",
+    items: [
+      ex("Barbell Squat", "Quads", 4, "5-8"),
+      ex("Barbell Romanian Deadlift", "Hamstrings", 3, "8-10"),
+      ex("Dumbbell Walking Lunge", "Quads", 3, "10-12"),
+      ex("Machine Seated Leg Curl", "Hamstrings", 3, "10-12"),
+      ex("Standing Calf Raise", "Calves", 4, "12-15"),
+      ex("Hanging Leg Raise", "Core", 3, "10-15"),
+    ],
+  },
+  {
+    id: "str-fullbody", name: "Full body", focus: "Full body", glyph: "strength", meta: "2–3×/week · 6 moves",
+    items: [
+      ex("Barbell Squat", "Quads", 3, "5-8"),
+      ex("Barbell Bench Press", "Chest", 3, "5-8"),
+      ex("Dumbbell Row", "Lats", 3, "8-12"),
+      ex("Barbell Overhead Press", "Shoulders", 3, "8-10"),
+      ex("Barbell Romanian Deadlift", "Hamstrings", 3, "8-10"),
+      ex("Plank", "Core", 3, "30-45s"),
+    ],
+  },
+
+  // ---------------- MOBILITY ----------------
+  {
+    id: "mob-postrun", name: "Post-run cooldown", focus: "Mobility", glyph: "mobility", meta: "Lower body · ~10 min",
+    items: [
+      ex("Foam Roll Quads", "Quads", 1, "45s"),
+      ex("Foam Roll Calves", "Calves", 1, "45s"),
+      ex("Couch Stretch", "Hip Flexors", 1, "45s/side"),
+      ex("Figure-4 Stretch", "Glutes", 1, "45s/side"),
+      ex("Pigeon Pose", "Glutes", 1, "60s/side"),
+      ex("Child's Pose", "Lower Back", 1, "60s"),
+    ],
+  },
+  {
+    id: "mob-hips-spine", name: "Hips & spine", focus: "Mobility", glyph: "mobility", meta: "Post-bike · ~10 min",
+    items: [
+      ex("90/90 Hip Switch", "Hips", 1, "10 reps"),
+      ex("Hip CARs", "Hips", 1, "5/side"),
+      ex("Kneeling Hip Flexor Stretch", "Hip Flexors", 1, "45s/side"),
+      ex("Cat-Cow", "Spine", 1, "10 reps"),
+      ex("Foam Roll IT Band", "IT Band", 1, "45s/side"),
+      ex("Child's Pose", "Lower Back", 1, "60s"),
+    ],
+  },
+  {
+    id: "mob-fullflow", name: "Full flow", focus: "Mobility", glyph: "mobility", meta: "Whole body · ~12 min",
+    items: [
+      ex("Diaphragmatic Breathing", "Core", 1, "60s"),
+      ex("Cat-Cow", "Spine", 1, "10 reps"),
+      ex("Down-Dog to Cobra", null, 1, "8 reps"),
+      ex("Doorway Chest Stretch", "Chest", 1, "45s"),
+      ex("Lat Stretch (Overhead Hang)", "Lats", 1, "45s"),
+      ex("Pigeon Pose", "Glutes", 1, "60s/side"),
+      ex("Legs-Up-the-Wall", "Full Body", 1, "90s"),
+    ],
   },
 ];
