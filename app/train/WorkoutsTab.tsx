@@ -7,7 +7,7 @@ import TodaySuggestion from "./TodaySuggestion";
 import FuelToday from "./FuelToday";
 import { CARDIO_PRESETS, STRENGTH_PRESETS, type CardioPreset, type PresetSport, type GlyphKey, type StrengthPreset } from "./presets";
 import { cardioList, cardioDelete, cardioPrescribe, wkRoutines, wkDeleteRoutine, wkActive } from "../lib/api";
-import type { CardioRoutine, WkRoutineSummary, WkBundle } from "../lib/api";
+import type { CardioRoutine, WkRoutineSummary, WkBundle, WkRoutineItem } from "../lib/api";
 
 /* ------------------------------------------------------------------ *
  * Workouts — four-zone home (Phase 1)
@@ -29,7 +29,7 @@ type Surface =
   | { k: "home" }
   | { k: "cardio"; intent: "workout" | "routine"; start: "describe" | "build"; editRoutineId?: string; preset?: CardioPreset }
   | { k: "presets" }
-  | { k: "strengthLogger"; autoStart: { plan_id?: string; routine_id?: string; title?: string } | null; resume?: boolean }
+  | { k: "strengthLogger"; autoStart: { plan_id?: string; routine_id?: string; title?: string; items?: WkRoutineItem[] } | null; resume?: boolean }
   | { k: "strengthBuild"; routineId: string | null; preset?: StrengthPreset }
   | { k: "strengthPresets" };
 
@@ -281,7 +281,7 @@ export default function WorkoutsTab({ onAskCoach }: { onAskCoach?: () => void })
     );
   }
   if (surface.k === "strengthPresets") {
-    return <StrengthPresetLibrary onExit={backHome} onLoad={(p) => setSurface({ k: "strengthBuild", routineId: null, preset: p })} />;
+    return <StrengthPresetLibrary onExit={backHome} onLoad={(p) => setSurface({ k: "strengthLogger", autoStart: { title: p.name, items: p.items } })} />;
   }
 
   // ---------- home ----------
@@ -521,7 +521,7 @@ export default function WorkoutsTab({ onAskCoach }: { onAskCoach?: () => void })
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             {STRENGTH_PRESETS.filter((p) => strengthPresetFilter === "all" || p.glyph === strengthPresetFilter).map((p) => (
-              <PresetTile key={p.id} name={p.name} meta={p.meta} glyphKey={p.glyph} hue={strengthHue(p)} onLoad={() => setSurface({ k: "strengthBuild", routineId: null, preset: p })} />
+              <PresetTile key={p.id} name={p.name} meta={p.meta} glyphKey={p.glyph} hue={strengthHue(p)} onLoad={() => setSurface({ k: "strengthLogger", autoStart: { title: p.name, items: p.items } })} />
             ))}
           </div>
         </>
