@@ -1025,10 +1025,11 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
 }
 
 // ================= Routine builder =================
-export function RoutineBuilder({ routineId, onExit }: { routineId: string | null; onExit: () => void }) {
-  const [name, setName] = useState("");
-  const [focus, setFocus] = useState("");
-  const [items, setItems] = useState<WkRoutineItem[]>([]);
+export function RoutineBuilder({ routineId, onExit, preset }: { routineId: string | null; onExit: () => void; preset?: { name: string; focus: string; items: WkRoutineItem[] } }) {
+  // A preset seeds a FRESH, unsaved routine (no routineId → Save creates the user's own). Initial state carries it in one shot.
+  const [name, setName] = useState(preset?.name ?? "");
+  const [focus, setFocus] = useState(preset?.focus ?? "");
+  const [items, setItems] = useState<WkRoutineItem[]>(preset ? preset.items.map((it) => ({ ...it })) : []);
   const [loading, setLoading] = useState(!!routineId);
   const [saving, setSaving] = useState(false);
   const [detail, setDetail] = useState<string | null>(null);
