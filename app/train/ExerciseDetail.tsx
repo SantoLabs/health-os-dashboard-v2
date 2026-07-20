@@ -8,6 +8,21 @@ const RANGES = [
   { k: "6W", days: 42 }, { k: "3M", days: 92 }, { k: "1Y", days: 366 },
 ] as const;
 
+function MediaHead({ title, cat, media }: { title: string; cat: WkExercise | null; media?: WkMedia | null }) {
+  const video = media?.video_url || cat?.video_url || null;
+  const thumb = media?.thumbnail_url || cat?.thumbnail_url || null;
+  if (!video && !thumb) return null;
+  return (
+    <div className="card" style={{ padding: 0, overflow: "hidden", marginBottom: 12 }}>
+      {video ? (
+        <video src={video} poster={thumb || undefined} autoPlay loop muted playsInline disablePictureInPicture controlsList="nodownload nofullscreen noremoteplayback" style={{ width: "100%", display: "block", background: "#000", pointerEvents: "none" }} />
+      ) : (
+        <img src={thumb as string} alt={title} style={{ width: "100%", display: "block" }} />
+      )}
+    </div>
+  );
+}
+
 function HowTo({ title, cat, media }: { title: string; cat: WkExercise | null; media?: WkMedia | null }) {
   const rows: [string, string | null | undefined][] = cat ? [
     ["Primary muscle", cat.muscle_group],
@@ -17,26 +32,9 @@ function HowTo({ title, cat, media }: { title: string; cat: WkExercise | null; m
     ["Mechanic", cat.mechanic],
     ["Difficulty", cat.difficulty],
   ] : [];
-  const video = media?.video_url || cat?.video_url || null;
-  const thumb = media?.thumbnail_url || cat?.thumbnail_url || null;
-  const cueSrc = (media?.cue_steps && media.cue_steps.length) ? media.cue_steps : (cat?.cue_steps && cat.cue_steps.length ? cat.cue_steps : null);
-  const cues = cueSrc;
+  const cues = (media?.cue_steps && media.cue_steps.length) ? media.cue_steps : (cat?.cue_steps && cat.cue_steps.length ? cat.cue_steps : null);
   return (
     <>
-      {video ? (
-        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-          <video src={video} poster={thumb || undefined} autoPlay loop muted playsInline controls style={{ width: "100%", display: "block", background: "#000" }} />
-        </div>
-      ) : thumb ? (
-        <div className="card" style={{ padding: 0, overflow: "hidden" }}><img src={thumb} alt={title} style={{ width: "100%", display: "block" }} /></div>
-      ) : (
-        <div className="card" style={{ textAlign: "center", padding: "26px 16px" }}>
-          <div style={{ fontSize: 30 }}>🎬</div>
-          <div style={{ fontWeight: 700, margin: "8px 0 4px" }}>No form clip yet</div>
-          <div className="subtle tiny" style={{ lineHeight: 1.5 }}>A demo clip for {title} isn&apos;t in your library yet. Here&apos;s the movement profile.</div>
-        </div>
-      )}
-
       {cues ? (
         <div className="card">
           <div className="eyebrow" style={{ marginBottom: 10 }}>How to perform</div>
@@ -84,6 +82,7 @@ export default function ExerciseDetail({ title, onBack, media }: { title: string
     return (
       <>
         <BackHead title={title} onBack={onBack} />
+        <MediaHead title={title} cat={cat} media={media} />
         <div className="trn-subs" style={{ marginBottom: 12 }}>
           <button className={tab === "history" ? "trn-sub on" : "trn-sub"} onClick={() => setTab("history")}>History</button>
           <button className={tab === "howto" ? "trn-sub on" : "trn-sub"} onClick={() => setTab("howto")}>How-to</button>
@@ -118,6 +117,8 @@ export default function ExerciseDetail({ title, onBack, media }: { title: string
         sub={`${s.muscle_group.replace(/_/g, " ")} · ${s.sessions} sessions`}
         onBack={onBack}
       />
+
+      <MediaHead title={title} cat={cat} media={media} />
 
       <div className="trn-subs" style={{ marginBottom: 12 }}>
         <button className={tab === "history" ? "trn-sub on" : "trn-sub"} onClick={() => setTab("history")}>History</button>
