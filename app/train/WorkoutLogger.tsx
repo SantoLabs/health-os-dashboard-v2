@@ -74,14 +74,14 @@ const TYPE_OPTS: { v: string; label: string }[] = [
   { v: "recovery_rehab", label: "Recovery / rehab" },
   { v: "cardio", label: "Cardio" },
 ];
-function loadRecents(): { name: string; muscle_group: string; tracking_type?: string | null }[] {
+function loadRecents(): { name: string; muscle_group: string; tracking_type?: string | null; thumbnail_url?: string | null }[] {
   try { const a = JSON.parse(localStorage.getItem(REX_KEY) || "[]"); return Array.isArray(a) ? a.slice(0, 20) : []; } catch { return []; }
 }
-function pushRecents(items: { name: string; muscle_group: string; tracking_type?: string | null }[]) {
+function pushRecents(items: { name: string; muscle_group: string; tracking_type?: string | null; thumbnail_url?: string | null }[]) {
   try {
     const seen = new Set<string>();
-    const merged: { name: string; muscle_group: string; tracking_type?: string | null }[] = [];
-    for (const it of [...items, ...loadRecents()]) { const k = (it.name || "").toLowerCase(); if (!it.name || seen.has(k)) continue; seen.add(k); merged.push({ name: it.name, muscle_group: it.muscle_group || "", tracking_type: it.tracking_type ?? null }); }
+    const merged: { name: string; muscle_group: string; tracking_type?: string | null; thumbnail_url?: string | null }[] = [];
+    for (const it of [...items, ...loadRecents()]) { const k = (it.name || "").toLowerCase(); if (!it.name || seen.has(k)) continue; seen.add(k); merged.push({ name: it.name, muscle_group: it.muscle_group || "", tracking_type: it.tracking_type ?? null, thumbnail_url: it.thumbnail_url ?? null }); }
     localStorage.setItem(REX_KEY, JSON.stringify(merged.slice(0, 20)));
   } catch { /* ignore */ }
 }
@@ -95,8 +95,8 @@ function ExercisePicker({ onPick, onPickMany, placeholder }: { onPick: (e: { nam
   const [fEquip, setFEquip] = useState<string | null>(null);
   const [fMuscle, setFMuscle] = useState<string | null>(null);
   const [sheet, setSheet] = useState<null | "type" | "equipment" | "muscle">(null);
-  const [sel, setSel] = useState<{ name: string; muscle_group: string; tracking_type?: string | null }[]>([]);
-  const [recents, setRecents] = useState<{ name: string; muscle_group: string }[]>([]);
+  const [sel, setSel] = useState<{ name: string; muscle_group: string; tracking_type?: string | null; thumbnail_url?: string | null }[]>([]);
+  const [recents, setRecents] = useState<{ name: string; muscle_group: string; thumbnail_url?: string | null }[]>([]);
   const filtered = !!(q.trim() || fType || fEquip || fMuscle);
   useEffect(() => { if (open) { ttLoad(); setRecents(loadRecents()); } }, [open]);
   useEffect(() => {
@@ -111,7 +111,7 @@ function ExercisePicker({ onPick, onPickMany, placeholder }: { onPick: (e: { nam
   }, [q, open, fType, fEquip, fMuscle]);
   const reset = () => { setQ(""); setOpen(false); setFType(null); setFEquip(null); setFMuscle(null); setSheet(null); setSel([]); };
   const isSel = (name: string) => sel.some((x) => x.name === name);
-  const toggleSel = (e: { name: string; muscle_group: string; tracking_type?: string | null }) => setSel((s) => (s.some((x) => x.name === e.name) ? s.filter((x) => x.name !== e.name) : [...s, { name: e.name, muscle_group: e.muscle_group || "", tracking_type: e.tracking_type ?? null }]));
+  const toggleSel = (e: { name: string; muscle_group: string; tracking_type?: string | null; thumbnail_url?: string | null }) => setSel((s) => (s.some((x) => x.name === e.name) ? s.filter((x) => x.name !== e.name) : [...s, { name: e.name, muscle_group: e.muscle_group || "", tracking_type: e.tracking_type ?? null, thumbnail_url: e.thumbnail_url ?? null }]));
   const commit = (chosen: { name: string; muscle_group: string; tracking_type?: string | null }[]) => {
     if (chosen.length === 0) return;
     pushRecents(chosen);
@@ -129,7 +129,7 @@ function ExercisePicker({ onPick, onPickMany, placeholder }: { onPick: (e: { nam
     else if (sheet === "muscle") setFMuscle((p) => (p === v ? null : v));
     setSheet(null);
   };
-  const listItems = filtered ? opts.map((o) => ({ name: o.name, muscle_group: o.muscle_group, tracking_type: o.tracking_type ?? null })) : recents;
+  const listItems = filtered ? opts.map((o) => ({ name: o.name, muscle_group: o.muscle_group, tracking_type: o.tracking_type ?? null, thumbnail_url: o.thumbnail_url ?? null })) : recents;
   return (
     <div style={{ position: "relative" }}>
       <div style={{ display: "flex", gap: 6 }}>
@@ -162,6 +162,7 @@ function ExercisePicker({ onPick, onPickMany, placeholder }: { onPick: (e: { nam
                 return (
                   <button key={o.name} onClick={() => toggleSel(o)} style={{ display: "flex", alignItems: "center", gap: 8, textAlign: "left", padding: "8px 10px", borderRadius: 8, cursor: "pointer", border: on ? "1px solid color-mix(in srgb, var(--ember) 55%, transparent)" : "1px solid var(--line)", background: on ? "color-mix(in srgb, var(--ember) 14%, transparent)" : "var(--surface-2)", color: "inherit" }}>
                     <span style={{ flex: "0 0 auto", width: 18, height: 18, borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, background: on ? ACCENT : "var(--surface-2)", color: "#fff" }}>{on ? "✓" : ""}</span>
+                    <span style={{ flex: "0 0 auto", width: 32, height: 32, borderRadius: "50%", overflow: "hidden", background: "var(--surface)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center" }}>{(o as { thumbnail_url?: string | null }).thumbnail_url ? <img src={(o as { thumbnail_url?: string | null }).thumbnail_url as string} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /> : null}</span>
                     <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 600 }}>{o.name}</span>
                     {o.muscle_group ? <span className="subtle tiny" style={{ textTransform: "capitalize" }}>{o.muscle_group}</span> : null}
                   </button>
