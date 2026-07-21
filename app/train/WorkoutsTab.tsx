@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import CardioBuilder from "./CardioBuilder";
 import CardioLive from "./CardioLive";
 import CardioFree from "./CardioFree";
+import CardioSwim from "./CardioSwim";
 import WorkoutLogger, { RoutineBuilder } from "./WorkoutLogger";
 import TodaySuggestion from "./TodaySuggestion";
 import FuelToday from "./FuelToday";
@@ -33,6 +34,7 @@ type Surface =
   | { k: "cardioLive"; routine: CardioRoutine }
   | { k: "cardioPick" }
   | { k: "cardioFree" }
+  | { k: "cardioSwim"; routine: CardioRoutine | null }
   | { k: "presets" }
   | { k: "strengthLogger"; autoStart: { plan_id?: string; routine_id?: string; title?: string; items?: WkRoutineItem[] } | null; resume?: boolean }
   | { k: "strengthBuild"; routineId: string | null; preset?: StrengthPreset }
@@ -265,7 +267,11 @@ export default function WorkoutsTab({ onAskCoach }: { onAskCoach?: () => void })
     setBusyId(id);
     try {
       const r = await cardioGet(id);
-      if (r.routine && (r.routine.structure?.blocks?.length ?? 0) > 0) { setOpenTray(null); setSurface({ k: "cardioLive", routine: r.routine }); }
+      if (r.routine && (r.routine.structure?.blocks?.length ?? 0) > 0) {
+        setOpenTray(null);
+        if ((r.routine.sport || "").toLowerCase().includes("swim")) setSurface({ k: "cardioSwim", routine: r.routine });
+        else setSurface({ k: "cardioLive", routine: r.routine });
+      }
       else setNote("This session has no steps to run yet.");
     } catch { setNote("Couldn't start — try again."); }
     finally { setBusyId(null); }
@@ -281,6 +287,9 @@ export default function WorkoutsTab({ onAskCoach }: { onAskCoach?: () => void })
   if (surface.k === "cardioFree") {
     return <CardioFree onExit={backHome} />;
   }
+  if (surface.k === "cardioSwim") {
+    return <CardioSwim routine={surface.routine} onExit={backHome} />;
+  }
   if (surface.k === "cardioPick") {
     return (
       <div style={{ padding: "18px 16px 28px", maxWidth: 720, margin: "0 auto" }}>
@@ -295,6 +304,16 @@ export default function WorkoutsTab({ onAskCoach }: { onAskCoach?: () => void })
           <span style={{ flex: 1 }}>
             <span style={{ display: "block", fontSize: 15, fontWeight: 800, color: "#fff" }}>Free run / ride</span>
             <span style={{ display: "block", fontSize: 11, color: "rgba(255,255,255,0.82)", marginTop: 1 }}>No plan · GPS · auto 1 km laps</span>
+          </span>
+        </button>
+        <button onClick={() => setSurface({ k: "cardioSwim", routine: null })}
+          style={{ display: "flex", alignItems: "center", gap: 12, textAlign: "left", width: "100%", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--r-md)", padding: "16px", cursor: "pointer", marginBottom: 18 }}>
+          <span style={{ width: 38, height: 38, borderRadius: 999, background: "var(--surface-2)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", flex: "0 0 auto" }}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--ember)" strokeWidth="2" strokeLinecap="round"><path d="M2 16c1.5 0 1.5-1 3-1s1.5 1 3 1 1.5-1 3-1 1.5 1 3 1 1.5-1 3-1 1.5 1 3 1" /><path d="M2 20c1.5 0 1.5-1 3-1s1.5 1 3 1 1.5-1 3-1 1.5 1 3 1 1.5-1 3-1 1.5 1 3 1" /><circle cx="16" cy="6" r="1.6" /></svg>
+          </span>
+          <span style={{ flex: 1 }}>
+            <span style={{ display: "block", fontSize: 15, fontWeight: 800, color: "var(--text)" }}>Pool swim</span>
+            <span style={{ display: "block", fontSize: 11, color: "var(--muted)", marginTop: 1 }}>Tap per length · rest timers</span>
           </span>
         </button>
         <span className="eyebrow">Saved sessions</span>
