@@ -74,7 +74,7 @@ function SectionRow({ title, sub, tone, chip, onClick }: { title: string; sub: s
 /* ---------- hub ---------- */
 function Hub({ data, onOpen, onPickPhoto, uploading }: { data: ProfileData; onOpen: (v: View) => void; onPickPhoto: () => void; uploading: boolean }) {
   const id = data.identity;
-  const meta = [id.age != null ? `${id.age}` : null, id.height_cm != null ? `${id.height_cm} cm` : null, id.weight_kg != null ? `${id.weight_kg} kg` : null, id.home_city].filter(Boolean).join(" \u00b7 ");
+  const meta = [id.age != null ? `${id.age} yrs` : null, id.height_cm != null ? `${id.height_cm} cm` : null, id.weight_kg != null ? `${id.weight_kg} kg` : null, id.home_city].filter(Boolean).join(" \u00b7 ");
 
   const basicsDone = !!(id.name && id.dob && id.height_cm);
   const healthDone = !!(data.health_mode.primary && data.goals.length);
@@ -278,11 +278,82 @@ function Soon({ title, onBack, note }: { title: string; onBack: () => void; note
   );
 }
 
+/* ---------- avatar crop + downscale modal ---------- */
+function CropModal({ src, onCancel, onUse }: { src: string; onCancel: () => void; onUse: (f: File) => void }) {
+  const FRAME = 264;
+  const OUT = 512;
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const [nat, setNat] = useState<{ w: number; h: number } | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [off, setOff] = useState({ x: 0, y: 0 });
+  const drag = useRef<{ x: number; y: number } | null>(null);
+  const busy = useRef(false);
+
+  const cover = nat ? FRAME / Math.min(nat.w, nat.h) : 1;
+  const scale = cover * zoom;
+  const dispW = nat ? nat.w * scale : FRAME;
+  const dispH = nat ? nat.h * scale : FRAME;
+
+  const fit = (x: number, y: number, dw: number, dh: number) => ({ x: Math.min(0, Math.max(FRAME - dw, x)), y: Math.min(0, Math.max(FRAME - dh, y)) });
+
+  function onLoad(e: React.SyntheticEvent<HTMLImageElement>) {
+    const im = e.currentTarget, w = im.naturalWidth, h = im.naturalHeight;
+    setNat({ w, h });
+    const c = FRAME / Math.min(w, h);
+    setOff({ x: (FRAME - w * c) / 2, y: (FRAME - h * c) / 2 });
+  }
+  function onZoom(z: number) {
+    if (!nat) { setZoom(z); return; }
+    const oldScale = cover * zoom, newScale = cover * z;
+    const cx = (-off.x + FRAME / 2) / oldScale, cy = (-off.y + FRAME / 2) / oldScale;
+    setZoom(z);
+    setOff(fit(FRAME / 2 - cx * newScale, FRAME / 2 - cy * newScale, nat.w * newScale, nat.h * newScale));
+  }
+  function down(e: React.PointerEvent) { drag.current = { x: e.clientX, y: e.clientY }; (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); }
+  function move(e: React.PointerEvent) {
+    if (!drag.current) return;
+    const dx = e.clientX - drag.current.x, dy = e.clientY - drag.current.y;
+    drag.current = { x: e.clientX, y: e.clientY };
+    setOff((o) => fit(o.x + dx, o.y + dy, dispW, dispH));
+  }
+  function up() { drag.current = null; }
+
+  function use() {
+    if (!nat || busy.current || !imgRef.current) return;
+    busy.current = true;
+    const canvas = document.createElement("canvas");
+    canvas.width = OUT; canvas.height = OUT;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) { busy.current = false; return; }
+    const sx = -off.x / scale, sy = -off.y / scale, sSize = FRAME / scale;
+    ctx.drawImage(imgRef.current, sx, sy, sSize, sSize, 0, 0, OUT, OUT);
+    canvas.toBlob((blob) => { busy.current = false; if (blob) onUse(new File([blob], "avatar.jpg", { type: "image/jpeg" })); }, "image/jpeg", 0.9);
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(20,14,10,0.55)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ ...S.card, width: "100%", maxWidth: 360, padding: 18 }}>
+        <div style={{ fontSize: 16, fontWeight: 800, color: "var(--text)", marginBottom: 14, textAlign: "center" }}>Position your photo</div>
+        <div style={{ width: FRAME, height: FRAME, margin: "0 auto", borderRadius: "50%", overflow: "hidden", position: "relative", background: "var(--surface-2)", touchAction: "none", cursor: "grab", border: "1px solid var(--line)" }}
+          onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}>
+          <img ref={imgRef} src={src} alt="" onLoad={onLoad} draggable={false} style={{ position: "absolute", left: off.x, top: off.y, width: dispW, height: dispH, maxWidth: "none", userSelect: "none", pointerEvents: "none" }} />
+        </div>
+        <input type="range" min={1} max={3} step={0.01} value={zoom} onChange={(e) => onZoom(parseFloat(e.target.value))} style={{ width: "100%", margin: "16px 0 4px", accentColor: "var(--ember)" }} />
+        <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+          <button onClick={onCancel} style={{ flex: 1, padding: 12, borderRadius: 12, border: "1px solid var(--line)", background: "var(--surface-2)", color: "var(--text-2)", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>Cancel</button>
+          <button onClick={use} style={{ flex: 1, padding: 12, borderRadius: 12, border: "none", background: "var(--ember)", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>Use photo</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ProfilePage() {
   const [data, setData] = useState<ProfileData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>("hub");
   const [uploading, setUploading] = useState(false);
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(async () => {
@@ -290,17 +361,22 @@ export default function ProfilePage() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+  function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]; e.target.value = "";
     if (!f) return;
-    setUploading(true);
-    try { setData(await uploadAvatar(f)); } catch (err) { setError((err as Error).message); } finally { setUploading(false); }
+    setCropSrc(URL.createObjectURL(f));
+  }
+  function closeCrop() { setCropSrc((s) => { if (s) URL.revokeObjectURL(s); return null; }); }
+  async function onCropped(file: File) {
+    closeCrop(); setUploading(true);
+    try { setData(await uploadAvatar(file)); } catch (err) { setError((err as Error).message); } finally { setUploading(false); }
   }
   const pickPhoto = () => fileRef.current?.click();
 
   return (
     <Screen title={view === "hub" ? "Profile" : ""} error={error} loading={!data && !error}>
       <input ref={fileRef} type="file" accept="image/*" onChange={onFile} style={{ display: "none" }} />
+      {cropSrc && <CropModal src={cropSrc} onCancel={closeCrop} onUse={onCropped} />}
       {data && view === "hub" && <Hub data={data} onOpen={setView} onPickPhoto={pickPhoto} uploading={uploading} />}
       {data && view === "basics" && <BasicsEditor data={data} onBack={() => setView("hub")} onSaved={(d) => { setData(d); setView("hub"); }} onPickPhoto={pickPhoto} uploading={uploading} />}
       {view === "health" && <HealthInterim onBack={() => setView("hub")} />}
