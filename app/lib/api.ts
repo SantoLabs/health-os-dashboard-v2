@@ -548,7 +548,11 @@ export async function profileSave(op: string, payload: Record<string, unknown> =
   const res = await authedFetch(`/functions/v1/profile`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op, ...payload }),
   });
-  if (!res.ok) throw new Error(`Couldn't save (${res.status})`);
+  if (!res.ok) {
+    let msg = `Couldn't save (${res.status})`;
+    try { const b = await res.json(); if (b?.error) msg = String(b.error); } catch { /* keep default */ }
+    throw new Error(msg);
+  }
   return res.json();
 }
 export async function uploadAvatar(file: File): Promise<ProfileData> {
