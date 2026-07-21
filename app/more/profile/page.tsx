@@ -78,7 +78,7 @@ function Hub({ data, onOpen, onPickPhoto, uploading }: { data: ProfileData; onOp
 
   const basicsDone = !!(id.name && id.dob && id.height_cm);
   const healthDone = !!(data.health_mode.primary && data.goals.length);
-  const trainingDone = !!(data.training_prefs.training_days?.length && data.training_prefs.sports?.length);
+  const trainingDone = !!(data.training_prefs.training_days?.length);
 
   return (
     <>
@@ -377,6 +377,191 @@ function Soon({ title, onBack, note }: { title: string; onBack: () => void; note
   );
 }
 
+/* ---------- training setup editor (prefs + equipment + injuries) ---------- */
+const DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
+const TIME_OPTS = [{ k: "morning", l: "Morning" }, { k: "midday", l: "Midday" }, { k: "evening", l: "Evening" }, { k: "flexible", l: "Flexible" }];
+const SESSION_OPTS = [30, 45, 60, 75, 90, 120];
+const CAT_ORDER = ["facility", "endurance", "home", "cardio"];
+const CAT_LABEL: Record<string, string> = { facility: "Facilities", endurance: "Endurance gear", home: "Home equipment", cardio: "Cardio machines" };
+const CAT_ICON: Record<string, string> = {
+  facility: "M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6",
+  endurance: "M6.5 6.5v11M17.5 6.5v11M3 9v6M21 9v6M6.5 12h11",
+  home: "M6.5 6.5v11M17.5 6.5v11M3 9v6M21 9v6M6.5 12h11",
+  cardio: "M3 12h4l2 5 4-12 2 7h6",
+};
+const STATUS_LABEL: Record<string, string> = { active: "Active", managing: "Managing", recovered: "Recovered" };
+
+function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick} aria-label="Toggle" style={{ width: 44, height: 26, borderRadius: 999, border: "none", cursor: "pointer", background: on ? "var(--ember)" : "var(--line-2)", position: "relative", flex: "none" }}>
+      <span style={{ position: "absolute", top: 3, left: on ? 21 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.25)" }} />
+    </button>
+  );
+}
+
+function TrainingSetup({ data, onBack, onSaved }: { data: ProfileData; onBack: () => void; onSaved: (d: ProfileData) => void }) {
+  const tp = data.training_prefs;
+  const [days, setDays] = useState<number[]>(tp.training_days || []);
+  const [ptime, setPtime] = useState<string | null>(tp.preferred_time);
+  const [maxMin, setMaxMin] = useState<number | null>(tp.max_session_min);
+  const [skip, setSkip] = useState<boolean>(!!tp.skip_build_phase);
+  const [selected, setSelected] = useState<string[]>(data.equipment.selected || []);
+  const [sheetCat, setSheetCat] = useState<string | null>(null);
+  type Inj = { id?: string; body_part: string; injury_type: string; status: string; note: string; date_resolved?: string | null };
+  const [injuries, setInjuries] = useState<Inj[]>((data.injuries || []).map((x) => ({ id: x.id, body_part: x.body_part, injury_type: x.injury_type || "", status: x.status || "active", note: x.physio_note || "", date_resolved: x.date_resolved })));
+  const [injEdit, setInjEdit] = useState(-1);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const catalog = data.equipment.catalog || [];
+  const byCat = (cat: string) => catalog.filter((e) => e.category === cat);
+  const cats = CAT_ORDER.filter((c) => byCat(c).length);
+  const selSet = new Set(selected);
+  const toggleItem = (k: string) => setSelected((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
+  const groupSummary = (cat: string) => byCat(cat).filter((e) => selSet.has(e.item_key)).map((e) => e.label);
+  const toggleDay = (d: number) => setDays((ds) => (ds.includes(d) ? ds.filter((x) => x !== d) : [...ds, d].sort((a, b) => a - b)));
+
+  const setInj = (i: number, p: Partial<Inj>) => setInjuries((xs) => xs.map((x, k) => (k === i ? { ...x, ...p } : x)));
+  const delInj = (i: number) => { setInjEdit(-1); setInjuries((xs) => xs.filter((_, k) => k !== i)); };
+  const addInj = () => { setInjuries((xs) => [...xs, { body_part: "", injury_type: "", status: "active", note: "" }]); setInjEdit(injuries.length); };
+
+  const smallBtn: React.CSSProperties = { width: 28, height: 28, borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--text-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flex: "none", fontSize: 14, lineHeight: 1 };
+  const seg = (on: boolean, tinted = true): React.CSSProperties => ({ flex: 1, padding: "9px 0", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer", textAlign: "center", border: "1px solid " + (on ? "var(--ember)" : "var(--line)"), background: on ? (tinted ? "var(--ember-tint)" : "var(--ember)") : "var(--surface-2)", color: on ? (tinted ? "var(--ember-strong)" : "#fff") : "var(--text-2)" });
+
+  async function save() {
+    setSaving(true); setErr(null);
+    try {
+      await profileSave("training_prefs_save", { training_days: days, preferred_time: ptime, max_session_min: maxMin, skip_build_phase: skip });
+      await profileSave("equipment_save", { selected });
+      const today = new Date().toISOString().slice(0, 10);
+      const d = await profileSave("injuries_save", { injuries: injuries.filter((x) => x.body_part.trim()).map((x) => ({ id: x.id, body_part: x.body_part.trim(), injury_type: x.injury_type.trim() || null, status: x.status, physio_note: x.note.trim() || null, date_resolved: x.status === "recovered" ? (x.date_resolved || today) : null })) });
+      onSaved(d);
+    } catch (e) { setErr((e as Error).message); } finally { setSaving(false); }
+  }
+
+  return (
+    <>
+      <EdHead title="Training Setup" onBack={onBack} />
+
+      <div style={S.secLabel as React.CSSProperties}>Preferences</div>
+      <div style={{ height: 10 }} />
+      <div style={{ ...S.card, padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
+        <div>
+          <label style={S.fieldLabel}>Training days</label>
+          <div style={{ display: "flex", gap: 6 }}>
+            {DAY_LABELS.map((lab, idx) => { const d = idx + 1; const on = days.includes(d); return (
+              <button key={idx} onClick={() => toggleDay(d)} style={{ flex: 1, padding: "9px 0", borderRadius: 10, fontSize: 12.5, fontWeight: 800, cursor: "pointer", border: "1px solid " + (on ? "var(--ember)" : "var(--line)"), background: on ? "var(--ember)" : "var(--surface-2)", color: on ? "#fff" : "var(--text-2)" }}>{lab}</button>
+            ); })}
+          </div>
+        </div>
+        <div>
+          <label style={S.fieldLabel}>Preferred time</label>
+          <div style={{ display: "flex", gap: 6 }}>
+            {TIME_OPTS.map((o) => (<button key={o.k} onClick={() => setPtime(ptime === o.k ? null : o.k)} style={seg(ptime === o.k)}>{o.l}</button>))}
+          </div>
+        </div>
+        <div>
+          <label style={S.fieldLabel}>Max session length</label>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {SESSION_OPTS.map((m) => (<button key={m} onClick={() => setMaxMin(maxMin === m ? null : m)} style={{ ...seg(maxMin === m), flex: "1 0 28%" }}>{m} min</button>))}
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>Skip build phase</div>
+            <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2, lineHeight: 1.4 }}>Jump straight to peak work instead of a gradual base build.</div>
+          </div>
+          <Toggle on={skip} onClick={() => setSkip((s) => !s)} />
+        </div>
+      </div>
+
+      <div style={{ ...(S.secLabel as React.CSSProperties), marginTop: 22 }}>Equipment & access</div>
+      <div style={{ height: 10 }} />
+      <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
+        {cats.map((cat, ci) => { const sel = groupSummary(cat); return (
+          <button key={cat} onClick={() => setSheetCat(cat)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "13px 14px", background: "transparent", border: "none", borderBottom: ci === cats.length - 1 ? "none" : "1px solid var(--line)", cursor: "pointer", textAlign: "left" }}>
+            <span style={{ width: 32, height: 32, borderRadius: 10, flex: "none", background: "var(--ember-tint)", display: "flex", alignItems: "center", justifyContent: "center" }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--ember-strong)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={CAT_ICON[cat]} /></svg></span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{CAT_LABEL[cat]}</span>
+              <span style={{ display: "block", fontSize: 11, color: "var(--text-2)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sel.length ? sel.join(" \u00b7 ") : "None selected"}</span>
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: 8, flex: "none" }}>
+              {sel.length > 0 && <span style={{ fontSize: 10.5, fontWeight: 800, color: "var(--success)" }}>{sel.length}</span>}
+              <Chevron />
+            </span>
+          </button>
+        ); })}
+      </div>
+      <div style={{ fontSize: 10.5, color: "var(--muted)", margin: "8px 2px 0" }}>Tap a group to pick items in a sheet.</div>
+
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "22px 2px 0" }}>
+        <span style={S.secLabel as React.CSSProperties}>Injuries</span>
+        <button onClick={addInj} style={{ fontSize: 12, fontWeight: 800, color: "var(--ember-strong)", background: "none", border: "none", cursor: "pointer" }}>+ Add</button>
+      </div>
+      <div style={{ height: 10 }} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {injuries.map((x, i) => (
+          <div key={i} style={{ ...S.card, padding: "12px 13px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+              <span style={{ width: 30, height: 30, borderRadius: 9, flex: "none", background: x.status === "recovered" ? "var(--success-tint)" : "var(--ember-tint)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={x.status === "recovered" ? "var(--success)" : "var(--ember-strong)"} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">{x.status === "recovered" ? <path d="M4 12l5 5 11-11" /> : <path d="M12 8v5M12 16v.01" />}</svg>
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(x.body_part || "New injury") + (x.injury_type ? " - " + x.injury_type : "")}</div>
+                <div style={{ fontSize: 11, color: "var(--text-2)", marginTop: 1 }}>{STATUS_LABEL[x.status] || x.status}{x.note ? " \u00b7 " + x.note : ""}</div>
+              </div>
+              <button aria-label="Edit" onClick={() => setInjEdit(injEdit === i ? -1 : i)} style={smallBtn}>{"\u270e"}</button>
+              <button aria-label="Delete" onClick={() => delInj(i)} style={{ ...smallBtn, color: "var(--danger)" }}>{"\u00d7"}</button>
+            </div>
+            {injEdit === i && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
+                <input style={S.input} value={x.body_part} onChange={(e) => setInj(i, { body_part: e.target.value })} placeholder="Body part (e.g. Left knee)" />
+                <input style={S.input} value={x.injury_type} onChange={(e) => setInj(i, { injury_type: e.target.value })} placeholder="Type (e.g. runner's knee)" />
+                <div style={{ display: "flex", gap: 6 }}>
+                  {([["active", "Active"], ["managing", "Managing"], ["recovered", "Recovered"]] as [string, string][]).map(([k, l]) => (
+                    <button key={k} onClick={() => setInj(i, { status: k })} style={seg(x.status === k)}>{l}</button>
+                  ))}
+                </div>
+                <input style={S.input} value={x.note} onChange={(e) => setInj(i, { note: e.target.value })} placeholder="Note (optional)" />
+              </div>
+            )}
+          </div>
+        ))}
+        {!injuries.length && <div style={{ fontSize: 12.5, color: "var(--muted)", padding: "2px 2px 4px" }}>No injuries logged. Add one so Kai can plan around it.</div>}
+      </div>
+
+      <div style={{ ...S.card, display: "flex", gap: 11, padding: "13px 14px", margin: "18px 0 0", background: "var(--ember-tint)" }}>
+        <div style={{ width: 26, height: 26, borderRadius: "50%", background: "var(--ember)", color: "#fff", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>K</div>
+        <div style={{ fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.45 }}>Your days, gear and injury flags shape every session Kai plans - workouts fit the equipment you have and route around what hurts.</div>
+      </div>
+
+      {err && <div style={{ color: "var(--danger)", fontSize: 13, marginTop: 14 }}>{err}</div>}
+      <button onClick={save} disabled={saving} style={{ width: "100%", margin: "18px 0 4px", padding: 14, borderRadius: 13, border: "none", background: "var(--ember)", color: "#fff", fontWeight: 800, fontSize: 15, cursor: saving ? "default" : "pointer", opacity: saving ? 0.7 : 1 }}>{saving ? "Saving\u2026" : "Save Training Setup"}</button>
+
+      {sheetCat && (
+        <div className="sheet-back" onClick={() => setSheetCat(null)}>
+          <div className="sheet-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-handle" />
+            <div className="sheet-head">
+              <span className="sheet-title">{CAT_LABEL[sheetCat]}</span>
+              <button className="sheet-x" onClick={() => setSheetCat(null)}>{"\u00d7"}</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingBottom: 4 }}>
+              {byCat(sheetCat).map((e) => { const on = selSet.has(e.item_key); return (
+                <button key={e.item_key} onClick={() => toggleItem(e.item_key)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "12px 14px", borderRadius: 12, border: "1px solid " + (on ? "var(--ember)" : "var(--line)"), background: on ? "var(--ember-tint)" : "var(--surface)", cursor: "pointer", textAlign: "left" }}>
+                  <span style={{ fontSize: 13.5, fontWeight: 600, color: on ? "var(--ember-strong)" : "var(--text)" }}>{e.label}</span>
+                  <span style={{ width: 20, height: 20, borderRadius: "50%", flex: "none", display: "flex", alignItems: "center", justifyContent: "center", background: on ? "var(--ember)" : "transparent", border: on ? "none" : "1.5px solid var(--line-2)" }}>{on ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg> : null}</span>
+                </button>
+              ); })}
+            </div>
+            <button onClick={() => setSheetCat(null)} style={{ width: "100%", marginTop: 12, padding: 13, borderRadius: 12, border: "none", background: "var(--ember)", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>Done</button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 /* ---------- avatar crop + downscale modal ---------- */
 function CropModal({ src, onCancel, onUse }: { src: string; onCancel: () => void; onUse: (f: File) => void }) {
   const FRAME = 264;
@@ -479,7 +664,7 @@ export default function ProfilePage() {
       {data && view === "hub" && <Hub data={data} onOpen={setView} onPickPhoto={pickPhoto} uploading={uploading} />}
       {data && view === "basics" && <BasicsEditor data={data} onBack={() => setView("hub")} onSaved={(d) => { setData(d); setView("hub"); }} onPickPhoto={pickPhoto} uploading={uploading} />}
       {data && view === "health" && <HealthSetup data={data} onBack={() => setView("hub")} onSaved={(d) => { setData(d); setView("hub"); }} />}
-      {view === "training" && <Soon title="Training Setup" onBack={() => setView("hub")} note="Training preferences, equipment & access, and injuries land here next." />}
+      {data && view === "training" && <TrainingSetup data={data} onBack={() => setView("hub")} onSaved={(d) => { setData(d); setView("hub"); }} />}
       {view === "appprefs" && <Soon title="App Preferences" onBack={() => setView("hub")} note="Connected apps, reminders and quiet hours are on the way. Appearance is in the theme toggle up top for now." />}
     </Screen>
   );
