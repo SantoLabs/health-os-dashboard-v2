@@ -513,6 +513,55 @@ export async function nutriPicksSet<T>(picks: unknown): Promise<T> {
   return res.json();
 }
 
+// ---- profile (brain configuration layer; dedicated service-role fn) ----
+export type EquipItem = { item_key: string; category: string; label: string; discipline: string | null; sort: number };
+export type ProfileGoal = { id?: string; title: string; kind: string; target_json: Record<string, unknown>; priority: number };
+export type ProfileInjury = { id?: string; body_part: string; injury_type: string | null; severity_1_5: number | null; status: string; affects_activities: unknown; physio_note: string | null; date_logged?: string; date_resolved?: string | null };
+export type ProfileData = {
+  identity: {
+    name: string | null; email: string | null; dob: string | null; age: number | null;
+    sex: string | null; height_cm: number | null; units: { mass: string; distance: string };
+    weight_kg: number | null; weight_source: string | null;
+    home_city: string | null; home_lat: number | null; home_lng: number | null; avatar_url: string | null;
+  };
+  health_mode: { primary: string | null; secondary: string[]; experience_level: string | null };
+  training_prefs: {
+    training_days: number[]; preferred_time: string | null; max_session_min: number | null;
+    weekly_volume_min: number | null; weekly_volume_max: number | null; sports: string[];
+    training_phase: string | null; skip_build_phase: boolean; pain_threshold: number | null; avoid_rules: string[];
+  };
+  equipment: { default_location: string | null; travel_fallback: string | null; catalog: EquipItem[]; selected: string[] };
+  goals: ProfileGoal[];
+  injuries: ProfileInjury[];
+  app_prefs: Record<string, unknown>;
+  reminders: Record<string, unknown>;
+};
+
+export async function profileGet(): Promise<ProfileData> {
+  const res = await authedFetch(`/functions/v1/profile`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "get" }),
+  });
+  if (!res.ok) throw new Error(`Couldn't load profile (${res.status})`);
+  return res.json();
+}
+export async function profileSave(op: string, payload: Record<string, unknown> = {}): Promise<ProfileData> {
+  const res = await authedFetch(`/functions/v1/profile`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op, ...payload }),
+  });
+  if (!res.ok) throw new Error(`Couldn't save (${res.status})`);
+  return res.json();
+}
+export async function uploadAvatar(file: File): Promise<ProfileData> {
+  const b64: string = await new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(",")[1] || "");
+    r.onerror = () => reject(new Error("Read failed"));
+    r.readAsDataURL(file);
+  });
+  const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+  return profileSave("avatar_upload", { b64, content_type: file.type || "image/jpeg", ext });
+}
+
 // GET food-DB search: { foods: [...] }. Optional category filter.
 export async function nutriFoods<T>(q: string, cat?: string): Promise<T> {
   const qs = "&q=" + encodeURIComponent(q || "") + (cat ? "&cat=" + encodeURIComponent(cat) : "");
