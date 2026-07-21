@@ -92,6 +92,14 @@ function paceTarget(t: CardioTarget[] | undefined): { low?: number; high?: numbe
   const p = (t || []).find((x) => x.metric === "pace");
   return p ? { low: p.low ?? undefined, high: p.high ?? undefined } : null;
 }
+function paceMps(t?: CardioTarget[]): number { const p = paceTarget(t); const s = p?.low ?? p?.high; return s ? 1000 / s : 0; }
+function estLapDist(ls: LiveStep, durS: number): number {
+  // indoor distance estimate (no GPS): distance steps use their planned meters; time steps use target pace × time
+  const m = ls.step.measure;
+  if (m.type === "distance") return m.meters;
+  if (m.type === "time") { const v = paceMps(ls.step.targets); return v ? Math.round(durS * v) : 0; }
+  return 0;
+}
 function targetText(t: CardioTarget[] | undefined): string {
   if (!t || !t.length) return "";
   const parts: string[] = [];
@@ -162,6 +170,7 @@ export default function CardioLive({ routine, onExit }: { routine: CardioRoutine
   const [idx, setIdx] = useState(0);
   const [paused, setPaused] = useState(false);
   const [voiceOn, setVoiceOn] = useState(true);
+  const [indoor, setIndoor] = useState(false);
   const [, setTick] = useState(0);
   const [gpsOk, setGpsOk] = useState<boolean | null>(null);
   const [dist, setDist] = useState(0);       // total meters (display)
@@ -187,6 +196,7 @@ export default function CardioLive({ routine, onExit }: { routine: CardioRoutine
   const watchRef = useRef<number | null>(null);
   const wakeRef = useRef<{ release?: () => void } | null>(null);
   const voiceRef = useRef(true); voiceRef.current = voiceOn;
+  const indoorRef = useRef(false); indoorRef.current = indoor;
 
   const elapsed = useCallback(() => {
     if (!startMsRef.current) return 0;
@@ -204,7 +214,7 @@ export default function CardioLive({ routine, onExit }: { routine: CardioRoutine
   const finish = useCallback(() => {
     // record final step actual
     const s = steps[idxRef.current];
-    if (s && stepElapsed() > 0) lapsRef.current.push({ distance_m: Math.round(stepDistRef.current), duration_s: Math.round(stepElapsed()) });
+    if (s && stepElapsed() > 0) { const d = Math.round(stepElapsed()); lapsRef.current.push({ distance_m: indoorRef.current ? estLapDist(s, d) : Math.round(stepDistRef.current), duration_s: d }); }
     runRef.current = false;
     if (watchRef.current != null && typeof navigator !== "undefined") { navigator.geolocation.clearWatch(watchRef.current); watchRef.current = null; }
     speak("Session complete.", voiceRef.current);
@@ -214,7 +224,7 @@ export default function CardioLive({ routine, onExit }: { routine: CardioRoutine
 
   const advance = useCallback((skipped = false) => {
     const s = steps[idxRef.current];
-    if (s) lapsRef.current.push({ distance_m: Math.round(stepDistRef.current), duration_s: Math.round(stepElapsed()), skipped });
+    if (s) { const d = Math.round(stepElapsed()); lapsRef.current.push({ distance_m: indoorRef.current ? estLapDist(s, d) : Math.round(stepDistRef.current), duration_s: d, skipped }); }
     const next = idxRef.current + 1;
     if (next >= steps.length) { finishRef.current(); return; }
     stepDistRef.current = 0; setStepDistDisp(0);
@@ -256,7 +266,7 @@ export default function CardioLive({ routine, onExit }: { routine: CardioRoutine
     startMsRef.current = Date.now(); pausedAccRef.current = 0; stepBaseRef.current = 0;
     idxRef.current = 0; runRef.current = true;
     setIdx(0); setPaused(false); setPhase("live");
-    startGps();
+    if (!indoorRef.current) startGps();
     try { const wl = await (navigator as unknown as { wakeLock?: { request: (t: string) => Promise<{ release?: () => void }> } }).wakeLock?.request("screen"); if (wl) wakeRef.current = wl; } catch { /* */ }
     announce(0);
   }, [startGps, announce]);
@@ -297,13 +307,13 @@ export default function CardioLive({ routine, onExit }: { routine: CardioRoutine
     try {
       const laps = lapsRef.current.filter((l) => l.duration_s > 0).map((l, i) => ({ lap_index: i, distance_m: l.distance_m || null, duration_s: l.duration_s, avg_speed_mps: l.distance_m && l.duration_s ? l.distance_m / l.duration_s : null }));
       const r = await cardioComplete({
-        sport, name: routine.name, duration_s: Math.round(elapsed()), distance_m: Math.round(totalDistRef.current),
+        sport, name: routine.name, duration_s: Math.round(elapsed()), distance_m: Math.round(indoor ? lapsRef.current.reduce((a, l) => a + (l.distance_m || 0), 0) : totalDistRef.current),
         elevation_gain_m: null, route_polyline: ptsRef.current.length > 1 ? encodePolyline(ptsRef.current) : null, laps,
       });
       if (r.ok) setSaved({ id: r.activity_id }); else setSaveErr(r.error || "Save failed");
     } catch (e) { setSaveErr((e as Error).message); }
     setSaving(false);
-  }, [sport, routine.name, elapsed]);
+  }, [sport, routine.name, elapsed, indoor]);
 
   /* ---------- shared bits ---------- */
   const hdrLabel = `${sport.toUpperCase()} · ${routine.name.toUpperCase()}`;
@@ -362,6 +372,18 @@ export default function CardioLive({ routine, onExit }: { routine: CardioRoutine
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>{renderBlocks(structure.blocks || [])}</div>
         </div>
         <div style={{ padding: "10px 18px 24px", maxWidth: 480, margin: "0 auto", width: "100%" }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            {(["outdoor", "indoor"] as const).map((v) => {
+              const on = (v === "indoor") === indoor;
+              return (
+                <button key={v} onClick={() => setIndoor(v === "indoor")}
+                  style={{ flex: 1, background: on ? C.surface2 : "transparent", border: `1px solid ${on ? C.ember : C.line}`, borderRadius: 14, padding: "9px 8px", cursor: "pointer", textAlign: "center" }}>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: on ? C.text : C.muted }}>{v === "indoor" ? "Indoor" : "Outdoor"}</div>
+                  <div style={{ fontSize: 9.5, color: on ? C.ember : C.faint, marginTop: 2 }}>{v === "indoor" ? "No GPS · time-driven" : "GPS · distance & pace"}</div>
+                </button>
+              );
+            })}
+          </div>
           <button onClick={begin} style={{ width: "100%", background: C.ember, border: "none", borderRadius: 999, padding: "17px 0", fontSize: 15.5, fontWeight: 800, color: "#fff", cursor: "pointer", boxShadow: "0 8px 20px rgba(217,111,78,0.35)" }}>Start</button>
         </div>
       </div>
@@ -371,7 +393,7 @@ export default function CardioLive({ routine, onExit }: { routine: CardioRoutine
   /* ================= SUMMARY ================= */
   if (phase === "summary") {
     const tot = Math.round(elapsed());
-    const km = totalDistRef.current / 1000;
+    const km = (indoor ? lapsRef.current.reduce((a, l) => a + (l.distance_m || 0), 0) : totalDistRef.current) / 1000;
     const avgPace = km > 0 ? tot / km : null;
     return (
       <div style={{ position: "fixed", inset: 0, zIndex: 300, background: C.bg, color: C.text, display: "flex", flexDirection: "column", fontFamily: "inherit" }}>
@@ -415,13 +437,14 @@ export default function CardioLive({ routine, onExit }: { routine: CardioRoutine
   const se = stepElapsed();
   let heroBig = "", heroSub = "", frac = 0;
   if (m?.type === "time") { const rem = Math.max(0, m.seconds - se); heroBig = fmtClock(rem); frac = m.seconds ? Math.min(1, se / m.seconds) : 0; heroSub = "remaining"; }
-  else if (m?.type === "distance") { const rem = Math.max(0, m.meters - stepDistDisp); heroBig = rem >= 1000 ? `${(rem / 1000).toFixed(2)} km` : `${Math.round(rem)} m`; frac = m.meters ? Math.min(1, stepDistDisp / m.meters) : 0; heroSub = "to go"; }
+  else if (m?.type === "distance" && !indoor) { const rem = Math.max(0, m.meters - stepDistDisp); heroBig = rem >= 1000 ? `${(rem / 1000).toFixed(2)} km` : `${Math.round(rem)} m`; frac = m.meters ? Math.min(1, stepDistDisp / m.meters) : 0; heroSub = "to go"; }
+  else if (m?.type === "distance") { heroBig = fmtClock(se); frac = 0; heroSub = `${measureText(m)} \u2014 tap Next`; }
   else { heroBig = fmtClock(se); frac = 0; heroSub = "elapsed"; }
   const tgt = cur ? targetText(cur.step.targets) : "";
   const next = steps[idx + 1] || null;
   const km = dist / 1000;
   const avgPace = km > 0 ? elapsed() / km : null;
-  const manual = m?.type === "lap" || m?.type === "open";
+  const manual = m?.type === "lap" || m?.type === "open" || (indoor && m?.type === "distance");
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 300, background: C.bg, color: C.text, display: "flex", flexDirection: "column", fontFamily: "inherit" }}>
@@ -429,8 +452,8 @@ export default function CardioLive({ routine, onExit }: { routine: CardioRoutine
         <button onClick={togglePause} aria-label="Back" style={{ width: 36, height: 36, borderRadius: 11, background: C.surface2, border: `1px solid ${C.line}`, color: C.text, fontSize: 18, cursor: "pointer" }}>‹</button>
         <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{hdrLabel}</div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, background: C.surface2, border: `1px solid ${C.line}`, borderRadius: 999, padding: "6px 10px" }}>
-          <span style={{ width: 8, height: 8, borderRadius: 999, background: gpsOk === false ? C.ember : C.green }} />
-          <span style={{ fontSize: 10, fontWeight: 800, color: gpsOk === false ? C.ember : C.green }}>{gpsOk === false ? "NO GPS" : "GPS"}</span>
+          <span style={{ width: 8, height: 8, borderRadius: 999, background: indoor ? C.gold : gpsOk === false ? C.ember : C.green }} />
+          <span style={{ fontSize: 10, fontWeight: 800, color: indoor ? C.gold : gpsOk === false ? C.ember : C.green }}>{indoor ? "INDOOR" : gpsOk === false ? "NO GPS" : "GPS"}</span>
         </div>
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: "0 18px", maxWidth: 480, margin: "0 auto", width: "100%" }}>
@@ -444,7 +467,9 @@ export default function CardioLive({ routine, onExit }: { routine: CardioRoutine
           {next ? <div style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>Up next · <span style={{ fontWeight: 700, color: C.text2 }}>{kindWord(next.step, sport)} · {measureText(next.step.measure)}</span></div> : <div style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>Last step</div>}
         </div>
         <div style={{ display: "flex", marginTop: 16 }}>
-          {[["DISTANCE", `${km.toFixed(2)} km`], ["TIME", fmtClock(elapsed())], ["AVG PACE", `${fmtPaceSec(avgPace)} /km`]].map(([l, v]) => (
+          {(indoor
+            ? [["TIME", fmtClock(elapsed())], ["STEP", `${idx + 1}/${steps.length}`], ["IN STEP", fmtClock(se)]]
+            : [["DISTANCE", `${km.toFixed(2)} km`], ["TIME", fmtClock(elapsed())], ["AVG PACE", `${fmtPaceSec(avgPace)} /km`]]).map(([l, v]) => (
             <div key={l} style={{ flex: 1, textAlign: "center" }}><div style={{ fontSize: 22, fontWeight: 800 }}>{v}</div><div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", color: C.faint, marginTop: 2 }}>{l}</div></div>
           ))}
         </div>
