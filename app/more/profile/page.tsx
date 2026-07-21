@@ -368,7 +368,9 @@ function HealthSetup({ data, onBack, onSaved }: { data: ProfileData; onBack: () 
 /* ---------- training setup editor (prefs + equipment + injuries) ---------- */
 const DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
 const TIME_OPTS = [{ k: "morning", l: "Morning" }, { k: "midday", l: "Midday" }, { k: "evening", l: "Evening" }, { k: "flexible", l: "Flexible" }];
-const SESSION_OPTS = [30, 45, 60, 75, 90, 120];
+const STRENGTH_OPTS = [30, 45, 60, 75, 90, 120];
+const CARDIO_OPTS = [30, 45, 60, 90, 120, 150, 180, 240];
+const fmtSession = (m: number): string => (m < 60 ? m + " min" : m % 60 === 0 ? m / 60 + (m === 60 ? " hr" : " hrs") : Math.floor(m / 60) + "h " + (m % 60) + "m");
 const CAT_ORDER = ["facility", "endurance", "home", "cardio"];
 const CAT_LABEL: Record<string, string> = { facility: "Facilities", endurance: "Endurance gear", home: "Home equipment", cardio: "Cardio machines" };
 const CAT_ICON: Record<string, string> = {
@@ -391,7 +393,9 @@ function TrainingSetup({ data, onBack, onSaved }: { data: ProfileData; onBack: (
   const tp = data.training_prefs;
   const [days, setDays] = useState<number[]>(tp.training_days || []);
   const [ptime, setPtime] = useState<string | null>(tp.preferred_time);
-  const [maxMin, setMaxMin] = useState<number | null>(tp.max_session_min);
+  const [maxStrength, setMaxStrength] = useState<number | null>(tp.max_session_strength_min);
+  const [maxCardio, setMaxCardio] = useState<number | null>(tp.max_session_cardio_min);
+  const selStyle: React.CSSProperties = { ...S.input, padding: "11px 12px", fontSize: 14, cursor: "pointer" };
   const [skip, setSkip] = useState<boolean>(!!tp.skip_build_phase);
   const [selected, setSelected] = useState<string[]>(data.equipment.selected || []);
   const [sheetCat, setSheetCat] = useState<string | null>(null);
@@ -419,7 +423,7 @@ function TrainingSetup({ data, onBack, onSaved }: { data: ProfileData; onBack: (
   async function save() {
     setSaving(true); setErr(null);
     try {
-      await profileSave("training_prefs_save", { training_days: days, preferred_time: ptime, max_session_min: maxMin, skip_build_phase: skip });
+      await profileSave("training_prefs_save", { training_days: days, preferred_time: ptime, max_session_strength_min: maxStrength, max_session_cardio_min: maxCardio, skip_build_phase: skip });
       await profileSave("equipment_save", { selected });
       const today = new Date().toISOString().slice(0, 10);
       const d = await profileSave("injuries_save", { injuries: injuries.filter((x) => x.body_part.trim()).map((x) => ({ id: x.id, body_part: x.body_part.trim(), injury_type: x.injury_type.trim() || null, status: x.status, physio_note: x.note.trim() || null, date_resolved: x.status === "recovered" ? (x.date_resolved || today) : null })) });
@@ -450,8 +454,21 @@ function TrainingSetup({ data, onBack, onSaved }: { data: ProfileData; onBack: (
         </div>
         <div>
           <label style={S.fieldLabel}>Max session length</label>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {SESSION_OPTS.map((m) => (<button key={m} onClick={() => setMaxMin(maxMin === m ? null : m)} style={{ ...seg(maxMin === m), flex: "1 0 28%" }}>{m} min</button>))}
+          <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-2)", marginBottom: 5 }}>Strength</div>
+              <select value={maxStrength ?? ""} onChange={(e) => setMaxStrength(e.target.value ? Number(e.target.value) : null)} style={selStyle}>
+                <option value="">Flexible</option>
+                {STRENGTH_OPTS.map((m) => (<option key={m} value={m}>{fmtSession(m)}</option>))}
+              </select>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--text-2)", marginBottom: 5 }}>Cardio</div>
+              <select value={maxCardio ?? ""} onChange={(e) => setMaxCardio(e.target.value ? Number(e.target.value) : null)} style={selStyle}>
+                <option value="">Flexible</option>
+                {CARDIO_OPTS.map((m) => (<option key={m} value={m}>{fmtSession(m)}</option>))}
+              </select>
+            </div>
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
@@ -564,6 +581,22 @@ function relSync(iso: string | null): string {
   return "Synced just now";
 }
 
+// Applies the appearance choice to the live theme, matching the top ThemeToggle
+// (localStorage key "strive-theme", data-theme on <html>). "system" clears the
+// override and resolves from the OS preference.
+function applyAppearance(mode: string) {
+  if (typeof document === "undefined") return;
+  let theme = mode;
+  if (mode === "system") {
+    theme = (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+  }
+  document.documentElement.setAttribute("data-theme", theme === "dark" ? "dark" : "light");
+  try {
+    if (mode === "system") localStorage.removeItem("strive-theme");
+    else localStorage.setItem("strive-theme", theme);
+  } catch { /* ignore */ }
+}
+
 function AppPrefsEditor({ data, onBack, onSaved }: { data: ProfileData; onBack: () => void; onSaved: (d: ProfileData) => void }) {
   const r0 = data.reminders as { notify_workout?: boolean; notify_meal?: boolean; notify_bedtime?: boolean; quiet_start?: string | null; quiet_end?: string | null };
   const a0 = data.app_prefs as { appearance?: string; week_start?: string };
@@ -646,9 +679,9 @@ function AppPrefsEditor({ data, onBack, onSaved }: { data: ProfileData; onBack: 
         <div>
           <label style={S.fieldLabel}>Appearance</label>
           <div style={{ display: "flex", gap: 6 }}>
-            {([["system", "System"], ["light", "Light"], ["dark", "Dark"]] as [string, string][]).map(([k, l]) => (<button key={k} onClick={() => setAppearance(k)} style={seg(appearance === k)}>{l}</button>))}
+            {([["system", "System"], ["light", "Light"], ["dark", "Dark"]] as [string, string][]).map(([k, l]) => (<button key={k} onClick={() => { setAppearance(k); applyAppearance(k); }} style={seg(appearance === k)}>{l}</button>))}
           </div>
-          <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 6 }}>Saved as your preference. The quick toggle up top still controls the live theme.</div>
+          <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 6 }}>Changes the theme right away and stays in sync with the quick toggle up top. Save to remember it.</div>
         </div>
         <div>
           <label style={S.fieldLabel}>Week starts on</label>
