@@ -527,6 +527,7 @@ export type ProfileData = {
   health_mode: { primary: string | null; secondary: string[]; experience_level: string | null };
   training_prefs: {
     training_days: number[]; preferred_time: string | null; max_session_min: number | null;
+    max_session_strength_min: number | null; max_session_cardio_min: number | null;
     weekly_volume_min: number | null; weekly_volume_max: number | null; sports: string[];
     training_phase: string | null; skip_build_phase: boolean; pain_threshold: number | null; avoid_rules: string[];
   };
