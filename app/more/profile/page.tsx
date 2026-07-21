@@ -213,53 +213,152 @@ function BasicsEditor({ data, onBack, onSaved, onPickPhoto, uploading }: { data:
   );
 }
 
-/* ---------- interim sleep editor (folds into Health Setup fully in a later unit) ---------- */
-function HealthInterim({ onBack }: { onBack: () => void }) {
+/* ---------- health setup editor (mode + goals + sleep) ---------- */
+type Goal = { id?: string; title: string; detail: string; kind: string };
+const MODES = [
+  { key: "performance", label: "Performance", sub: "Train to compete" },
+  { key: "longevity", label: "Longevity", sub: "Health-first" },
+  { key: "recomp", label: "Recomp", sub: "Body change" },
+];
+const GOAL_PRESETS = ["Marathon", "Hyrox", "10k PR", "VO2 max", "Body fat %"];
+
+function HealthSetup({ data, onBack, onSaved }: { data: ProfileData; onBack: () => void; onSaved: (d: ProfileData) => void }) {
+  const [primary, setPrimary] = useState<string | null>(data.health_mode.primary);
+  const [goals, setGoals] = useState<Goal[]>((data.goals || []).map((g) => ({ id: g.id, title: g.title, kind: g.kind || "custom", detail: String((g.target_json as { detail?: string })?.detail || "") })));
+  const [editIdx, setEditIdx] = useState(-1);
+  const [adding, setAdding] = useState(false);
+  const [dTitle, setDTitle] = useState("");
+  const [dDetail, setDDetail] = useState("");
   const [bed, setBed] = useState<Bed | null>(null);
-  const [orig, setOrig] = useState<Bed | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const bedOrig = useRef<Bed | null>(null);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
   useEffect(() => {
-    actionGet<Bed>("bedtime_goal").then((d) => { const b = { target_hour: d.target_hour, winddown_hour: d.winddown_hour, grace_hour: d.grace_hour }; setBed(b); setOrig(b); }).catch((e) => setErr((e as Error).message));
+    actionGet<Bed>("bedtime_goal").then((d) => { const b = { target_hour: d.target_hour, winddown_hour: d.winddown_hour, grace_hour: d.grace_hour }; setBed(b); bedOrig.current = b; }).catch(() => {});
   }, []);
+
+  const move = (i: number, dir: number) => setGoals((gs) => { const j = i + dir; if (j < 0 || j >= gs.length) return gs; const c = gs.slice(); const t = c[i]; c[i] = c[j]; c[j] = t; return c; });
+  const del = (i: number) => { setEditIdx(-1); setGoals((gs) => gs.filter((_, k) => k !== i)); };
+  const patch = (i: number, p: Partial<Goal>) => setGoals((gs) => gs.map((g, k) => (k === i ? { ...g, ...p } : g)));
+  const addGoal = () => { const t = dTitle.trim(); if (!t) return; setGoals((gs) => [...gs, { title: t, detail: dDetail.trim(), kind: "custom" }]); setDTitle(""); setDDetail(""); setAdding(false); };
+
   const clamp = (h: number) => Math.max(19, Math.min(26, Math.round(h * 4) / 4));
-  const set = (k: keyof Bed, v: number) => { setBed((b) => (b ? { ...b, [k]: v } : b)); setSaved(false); };
-  const dirty = bed && orig && (bed.target_hour !== orig.target_hour || bed.winddown_hour !== orig.winddown_hour || bed.grace_hour !== orig.grace_hour);
+  const setBedK = (k: keyof Bed, v: number) => setBed((b) => (b ? { ...b, [k]: v } : b));
+  const stepBtn: React.CSSProperties = { width: 36, height: 36, borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface-2)", color: "var(--text)", fontSize: 19, cursor: "pointer", lineHeight: 1 };
+  const smallBtn: React.CSSProperties = { width: 28, height: 28, borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--text-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flex: "none", fontSize: 14, lineHeight: 1 };
+
   async function save() {
-    if (!bed) return; setSaving(true);
-    try { await actionPost("bedtime_target_save", bed); setOrig(bed); setSaved(true); } catch (e) { setErr((e as Error).message); } finally { setSaving(false); }
+    setSaving(true); setErr(null);
+    try {
+      await profileSave("health_mode_save", { health_mode_primary: primary });
+      const d = await profileSave("goals_save", { goals: goals.map((g, i) => ({ id: g.id, title: g.title.trim(), kind: g.kind, target_json: g.detail.trim() ? { detail: g.detail.trim() } : {}, priority: i })) });
+      if (bed && bedOrig.current && (bed.target_hour !== bedOrig.current.target_hour || bed.winddown_hour !== bedOrig.current.winddown_hour || bed.grace_hour !== bedOrig.current.grace_hour)) {
+        await actionPost("bedtime_target_save", bed); bedOrig.current = bed;
+      }
+      onSaved(d);
+    } catch (e) { setErr((e as Error).message); } finally { setSaving(false); }
   }
-  const stepBtn: React.CSSProperties = { width: 38, height: 38, borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface-2)", color: "var(--text)", fontSize: 20, cursor: "pointer", lineHeight: 1 };
-  const Row = ({ label, display, dec, inc }: { label: string; display: string; dec: () => void; inc: () => void }) => (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-      <span style={{ fontSize: 14, color: "var(--text-2)" }}>{label}</span>
-      <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <button style={stepBtn} onClick={dec}>-</button>
-        <span style={{ minWidth: 94, textAlign: "center", fontWeight: 700, fontSize: 15, color: "var(--text)" }}>{display}</span>
-        <button style={stepBtn} onClick={inc}>+</button>
-      </span>
-    </div>
-  );
+
+  const sleepRows: [string, string, () => void, () => void][] = bed ? [
+    ["Target bedtime", fmtClock(bed.target_hour > 24 ? bed.target_hour - 24 : bed.target_hour), () => setBedK("target_hour", clamp(bed.target_hour - 0.25)), () => setBedK("target_hour", clamp(bed.target_hour + 0.25))],
+    ["Wind-down start", fmtClock(bed.winddown_hour > 24 ? bed.winddown_hour - 24 : bed.winddown_hour), () => setBedK("winddown_hour", clamp(bed.winddown_hour - 0.25)), () => setBedK("winddown_hour", clamp(bed.winddown_hour + 0.25))],
+    ["Grace window", `\u00b1 ${Math.round(bed.grace_hour * 60)} min`, () => setBedK("grace_hour", Math.max(0, Math.round((bed.grace_hour - 0.25) * 4) / 4)), () => setBedK("grace_hour", Math.min(1, Math.round((bed.grace_hour + 0.25) * 4) / 4))],
+  ] : [];
+
   return (
     <>
       <EdHead title="Health Setup" onBack={onBack} />
-      <div style={{ ...S.card, padding: "13px 14px", marginBottom: 14, display: "flex", gap: 11, background: "var(--ember-tint)" }}>
-        <div style={{ width: 26, height: 26, borderRadius: "50%", background: "var(--ember)", color: "#fff", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>K</div>
-        <div style={{ fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.45 }}>Health Mode and priority goals arrive in the next update. Your sleep targets live here.</div>
-      </div>
-      <div style={S.secLabel as React.CSSProperties}>Sleep targets</div>
+
+      <div style={S.secLabel as React.CSSProperties}>Health Mode</div>
       <div style={{ height: 10 }} />
-      {err && <div style={{ color: "var(--danger)", fontSize: 13, marginBottom: 10 }}>{err}</div>}
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        {MODES.map((m) => {
+          const on = primary === m.key;
+          return (
+            <button key={m.key} onClick={() => setPrimary(m.key)} style={{ flex: 1, borderRadius: 16, padding: "13px 8px", textAlign: "center", cursor: "pointer", border: "1px solid " + (on ? "var(--text)" : "var(--line)"), background: on ? "var(--text)" : "var(--surface)" }}>
+              <div style={{ fontSize: 12.5, fontWeight: 800, color: on ? "var(--surface)" : "var(--text-2)" }}>{m.label}</div>
+              <div style={{ fontSize: 10, marginTop: 2, color: on ? "var(--surface-2)" : "var(--muted)" }}>{m.sub}</div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "0 2px" }}>
+        <span style={S.secLabel as React.CSSProperties}>{"Goals & targets"}</span>
+        <span style={{ fontSize: 10.5, color: "var(--muted)" }}>Priority order</span>
+      </div>
+      <div style={{ height: 10 }} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {goals.map((g, i) => (
+          <div key={i} style={{ ...S.card, padding: "12px 13px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+              <div style={{ width: 24, height: 24, borderRadius: "50%", flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, background: i === 0 ? "var(--ember)" : "var(--surface-2)", color: i === 0 ? "#fff" : "var(--muted)" }}>{i + 1}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.title || "Untitled goal"}</div>
+                {g.detail && <div style={{ fontSize: 11.5, color: "var(--text-2)", marginTop: 1 }}>{g.detail}</div>}
+              </div>
+              <div style={{ display: "flex", gap: 6, flex: "none" }}>
+                <button aria-label="Move up" onClick={() => move(i, -1)} disabled={i === 0} style={{ ...smallBtn, opacity: i === 0 ? 0.4 : 1 }}>{"\u2191"}</button>
+                <button aria-label="Move down" onClick={() => move(i, 1)} disabled={i === goals.length - 1} style={{ ...smallBtn, opacity: i === goals.length - 1 ? 0.4 : 1 }}>{"\u2193"}</button>
+                <button aria-label="Edit" onClick={() => setEditIdx(editIdx === i ? -1 : i)} style={smallBtn}>{"\u270e"}</button>
+                <button aria-label="Delete" onClick={() => del(i)} style={{ ...smallBtn, color: "var(--danger)" }}>{"\u00d7"}</button>
+              </div>
+            </div>
+            {editIdx === i && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
+                <input style={S.input} value={g.title} onChange={(e) => patch(i, { title: e.target.value })} placeholder="Goal" />
+                <input style={S.input} value={g.detail} onChange={(e) => patch(i, { detail: e.target.value })} placeholder="Detail (optional)" />
+              </div>
+            )}
+          </div>
+        ))}
+        {!goals.length && !adding && <div style={{ fontSize: 12.5, color: "var(--muted)", padding: "2px 2px 4px" }}>No goals yet. Add what you are working toward - priority 1 shapes your plan.</div>}
+      </div>
+
+      {adding ? (
+        <div style={{ ...S.card, padding: 13, marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+          <input style={S.input} value={dTitle} onChange={(e) => setDTitle(e.target.value)} placeholder="Goal (e.g. Ironman 70.3)" />
+          <input style={S.input} value={dDetail} onChange={(e) => setDDetail(e.target.value)} placeholder="Detail (optional)" />
+          <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+            {GOAL_PRESETS.map((p) => (
+              <button key={p} onClick={() => setDTitle(p)} style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-2)", background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 999, padding: "6px 12px", cursor: "pointer" }}>{p}</button>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 10, marginTop: 2 }}>
+            <button onClick={() => { setAdding(false); setDTitle(""); setDDetail(""); }} style={{ flex: 1, padding: 11, borderRadius: 11, border: "1px solid var(--line)", background: "var(--surface-2)", color: "var(--text-2)", fontWeight: 700, fontSize: 13.5, cursor: "pointer" }}>Cancel</button>
+            <button onClick={addGoal} disabled={!dTitle.trim()} style={{ flex: 1, padding: 11, borderRadius: 11, border: "none", background: dTitle.trim() ? "var(--ember)" : "var(--surface-2)", color: dTitle.trim() ? "#fff" : "var(--muted)", fontWeight: 800, fontSize: 13.5, cursor: dTitle.trim() ? "pointer" : "default" }}>Add goal</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setAdding(true)} style={{ marginTop: 10, width: "100%", padding: 11, borderRadius: 12, border: "1px dashed var(--line-2)", background: "transparent", color: "var(--ember-strong)", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>+ Add goal</button>
+      )}
+
+      <div style={{ ...S.card, display: "flex", gap: 11, padding: "13px 14px", margin: "18px 0 0", background: "var(--ember-tint)" }}>
+        <div style={{ width: 26, height: 26, borderRadius: "50%", background: "var(--ember)", color: "#fff", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>K</div>
+        <div style={{ fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.45 }}>Priority 1 drives your plan - Kai builds around it and rebalances when your mode changes. Nothing is lost.</div>
+      </div>
+
+      <div style={{ ...(S.secLabel as React.CSSProperties), marginTop: 22 }}>Sleep targets</div>
+      <div style={{ height: 10 }} />
       {bed && (
         <div style={{ ...S.card, padding: 16 }}>
-          <Row label="Target bedtime" display={fmtClock(bed.target_hour > 24 ? bed.target_hour - 24 : bed.target_hour)} dec={() => set("target_hour", clamp(bed.target_hour - 0.25))} inc={() => set("target_hour", clamp(bed.target_hour + 0.25))} />
-          <Row label="Wind-down start" display={fmtClock(bed.winddown_hour > 24 ? bed.winddown_hour - 24 : bed.winddown_hour)} dec={() => set("winddown_hour", clamp(bed.winddown_hour - 0.25))} inc={() => set("winddown_hour", clamp(bed.winddown_hour + 0.25))} />
-          <Row label="Grace window" display={`\u00b1 ${Math.round(bed.grace_hour * 60)} min`} dec={() => set("grace_hour", Math.max(0, Math.round((bed.grace_hour - 0.25) * 4) / 4))} inc={() => set("grace_hour", Math.min(1, Math.round((bed.grace_hour + 0.25) * 4) / 4))} />
-          <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.45, margin: "4px 0 14px" }}>A night counts as on-time if you are asleep by your target plus the grace window. Wind-down is your nudge to start slowing down.</div>
-          <button onClick={save} disabled={!dirty || saving} style={{ width: "100%", padding: 13, borderRadius: 12, border: "none", background: dirty ? "var(--ember)" : "var(--surface-2)", color: dirty ? "#fff" : "var(--muted)", fontWeight: 800, fontSize: 14.5, cursor: dirty ? "pointer" : "default" }}>{saving ? "Saving\u2026" : saved ? "Saved" : "Save targets"}</button>
+          {sleepRows.map(([label, disp, dec, inc]) => (
+            <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <span style={{ fontSize: 14, color: "var(--text-2)" }}>{label}</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <button style={stepBtn} onClick={dec}>-</button>
+                <span style={{ minWidth: 90, textAlign: "center", fontWeight: 700, fontSize: 15, color: "var(--text)" }}>{disp}</span>
+                <button style={stepBtn} onClick={inc}>+</button>
+              </span>
+            </div>
+          ))}
+          <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.45, marginTop: 2 }}>A night counts as on-time if you are asleep by your target plus the grace window.</div>
         </div>
       )}
+
+      {err && <div style={{ color: "var(--danger)", fontSize: 13, marginTop: 14 }}>{err}</div>}
+      <button onClick={save} disabled={saving} style={{ width: "100%", margin: "18px 0 4px", padding: 14, borderRadius: 13, border: "none", background: "var(--ember)", color: "#fff", fontWeight: 800, fontSize: 15, cursor: saving ? "default" : "pointer", opacity: saving ? 0.7 : 1 }}>{saving ? "Saving\u2026" : "Save Health Setup"}</button>
     </>
   );
 }
@@ -379,7 +478,7 @@ export default function ProfilePage() {
       {cropSrc && <CropModal src={cropSrc} onCancel={closeCrop} onUse={onCropped} />}
       {data && view === "hub" && <Hub data={data} onOpen={setView} onPickPhoto={pickPhoto} uploading={uploading} />}
       {data && view === "basics" && <BasicsEditor data={data} onBack={() => setView("hub")} onSaved={(d) => { setData(d); setView("hub"); }} onPickPhoto={pickPhoto} uploading={uploading} />}
-      {view === "health" && <HealthInterim onBack={() => setView("hub")} />}
+      {data && view === "health" && <HealthSetup data={data} onBack={() => setView("hub")} onSaved={(d) => { setData(d); setView("hub"); }} />}
       {view === "training" && <Soon title="Training Setup" onBack={() => setView("hub")} note="Training preferences, equipment & access, and injuries land here next." />}
       {view === "appprefs" && <Soon title="App Preferences" onBack={() => setView("hub")} note="Connected apps, reminders and quiet hours are on the way. Appearance is in the theme toggle up top for now." />}
     </Screen>
