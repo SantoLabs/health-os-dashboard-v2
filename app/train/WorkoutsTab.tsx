@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import CardioBuilder from "./CardioBuilder";
 import CardioLive from "./CardioLive";
+import CardioFree from "./CardioFree";
 import WorkoutLogger, { RoutineBuilder } from "./WorkoutLogger";
 import TodaySuggestion from "./TodaySuggestion";
 import FuelToday from "./FuelToday";
@@ -31,6 +32,7 @@ type Surface =
   | { k: "cardio"; intent: "workout" | "routine"; start: "describe" | "build"; editRoutineId?: string; preset?: CardioPreset }
   | { k: "cardioLive"; routine: CardioRoutine }
   | { k: "cardioPick" }
+  | { k: "cardioFree" }
   | { k: "presets" }
   | { k: "strengthLogger"; autoStart: { plan_id?: string; routine_id?: string; title?: string; items?: WkRoutineItem[] } | null; resume?: boolean }
   | { k: "strengthBuild"; routineId: string | null; preset?: StrengthPreset }
@@ -276,14 +278,28 @@ export default function WorkoutsTab({ onAskCoach }: { onAskCoach?: () => void })
   if (surface.k === "cardioLive") {
     return <CardioLive routine={surface.routine} onExit={backHome} />;
   }
+  if (surface.k === "cardioFree") {
+    return <CardioFree onExit={backHome} />;
+  }
   if (surface.k === "cardioPick") {
     return (
       <div style={{ padding: "18px 16px 28px", maxWidth: 720, margin: "0 auto" }}>
         <button onClick={backHome} className="trn-sub" style={{ marginBottom: 14 }}>‹ Back</button>
         <span className="eyebrow">Start cardio now</span>
-        <div style={{ fontSize: 12.5, color: "var(--muted)", margin: "4px 0 16px" }}>Pick a saved session to run with live coaching.</div>
+        <div style={{ fontSize: 12.5, color: "var(--muted)", margin: "4px 0 16px" }}>Run or ride freely, or start a saved session with live coaching.</div>
+        <button onClick={() => setSurface({ k: "cardioFree" })}
+          style={{ display: "flex", alignItems: "center", gap: 12, textAlign: "left", width: "100%", background: "var(--ember)", border: "none", borderRadius: "var(--r-md)", padding: "16px", cursor: "pointer", marginBottom: 18 }}>
+          <span style={{ width: 38, height: 38, borderRadius: 999, background: "rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center", flex: "0 0 auto" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M7 4l13 8-13 8V4z" /></svg>
+          </span>
+          <span style={{ flex: 1 }}>
+            <span style={{ display: "block", fontSize: 15, fontWeight: 800, color: "#fff" }}>Free run / ride</span>
+            <span style={{ display: "block", fontSize: 11, color: "rgba(255,255,255,0.82)", marginTop: 1 }}>No plan · GPS · auto 1 km laps</span>
+          </span>
+        </button>
+        <span className="eyebrow">Saved sessions</span>
         {cardio && cardio.length ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
             {cardio.map((r) => (
               <button key={r.id} disabled={busyId === r.id} onClick={() => startLive(r.id)}
                 style={{ display: "flex", alignItems: "center", gap: 12, textAlign: "left", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--r-md)", padding: "14px 16px", cursor: busyId === r.id ? "default" : "pointer" }}>
@@ -299,7 +315,7 @@ export default function WorkoutsTab({ onAskCoach }: { onAskCoach?: () => void })
             ))}
           </div>
         ) : (
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text-2)" }}>No saved sessions yet — build one first, then start it here.</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--muted)", marginTop: 8 }}>No saved sessions yet — build one to run it with coaching.</div>
         )}
       </div>
     );
