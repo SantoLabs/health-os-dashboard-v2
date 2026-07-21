@@ -56,7 +56,8 @@ function strokeWord(s: CardioStep): string {
   if (k === "warmup") return "Warm up";
   if (k === "cooldown") return "Cool down";
   if (isRest(s)) return "Rest";
-  if (r) return r.charAt(0).toUpperCase() + r.slice(1);
+  const generic = r === "" || r === "work" || r === "segment" || r === "active" || r === "steady" || r === "swim";
+  if (!generic) return r.charAt(0).toUpperCase() + r.slice(1);
   return "Swim";
 }
 
