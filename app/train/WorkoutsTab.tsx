@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import CardioBuilder from "./CardioBuilder";
+import CardioLive from "./CardioLive";
 import WorkoutLogger, { RoutineBuilder } from "./WorkoutLogger";
 import TodaySuggestion from "./TodaySuggestion";
 import FuelToday from "./FuelToday";
 import { CARDIO_PRESETS, STRENGTH_PRESETS, type CardioPreset, type PresetSport, type GlyphKey, type StrengthPreset } from "./presets";
-import { cardioList, cardioDelete, cardioPrescribe, wkRoutines, wkDeleteRoutine, wkActive } from "../lib/api";
+import { cardioList, cardioDelete, cardioPrescribe, cardioGet, wkRoutines, wkDeleteRoutine, wkActive } from "../lib/api";
 import type { CardioRoutine, WkRoutineSummary, WkBundle, WkRoutineItem } from "../lib/api";
 
 /* ------------------------------------------------------------------ *
@@ -28,6 +29,7 @@ type Discipline = "strength" | "cardio";
 type Surface =
   | { k: "home" }
   | { k: "cardio"; intent: "workout" | "routine"; start: "describe" | "build"; editRoutineId?: string; preset?: CardioPreset }
+  | { k: "cardioLive"; routine: CardioRoutine }
   | { k: "presets" }
   | { k: "strengthLogger"; autoStart: { plan_id?: string; routine_id?: string; title?: string; items?: WkRoutineItem[] } | null; resume?: boolean }
   | { k: "strengthBuild"; routineId: string | null; preset?: StrengthPreset }
@@ -256,10 +258,22 @@ export default function WorkoutsTab({ onAskCoach }: { onAskCoach?: () => void })
     } catch { setNote("Couldn't schedule — try again."); }
     finally { setBusyId(null); setOpenTray(null); }
   }
+  async function startLive(id: string) {
+    setBusyId(id);
+    try {
+      const r = await cardioGet(id);
+      if (r.routine && (r.routine.structure?.blocks?.length ?? 0) > 0) { setOpenTray(null); setSurface({ k: "cardioLive", routine: r.routine }); }
+      else setNote("This session has no steps to run yet.");
+    } catch { setNote("Couldn't start — try again."); }
+    finally { setBusyId(null); }
+  }
 
   // ---------- sub-surfaces (delegate to existing builders/loggers) ----------
   if (surface.k === "cardio") {
     return <CardioBuilder onExit={backHome} intent={surface.intent} startMode={surface.start} editRoutineId={surface.editRoutineId} presetStructure={surface.preset?.structure} presetName={surface.preset?.name} presetSport={surface.preset?.sport} />;
+  }
+  if (surface.k === "cardioLive") {
+    return <CardioLive routine={surface.routine} onExit={backHome} />;
   }
   if (surface.k === "presets") {
     return <PresetLibrary onExit={backHome} onLoad={(p) => setSurface({ k: "cardio", intent: "routine", start: "build", preset: p })} />;
@@ -323,8 +337,11 @@ export default function WorkoutsTab({ onAskCoach }: { onAskCoach?: () => void })
         {cell("Schedule", false, !isCardio, isCardio ? () => scheduleCardio(id, name) : null,
           <svg {...trayIco(isCardio ? "var(--text-2)" : "var(--faint)")}><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M3 10h18M8 3v4M16 3v4" /></svg>,
           isCardio ? undefined : "SOON")}
-        {cell("Push to device", false, true, null,
-          <svg {...trayIco("var(--faint)")}><rect x="7" y="6.5" width="10" height="11" rx="3" /><path d="M9.5 6.5L10 3h4l.5 3.5M9.5 17.5L10 21h4l.5-3.5" /></svg>, "SOON")}
+        {isCardio
+          ? cell("Start", false, busyId === id, () => startLive(id),
+              <svg {...trayIco("var(--ember)")}><path d="M7 4l13 8-13 8V4z" /></svg>, "LIVE")
+          : cell("Push to device", false, true, null,
+              <svg {...trayIco("var(--faint)")}><rect x="7" y="6.5" width="10" height="11" rx="3" /><path d="M9.5 6.5L10 3h4l.5 3.5M9.5 17.5L10 21h4l.5-3.5" /></svg>, "SOON")}
         {cell("Delete", true, false, () => setConfirmDel(id),
           <svg {...trayIco("var(--danger)")}><path d="M4 7h16M9.5 7V5h5v2M6.5 7l1 13h9l1-13" /></svg>)}
       </div>
