@@ -74,7 +74,7 @@ function SectionRow({ title, sub, tone, chip, onClick }: { title: string; sub: s
 /* ---------- hub ---------- */
 function Hub({ data, onOpen, onPickPhoto, uploading }: { data: ProfileData; onOpen: (v: View) => void; onPickPhoto: () => void; uploading: boolean }) {
   const id = data.identity;
-  const meta = [id.age != null ? `${id.age} yrs` : null, id.height_cm != null ? `${id.height_cm} cm` : null, id.weight_kg != null ? `${id.weight_kg} kg` : null, id.home_city].filter(Boolean).join(" \u00b7 ");
+  const meta = [id.age != null ? `${id.age} yrs` : null, id.height_cm != null ? `${id.height_cm} cm` : null, id.weight_kg != null ? `${Math.round(id.weight_kg * 10) / 10} kg` : null, id.home_city].filter(Boolean).join(" \u00b7 ");
 
   const basicsDone = !!(id.name && id.dob && id.height_cm);
   const healthDone = !!(data.health_mode.primary && data.goals.length);
@@ -270,7 +270,7 @@ function HealthSetup({ data, onBack, onSaved }: { data: ProfileData; onBack: () 
 
   return (
     <>
-      <EdHead title="Health Setup" onBack={onBack} />
+      <EdHead title="Health Setup" onBack={onBack} right={<StatusChip tone={primary && goals.length ? "done" : "todo"} label={primary && goals.length ? "DONE" : "SET UP"} />} />
 
       <div style={S.secLabel as React.CSSProperties}>Health Mode</div>
       <div style={{ height: 10 }} />
@@ -433,7 +433,7 @@ function TrainingSetup({ data, onBack, onSaved }: { data: ProfileData; onBack: (
 
   return (
     <>
-      <EdHead title="Training Setup" onBack={onBack} />
+      <EdHead title="Training Setup" onBack={onBack} right={<StatusChip tone={days.length ? "done" : "todo"} label={days.length ? "DONE" : "SET UP"} />} />
 
       <div style={S.secLabel as React.CSSProperties}>Preferences</div>
       <div style={{ height: 10 }} />
@@ -631,7 +631,7 @@ function AppPrefsEditor({ data, onBack, onSaved }: { data: ProfileData; onBack: 
 
   return (
     <>
-      <EdHead title="App Preferences" onBack={onBack} />
+      <EdHead title="App Preferences" onBack={onBack} right={<StatusChip tone={(nWorkout || nMeal || nBed || quietOn) ? "done" : "todo"} label={(nWorkout || nMeal || nBed || quietOn) ? "DONE" : "SET UP"} />} />
 
       <div style={S.secLabel as React.CSSProperties}>Connected apps</div>
       <div style={{ height: 10 }} />
@@ -672,6 +672,7 @@ function AppPrefsEditor({ data, onBack, onSaved }: { data: ProfileData; onBack: 
           )}
         </div>
       </div>
+      <div style={{ fontSize: 10.5, color: "var(--muted)", margin: "8px 2px 0" }}>Your choices are saved now. Nudge delivery arrives with notifications support.</div>
 
       <div style={{ ...(S.secLabel as React.CSSProperties), marginTop: 22 }}>General</div>
       <div style={{ height: 10 }} />
