@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { cardioActivities, cardioDetail, type CardioActivityLite, type CardioDetail, type CardioHrZone } from "../lib/api";
+import { cardioActivities, cardioDetail, cardioSources, cardioRenameActivity, cardioDeleteActivity, type CardioActivityLite, type CardioDetail, type CardioHrZone } from "../lib/api";
 import { sportEmoji, fmtPace } from "./ui";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -136,7 +136,25 @@ function CardioChart({ acts, sport }: { acts: CardioActivityLite[]; sport: strin
     </div>
   );
 }
-function CardioList({ acts, sport, onOpen }: { acts: CardioActivityLite[]; sport: string; onOpen: (id: string) => void }) {
+function sourceLabel(src?: string): string | null {
+  if (!src) return null;
+  const s = src.toLowerCase();
+  if (s === "in_app") return "In-app";
+  if (s === "garmin") return "Garmin";
+  if (s === "strava") return "Strava";
+  if (s === "manual") return "Manual";
+  return src.charAt(0).toUpperCase() + src.slice(1);
+}
+function SourcePill({ src }: { src?: string }) {
+  const label = sourceLabel(src);
+  if (!label) return null;
+  const inApp = (src || "").toLowerCase() === "in_app";
+  return (
+    <span style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: "0.06em", textTransform: "uppercase", padding: "2px 6px", borderRadius: 999, color: inApp ? "var(--ember)" : "var(--muted)", background: inApp ? "rgba(217,111,78,0.12)" : "var(--surface-2)", border: `1px solid ${inApp ? "transparent" : "var(--line)"}`, whiteSpace: "nowrap" }}>{label}</span>
+  );
+}
+
+function CardioList({ acts, sport, onOpen, sources }: { acts: CardioActivityLite[]; sport: string; onOpen: (id: string) => void; sources: Record<string, { source: string; name: string | null }> }) {
   const [monthIdx, setMonthIdx] = useState(0);
   const inSport = useMemo(() => acts.filter((a) => a.sport === sport), [acts, sport]);
   const months = useMemo(() => {
@@ -164,7 +182,10 @@ function CardioList({ acts, sport, onOpen }: { acts: CardioActivityLite[]; sport
             <span style={{ fontSize: 16 }}>{sportEmoji(sport)}</span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 600, fontSize: 13 }}>{a.distance_km != null ? `${a.distance_km.toFixed(2)} km` : (a.duration_mins != null ? fmtHrMin(a.duration_mins) : (a.name || "Session"))}</div>
-              <div className="subtle tiny">{new Date(a.date + "T00:00:00").getDate()} {MONTHS[new Date(a.date + "T00:00:00").getMonth()]}{a.duration_mins != null ? ` · ${fmtHrMin(a.duration_mins)}` : ""}</div>
+              <div className="subtle tiny" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <span>{new Date(a.date + "T00:00:00").getDate()} {MONTHS[new Date(a.date + "T00:00:00").getMonth()]}{a.duration_mins != null ? ` · ${fmtHrMin(a.duration_mins)}` : ""}</span>
+                <SourcePill src={sources[a.activity_id]?.source} />
+              </div>
             </div>
             <div style={{ textAlign: "right" }}>
               <div className="tnum" style={{ fontSize: 13, fontWeight: 600, color: "var(--text-2)" }}>{sport === "swimming" && a.avg_swolf != null ? `SWOLF ${Math.round(a.avg_swolf)}` : a.pace_min_km != null ? `${fmtPace(a.pace_min_km)}/km` : ""}</div>
@@ -320,16 +341,37 @@ function RouteTrace({ poly }: { poly: string }) {
     </div>
   );
 }
-export function CardioActivityDetail({ id, sport, onBack }: { id: string; sport: string; onBack: () => void }) {
+export function CardioActivityDetail({ id, sport, onBack, source, onChanged, onDeleted }: { id: string; sport: string; onBack: () => void; source?: string; onChanged?: (name: string) => void; onDeleted?: () => void }) {
   const [d, setD] = useState<CardioDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [localName, setLocalName] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [nameInput, setNameInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [actErr, setActErr] = useState<string | null>(null);
   useEffect(() => { let a = true; cardioDetail(id).then((r) => a && setD(r)).catch((e) => a && setErr((e as Error).message)); return () => { a = false; }; }, [id]);
+
+  const inApp = (source || "").toLowerCase() === "in_app";
+  const saveName = async () => {
+    const nm = nameInput.trim(); if (!nm) { setEditing(false); return; }
+    setBusy(true); setActErr(null);
+    try { await cardioRenameActivity(id, nm); setLocalName(nm); onChanged?.(nm); setEditing(false); }
+    catch (e) { setActErr((e as Error).message); }
+    finally { setBusy(false); }
+  };
+  const doDelete = async () => {
+    setBusy(true); setActErr(null);
+    try { await cardioDeleteActivity(id); onDeleted?.(); }
+    catch (e) { setActErr((e as Error).message); setBusy(false); }
+  };
 
   const back = <button onClick={onBack} style={{ background: "none", border: "none", color: "var(--ember)", cursor: "pointer", fontSize: 13, fontWeight: 600, padding: "4px 0" }}>{"‹"} Back</button>;
   if (err) return <div>{back}<div className="card error" style={{ marginTop: 8 }}><strong>Couldn&apos;t load</strong><div className="subtle">{err}</div></div></div>;
   if (!d) return <div>{back}<div className="muted center pad">Loading{"…"}</div></div>;
   const a = d.activity;
   if (!a) return <div>{back}<div className="subtle center pad">Activity not found.</div></div>;
+  const displayName = localName ?? a.name;
 
   const laps = d.laps || [];
   const hz = pickHrZones(d.hr_zones, sport);
@@ -369,11 +411,33 @@ export function CardioActivityDetail({ id, sport, onBack }: { id: string; sport:
       {back}
       <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "6px 0 12px" }}>
         <span style={{ fontSize: 20 }}>{sportEmoji(sport)}</span>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: 15 }}>{a.name || `${cap(sport)} session`}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {editing ? (
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <input value={nameInput} onChange={(e) => setNameInput(e.target.value)} autoFocus maxLength={80}
+                style={{ flex: 1, minWidth: 0, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 8, padding: "5px 8px", color: "var(--text)", fontSize: 14, fontWeight: 700 }} />
+              <button disabled={busy} onClick={saveName} style={{ background: "var(--ember)", border: "none", borderRadius: 8, padding: "6px 10px", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{busy ? "…" : "Save"}</button>
+              <button onClick={() => setEditing(false)} style={{ background: "none", border: "none", color: "var(--muted)", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>{displayName || `${cap(sport)} session`}</div>
+              <SourcePill src={source} />
+              {inApp ? <button onClick={() => { setNameInput(displayName || ""); setEditing(true); }} aria-label="Rename" style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 13, padding: 0 }}>✎</button> : null}
+            </div>
+          )}
           <div className="subtle tiny">{new Date(a.date + "T00:00:00").getDate()} {MONTHS[new Date(a.date + "T00:00:00").getMonth()]} {new Date(a.date + "T00:00:00").getFullYear()}</div>
         </div>
+        {inApp && !editing ? <button onClick={() => setConfirmDel(true)} aria-label="Delete" style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 15, padding: 4 }}>🗑</button> : null}
       </div>
+      {actErr ? <div className="subtle tiny" style={{ color: "var(--danger)", marginBottom: 8 }}>{actErr}</div> : null}
+      {confirmDel ? (
+        <div className="card" style={{ marginBottom: 10, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ flex: 1, fontSize: 12.5, fontWeight: 700, color: "var(--text-2)" }}>Delete this in-app activity? This can&apos;t be undone.</span>
+          <button onClick={() => setConfirmDel(false)} className="trn-sub">Cancel</button>
+          <button disabled={busy} onClick={doDelete} className="trn-sub" style={{ color: "#fff", background: "var(--danger)", borderColor: "transparent" }}>{busy ? "…" : "Delete"}</button>
+        </div>
+      ) : null}
 
       {poly ? <RouteTrace poly={poly} /> : null}
 
@@ -433,8 +497,11 @@ export default function CardioTab() {
   const [err, setErr] = useState<string | null>(null);
   const [sport, setSport] = useState<string>("running");
   const [sel, setSel] = useState<string | null>(null);
+  const [sources, setSources] = useState<Record<string, { source: string; name: string | null }>>({});
+  const [reload, setReload] = useState(0);
 
-  useEffect(() => { let alive = true; cardioActivities().then((r) => alive && setActs(r)).catch((e) => alive && setErr((e as Error).message)); return () => { alive = false; }; }, []);
+  useEffect(() => { let alive = true; cardioActivities().then((r) => alive && setActs(r)).catch((e) => alive && setErr((e as Error).message)); return () => { alive = false; }; }, [reload]);
+  useEffect(() => { let alive = true; cardioSources().then((r) => alive && setSources(r)).catch(() => {}); return () => { alive = false; }; }, [reload]);
 
   const sports = useMemo(() => {
     if (!acts) return [];
@@ -450,7 +517,7 @@ export default function CardioTab() {
   useEffect(() => { if (sports.length && !sports.includes(sport)) setSport(sports[0]); }, [sports, sport]);
   useEffect(() => { setSel(null); }, [sport]);
 
-  if (sel) return <CardioActivityDetail id={sel} sport={sport} onBack={() => setSel(null)} />;
+  if (sel) return <CardioActivityDetail id={sel} sport={sport} onBack={() => setSel(null)} source={sources[sel]?.source} onChanged={() => setReload((n) => n + 1)} onDeleted={() => { setSel(null); setReload((n) => n + 1); }} />;
 
   return (
     <div>
@@ -461,7 +528,7 @@ export default function CardioTab() {
             {sports.map((s) => <button key={s} className={sport === s ? "trn-sub on" : "trn-sub"} onClick={() => setSport(s)}>{sportEmoji(s)} {cap(s)}</button>)}
           </div>
           <CardioChart acts={acts} sport={sport} />
-          <CardioList acts={acts} sport={sport} onOpen={setSel} />
+          <CardioList acts={acts} sport={sport} onOpen={setSel} sources={sources} />
         </>
       )}
     </div>
