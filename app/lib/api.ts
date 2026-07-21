@@ -535,6 +535,7 @@ export type ProfileData = {
   injuries: ProfileInjury[];
   app_prefs: Record<string, unknown>;
   reminders: Record<string, unknown>;
+  connected_apps: { key: string; label: string; desc: string; connected: boolean; last_synced: string | null }[];
 };
 
 export async function profileGet(): Promise<ProfileData> {
