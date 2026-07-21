@@ -30,6 +30,7 @@ type Surface =
   | { k: "home" }
   | { k: "cardio"; intent: "workout" | "routine"; start: "describe" | "build"; editRoutineId?: string; preset?: CardioPreset }
   | { k: "cardioLive"; routine: CardioRoutine }
+  | { k: "cardioPick" }
   | { k: "presets" }
   | { k: "strengthLogger"; autoStart: { plan_id?: string; routine_id?: string; title?: string; items?: WkRoutineItem[] } | null; resume?: boolean }
   | { k: "strengthBuild"; routineId: string | null; preset?: StrengthPreset }
@@ -275,6 +276,34 @@ export default function WorkoutsTab({ onAskCoach }: { onAskCoach?: () => void })
   if (surface.k === "cardioLive") {
     return <CardioLive routine={surface.routine} onExit={backHome} />;
   }
+  if (surface.k === "cardioPick") {
+    return (
+      <div style={{ padding: "18px 16px 28px", maxWidth: 720, margin: "0 auto" }}>
+        <button onClick={backHome} className="trn-sub" style={{ marginBottom: 14 }}>‹ Back</button>
+        <span className="eyebrow">Start cardio now</span>
+        <div style={{ fontSize: 12.5, color: "var(--muted)", margin: "4px 0 16px" }}>Pick a saved session to run with live coaching.</div>
+        {cardio && cardio.length ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {cardio.map((r) => (
+              <button key={r.id} disabled={busyId === r.id} onClick={() => startLive(r.id)}
+                style={{ display: "flex", alignItems: "center", gap: 12, textAlign: "left", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--r-md)", padding: "14px 16px", cursor: busyId === r.id ? "default" : "pointer" }}>
+                <span style={{ width: 34, height: 34, borderRadius: 999, background: "var(--surface-2)", border: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "center", flex: "0 0 auto" }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--ember)"><path d="M7 4l13 8-13 8V4z" /></svg>
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: "block", fontSize: 14, fontWeight: 800, color: "var(--text)" }}>{r.name}</span>
+                  <span style={{ display: "block", fontSize: 11, color: "var(--muted)", marginTop: 1 }}>{cardioMeta(r)}</span>
+                </span>
+                <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.08em", color: busyId === r.id ? "var(--muted)" : "var(--ember)" }}>{busyId === r.id ? "…" : "START"}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text-2)" }}>No saved sessions yet — build one first, then start it here.</div>
+        )}
+      </div>
+    );
+  }
   if (surface.k === "presets") {
     return <PresetLibrary onExit={backHome} onLoad={(p) => setSurface({ k: "cardio", intent: "routine", start: "build", preset: p })} />;
   }
@@ -337,11 +366,10 @@ export default function WorkoutsTab({ onAskCoach }: { onAskCoach?: () => void })
         {cell("Schedule", false, !isCardio, isCardio ? () => scheduleCardio(id, name) : null,
           <svg {...trayIco(isCardio ? "var(--text-2)" : "var(--faint)")}><rect x="3" y="5" width="18" height="16" rx="3" /><path d="M3 10h18M8 3v4M16 3v4" /></svg>,
           isCardio ? undefined : "SOON")}
-        {isCardio
-          ? cell("Start", false, busyId === id, () => startLive(id),
-              <svg {...trayIco("var(--ember)")}><path d="M7 4l13 8-13 8V4z" /></svg>, "LIVE")
-          : cell("Push to device", false, true, null,
-              <svg {...trayIco("var(--faint)")}><rect x="7" y="6.5" width="10" height="11" rx="3" /><path d="M9.5 6.5L10 3h4l.5 3.5M9.5 17.5L10 21h4l.5-3.5" /></svg>, "SOON")}
+        {isCardio ? cell("Start", false, busyId === id, () => startLive(id),
+          <svg {...trayIco("var(--ember)")}><path d="M7 4l13 8-13 8V4z" /></svg>, "LIVE") : null}
+        {cell("Push to device", false, true, null,
+          <svg {...trayIco("var(--faint)")}><rect x="7" y="6.5" width="10" height="11" rx="3" /><path d="M9.5 6.5L10 3h4l.5 3.5M9.5 17.5L10 21h4l.5-3.5" /></svg>, "SOON")}
         {cell("Delete", true, false, () => setConfirmDel(id),
           <svg {...trayIco("var(--danger)")}><path d="M4 7h16M9.5 7V5h5v2M6.5 7l1 13h9l1-13" /></svg>)}
       </div>
@@ -374,7 +402,7 @@ export default function WorkoutsTab({ onAskCoach }: { onAskCoach?: () => void })
 
   // entry pair (honest copy; destinations wired minimally — full intent routing is Phase 2)
   const doNow = isCardio
-    ? { title: "Start cardio now", sub: "Pick a session — record on your watch", go: () => setSurface({ k: "cardio", intent: "workout", start: "build" }) }
+    ? { title: "Start cardio now", sub: "Pick a saved session to run", go: () => setSurface({ k: "cardioPick" }) }
     : { title: "Start strength now", sub: "Log your sets as you go", go: () => setSurface({ k: "strengthLogger", autoStart: { title: "Quick workout" } }) };
   const build = isCardio
     ? { title: "Build a session", sub: "Author · save · schedule", go: () => setSurface({ k: "cardio", intent: "routine", start: "build" }) }
