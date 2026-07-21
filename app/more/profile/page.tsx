@@ -79,6 +79,8 @@ function Hub({ data, onOpen, onPickPhoto, uploading }: { data: ProfileData; onOp
   const basicsDone = !!(id.name && id.dob && id.height_cm);
   const healthDone = !!(data.health_mode.primary && data.goals.length);
   const trainingDone = !!(data.training_prefs.training_days?.length);
+  const rem = data.reminders as { notify_workout?: boolean; notify_meal?: boolean; notify_bedtime?: boolean; quiet_start?: string | null };
+  const appDone = !!(rem.notify_workout || rem.notify_meal || rem.notify_bedtime || rem.quiet_start);
 
   return (
     <>
@@ -105,7 +107,7 @@ function Hub({ data, onOpen, onPickPhoto, uploading }: { data: ProfileData; onOp
       <SectionRow title="Account + Basics" sub="Name, DOB, body stats, units, location" tone={basicsDone ? "done" : "todo"} chip={basicsDone ? "DONE" : "SET UP"} onClick={() => onOpen("basics")} />
       <SectionRow title="Health Setup" sub="Health Mode, goals & sleep targets" tone={healthDone ? "done" : "todo"} chip={healthDone ? "DONE" : "SET UP"} onClick={() => onOpen("health")} />
       <SectionRow title="Training Setup" sub="Preferences, equipment & access, injuries" tone={trainingDone ? "done" : "todo"} chip={trainingDone ? "DONE" : "SET UP"} onClick={() => onOpen("training")} />
-      <SectionRow title="App Preferences" sub="Connected apps, reminders & quiet hours" tone="none" chip="NOT SET" onClick={() => onOpen("appprefs")} />
+      <SectionRow title="App Preferences" sub="Connected apps, reminders & quiet hours" tone={appDone ? "done" : "todo"} chip={appDone ? "DONE" : "SET UP"} onClick={() => onOpen("appprefs")} />
 
       <div style={{ ...S.card, display: "flex", gap: 11, padding: "13px 14px", marginTop: 7, background: "var(--ember-tint)", border: "1px solid var(--line)" }}>
         <div style={{ width: 26, height: 26, borderRadius: "50%", background: "var(--ember)", color: "#fff", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>K</div>
@@ -363,20 +365,6 @@ function HealthSetup({ data, onBack, onSaved }: { data: ProfileData; onBack: () 
   );
 }
 
-/* ---------- placeholder for sections shipping in later units ---------- */
-function Soon({ title, onBack, note }: { title: string; onBack: () => void; note: string }) {
-  return (
-    <>
-      <EdHead title={title} onBack={onBack} />
-      <div style={{ ...S.card, padding: "22px 18px", textAlign: "center" }}>
-        <div style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--ember-tint)", color: "var(--ember-strong)", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px", fontSize: 18 }}>K</div>
-        <div style={{ fontSize: 14.5, fontWeight: 700, color: "var(--text)", marginBottom: 6 }}>Coming in the next update</div>
-        <div style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.5 }}>{note}</div>
-      </div>
-    </>
-  );
-}
-
 /* ---------- training setup editor (prefs + equipment + injuries) ---------- */
 const DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
 const TIME_OPTS = [{ k: "morning", l: "Morning" }, { k: "midday", l: "Midday" }, { k: "evening", l: "Evening" }, { k: "flexible", l: "Flexible" }];
@@ -562,6 +550,120 @@ function TrainingSetup({ data, onBack, onSaved }: { data: ProfileData; onBack: (
   );
 }
 
+/* ---------- app preferences editor (connected apps + reminders + general) ---------- */
+const APP_META: Record<string, { c: string }> = {
+  garmin: { c: "#007CC3" }, strava: { c: "#FC4C02" }, hevy: { c: "#1B2A4A" }, withings: { c: "#00B2A9" }, calendar: { c: "#4285F4" },
+};
+function relSync(iso: string | null): string {
+  if (!iso) return "Not connected";
+  const diff = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diff / 60000), hr = Math.floor(min / 60), day = Math.floor(hr / 24);
+  if (day > 0) return "Synced " + day + (day === 1 ? " day ago" : " days ago");
+  if (hr > 0) return "Synced " + hr + (hr === 1 ? " hr ago" : " hrs ago");
+  if (min > 0) return "Synced " + min + " min ago";
+  return "Synced just now";
+}
+
+function AppPrefsEditor({ data, onBack, onSaved }: { data: ProfileData; onBack: () => void; onSaved: (d: ProfileData) => void }) {
+  const r0 = data.reminders as { notify_workout?: boolean; notify_meal?: boolean; notify_bedtime?: boolean; quiet_start?: string | null; quiet_end?: string | null };
+  const a0 = data.app_prefs as { appearance?: string; week_start?: string };
+  const [nWorkout, setNWorkout] = useState(!!r0.notify_workout);
+  const [nMeal, setNMeal] = useState(!!r0.notify_meal);
+  const [nBed, setNBed] = useState(!!r0.notify_bedtime);
+  const [quietOn, setQuietOn] = useState<boolean>(!!(r0.quiet_start && r0.quiet_end));
+  const [qStart, setQStart] = useState<string>((r0.quiet_start as string) || "22:00");
+  const [qEnd, setQEnd] = useState<string>((r0.quiet_end as string) || "07:00");
+  const [appearance, setAppearance] = useState<string>(a0.appearance || "system");
+  const [weekStart, setWeekStart] = useState<string>(a0.week_start || "monday");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const seg = (on: boolean): React.CSSProperties => ({ flex: 1, padding: "9px 0", borderRadius: 10, fontSize: 12.5, fontWeight: 700, cursor: "pointer", textAlign: "center", border: "1px solid " + (on ? "var(--ember)" : "var(--line)"), background: on ? "var(--ember-tint)" : "var(--surface-2)", color: on ? "var(--ember-strong)" : "var(--text-2)" });
+
+  async function save() {
+    setSaving(true); setErr(null);
+    try {
+      await profileSave("reminders_save", { notify_workout: nWorkout, notify_meal: nMeal, notify_bedtime: nBed, quiet_start: quietOn ? qStart : null, quiet_end: quietOn ? qEnd : null });
+      const d = await profileSave("app_prefs_save", { appearance, week_start: weekStart });
+      onSaved(d);
+    } catch (e) { setErr((e as Error).message); } finally { setSaving(false); }
+  }
+
+  const remRow = (label: string, on: boolean, set: (v: boolean) => void) => (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 15px", borderBottom: "1px solid var(--line)" }}>
+      <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)" }}>{label}</span>
+      <Toggle on={on} onClick={() => set(!on)} />
+    </div>
+  );
+
+  return (
+    <>
+      <EdHead title="App Preferences" onBack={onBack} />
+
+      <div style={S.secLabel as React.CSSProperties}>Connected apps</div>
+      <div style={{ height: 10 }} />
+      <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
+        {data.connected_apps.map((app, i) => { const m = APP_META[app.key] || { c: "var(--ember)" }; return (
+          <div key={app.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 15px", borderBottom: i === data.connected_apps.length - 1 ? "none" : "1px solid var(--line)" }}>
+            <span style={{ width: 32, height: 32, borderRadius: 8, flex: "none", background: m.c, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 800 }}>{app.label.charAt(0)}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{app.label}</div>
+              <div style={{ fontSize: 11, color: "var(--text-2)", marginTop: 1 }}>{app.desc}</div>
+            </div>
+            <span style={{ fontSize: 10.5, fontWeight: 700, padding: "5px 10px", borderRadius: 999, whiteSpace: "nowrap", background: app.connected ? "var(--success-tint)" : "var(--surface-2)", color: app.connected ? "var(--success)" : "var(--muted)" }}>{app.connected ? relSync(app.last_synced) : "Not connected"}</span>
+          </div>
+        ); })}
+      </div>
+      <div style={{ fontSize: 10.5, color: "var(--muted)", margin: "8px 2px 0" }}>Connect and disconnect controls are coming - for now this shows live sync status.</div>
+
+      <div style={{ ...(S.secLabel as React.CSSProperties), marginTop: 22 }}>Reminders</div>
+      <div style={{ height: 10 }} />
+      <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
+        {remRow("Workout reminders", nWorkout, setNWorkout)}
+        {remRow("Meal logging nudges", nMeal, setNMeal)}
+        {remRow("Bedtime wind-down", nBed, setNBed)}
+        <div style={{ padding: "13px 15px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div>
+              <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--text)" }}>Quiet hours</div>
+              <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 1 }}>No notifications in this window</div>
+            </div>
+            <Toggle on={quietOn} onClick={() => setQuietOn((v) => !v)} />
+          </div>
+          {quietOn && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
+              <input type="time" value={qStart} onChange={(e) => setQStart(e.target.value)} style={{ ...S.input, width: "auto", flex: 1, padding: "10px 12px", fontSize: 14 }} />
+              <span style={{ color: "var(--muted)", fontSize: 13 }}>to</span>
+              <input type="time" value={qEnd} onChange={(e) => setQEnd(e.target.value)} style={{ ...S.input, width: "auto", flex: 1, padding: "10px 12px", fontSize: 14 }} />
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ ...(S.secLabel as React.CSSProperties), marginTop: 22 }}>General</div>
+      <div style={{ height: 10 }} />
+      <div style={{ ...S.card, padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
+        <div>
+          <label style={S.fieldLabel}>Appearance</label>
+          <div style={{ display: "flex", gap: 6 }}>
+            {([["system", "System"], ["light", "Light"], ["dark", "Dark"]] as [string, string][]).map(([k, l]) => (<button key={k} onClick={() => setAppearance(k)} style={seg(appearance === k)}>{l}</button>))}
+          </div>
+          <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 6 }}>Saved as your preference. The quick toggle up top still controls the live theme.</div>
+        </div>
+        <div>
+          <label style={S.fieldLabel}>Week starts on</label>
+          <div style={{ display: "flex", gap: 6 }}>
+            {([["monday", "Monday"], ["sunday", "Sunday"]] as [string, string][]).map(([k, l]) => (<button key={k} onClick={() => setWeekStart(k)} style={seg(weekStart === k)}>{l}</button>))}
+          </div>
+        </div>
+      </div>
+
+      {err && <div style={{ color: "var(--danger)", fontSize: 13, marginTop: 14 }}>{err}</div>}
+      <button onClick={save} disabled={saving} style={{ width: "100%", margin: "18px 0 4px", padding: 14, borderRadius: 13, border: "none", background: "var(--ember)", color: "#fff", fontWeight: 800, fontSize: 15, cursor: saving ? "default" : "pointer", opacity: saving ? 0.7 : 1 }}>{saving ? "Saving\u2026" : "Save App Preferences"}</button>
+    </>
+  );
+}
+
 /* ---------- avatar crop + downscale modal ---------- */
 function CropModal({ src, onCancel, onUse }: { src: string; onCancel: () => void; onUse: (f: File) => void }) {
   const FRAME = 264;
@@ -665,7 +767,7 @@ export default function ProfilePage() {
       {data && view === "basics" && <BasicsEditor data={data} onBack={() => setView("hub")} onSaved={(d) => { setData(d); setView("hub"); }} onPickPhoto={pickPhoto} uploading={uploading} />}
       {data && view === "health" && <HealthSetup data={data} onBack={() => setView("hub")} onSaved={(d) => { setData(d); setView("hub"); }} />}
       {data && view === "training" && <TrainingSetup data={data} onBack={() => setView("hub")} onSaved={(d) => { setData(d); setView("hub"); }} />}
-      {view === "appprefs" && <Soon title="App Preferences" onBack={() => setView("hub")} note="Connected apps, reminders and quiet hours are on the way. Appearance is in the theme toggle up top for now." />}
+      {data && view === "appprefs" && <AppPrefsEditor data={data} onBack={() => setView("hub")} onSaved={(d) => { setData(d); setView("hub"); }} />}
     </Screen>
   );
 }
