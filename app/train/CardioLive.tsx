@@ -62,15 +62,25 @@ function kindColor(kind: string, role?: string | null): string {
   if (k === "transition") return C.muted;
   return C.ember; // segment / work
 }
-function kindWord(s: CardioStep): string {
+function sportWord(sport: string): string {
+  const s = (sport || "").toLowerCase();
+  if (s.startsWith("cyc") || s.startsWith("bik") || s === "ride") return "Bike";
+  if (s.startsWith("swim") || s.startsWith("pool")) return "Swim";
+  if (s.startsWith("walk")) return "Walk";
+  if (s.startsWith("hik")) return "Hike";
+  return "Run";
+}
+function kindWord(s: CardioStep, sport: string): string {
   if (s.label) return s.label;
   const k = (s.kind || "").toLowerCase(), r = (s.role || "").toLowerCase();
   if (k === "warmup") return "Warm up";
   if (k === "cooldown") return "Cool down";
-  if (k === "rest") return r.includes("recover") ? "Recover" : "Rest";
   if (k === "transition") return "Transition";
-  if (r) return r.charAt(0).toUpperCase() + r.slice(1);
-  return "Work";
+  if (r.includes("recover")) return "Recover";
+  if (k === "rest") return "Rest";
+  const generic = r === "" || r === "work" || r === "segment" || r === "active" || r === "steady";
+  if (!generic) return r.charAt(0).toUpperCase() + r.slice(1);
+  return sportWord(sport); // plain steady effort → show the activity (Run/Bike/Swim), never "Work"
 }
 function measureText(m: CardioMeasure): string {
   if (m.type === "distance") return m.meters >= 1000 ? `${(m.meters / 1000).toFixed(m.meters % 1000 ? 2 : 0)} km` : `${m.meters} m`;
@@ -110,8 +120,8 @@ function speak(text: string, on: boolean) {
   if (!on || typeof window === "undefined" || !("speechSynthesis" in window)) return;
   try { window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.rate = 1.0; u.pitch = 1.0; window.speechSynthesis.speak(u); } catch { /* ignore */ }
 }
-function stepPhrase(ls: LiveStep): string {
-  const s = ls.step, word = kindWord(s), m = s.measure;
+function stepPhrase(ls: LiveStep, sport: string): string {
+  const s = ls.step, word = kindWord(s, sport), m = s.measure;
   const rnd = ls.round ? `${word}. Rep ${ls.round.i} of ${ls.round.of}. ` : `${word}. `;
   let meas = "";
   if (m.type === "distance") meas = m.meters >= 1000 ? `${(m.meters / 1000).toFixed(2)} kilometers` : `${m.meters} meters`;
@@ -189,7 +199,7 @@ export default function CardioLive({ routine, onExit }: { routine: CardioRoutine
   const finishRef = useRef<() => void>(() => {});
   const advanceRef = useRef<(skipped?: boolean) => void>(() => {});
 
-  const announce = useCallback((i: number) => { const ls = steps[i]; if (ls) speak(stepPhrase(ls), voiceRef.current); }, [steps]);
+  const announce = useCallback((i: number) => { const ls = steps[i]; if (ls) speak(stepPhrase(ls, sport), voiceRef.current); }, [steps, sport]);
 
   const finish = useCallback(() => {
     // record final step actual
@@ -325,7 +335,7 @@ export default function CardioLive({ routine, onExit }: { routine: CardioRoutine
           <div key={`s${depth}_${i}`} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 2px" }}>
             <div style={{ width: 10, height: 26, borderRadius: 999, background: kindColor(s.kind, s.role), flex: "0 0 auto" }} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13.5, fontWeight: 800, color: C.text }}>{kindWord(s)}</div>
+              <div style={{ fontSize: 13.5, fontWeight: 800, color: C.text }}>{kindWord(s, sport)}</div>
               <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>{measureText(s.measure)}{targetText(s.targets) ? ` · ${targetText(s.targets)}` : ""}</div>
             </div>
             <div style={{ fontSize: 12, fontWeight: 700, color: C.muted }}>~{fmtClock(estSec(s, sport))}</div>
@@ -344,7 +354,7 @@ export default function CardioLive({ routine, onExit }: { routine: CardioRoutine
         <div style={{ flex: 1, overflowY: "auto", padding: "0 18px 18px", maxWidth: 480, margin: "0 auto", width: "100%" }}>
           <div style={{ textAlign: "center", marginTop: 18 }}>
             <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", color: C.muted }}>UP FIRST</div>
-            <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em", marginTop: 4 }}>{first ? `${kindWord(first.step)} · ${measureText(first.step.measure)}` : "—"}</div>
+            <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em", marginTop: 4 }}>{first ? `${kindWord(first.step, sport)} · ${measureText(first.step.measure)}` : "—"}</div>
             <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>{steps.length} steps · est {fmtClock(totalEst)}{routine.total_distance_m ? ` · ${(routine.total_distance_m / 1000).toFixed(1)} km` : ""}</div>
           </div>
           <div style={{ marginTop: 16 }}>{segBar}</div>
@@ -379,7 +389,7 @@ export default function CardioLive({ routine, onExit }: { routine: CardioRoutine
             {lapsRef.current.map((l, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderTop: i ? `1px solid ${C.surface2}` : "none" }}>
                 <span style={{ fontSize: 11, fontWeight: 800, color: C.faint, width: 22 }}>{i + 1}</span>
-                <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: C.text2 }}>{steps[i] ? kindWord(steps[i].step) : "Step"}{l.skipped ? " · skipped" : ""}</span>
+                <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: C.text2 }}>{steps[i] ? kindWord(steps[i].step, sport) : "Step"}{l.skipped ? " · skipped" : ""}</span>
                 <span style={{ fontSize: 12, color: C.muted }}>{l.distance_m ? `${(l.distance_m / 1000).toFixed(2)} km · ` : ""}{fmtClock(l.duration_s)}</span>
               </div>
             ))}
@@ -392,7 +402,7 @@ export default function CardioLive({ routine, onExit }: { routine: CardioRoutine
           ) : (
             <>
               <button onClick={onExit} style={{ flex: 1, background: C.surface2, border: `1px solid ${C.line}`, borderRadius: 999, padding: "16px 0", fontSize: 13.5, fontWeight: 800, color: C.text2, cursor: "pointer" }}>Discard</button>
-              <button disabled={saving} onClick={doSave} style={{ flex: 2, background: C.green, border: "none", borderRadius: 999, padding: "16px 0", fontSize: 15, fontWeight: 800, color: "#14231a", cursor: saving ? "default" : "pointer", opacity: saving ? 0.6 : 1 }}>{saving ? "Saving…" : "Save to history"}</button>
+              <button disabled={saving} onClick={doSave} style={{ flex: 2, background: C.green, border: "none", borderRadius: 999, padding: "16px 0", fontSize: 15, fontWeight: 800, color: "#14231a", cursor: saving ? "default" : "pointer", opacity: saving ? 0.6 : 1 }}>{saving ? "Saving…" : "Save"}</button>
             </>
           )}
         </div>
@@ -426,12 +436,12 @@ export default function CardioLive({ routine, onExit }: { routine: CardioRoutine
       <div style={{ flex: 1, overflowY: "auto", padding: "0 18px", maxWidth: 480, margin: "0 auto", width: "100%" }}>
         <div style={{ marginTop: 16 }}>{segBar}</div>
         <div style={{ background: C.surface, border: `1px solid ${C.line}`, borderRadius: 24, padding: 22, textAlign: "center", marginTop: 16 }}>
-          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", color: C.muted }}>STEP {idx + 1} OF {steps.length}{cur?.round ? ` · REP ${cur.round.i}/${cur.round.of}` : ""} · {cur ? kindWord(cur.step).toUpperCase() : ""}</div>
+          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", color: C.muted }}>STEP {idx + 1} OF {steps.length}{cur?.round ? ` · REP ${cur.round.i}/${cur.round.of}` : ""} · {cur ? kindWord(cur.step, sport).toUpperCase() : ""}</div>
           <div style={{ fontSize: 46, fontWeight: 800, letterSpacing: "-0.02em", marginTop: 6 }}>{heroBig}</div>
           <div style={{ fontSize: 11, color: C.faint, letterSpacing: "0.06em" }}>{heroSub}</div>
           {tgt ? <div style={{ fontSize: 15, fontWeight: 700, color: C.ember, marginTop: 6 }}>{tgt}</div> : null}
           <div style={{ height: 6, borderRadius: 999, background: C.surface2, marginTop: 14 }}><div style={{ width: `${Math.round((manual ? 1 : frac) * 100)}%`, height: 6, borderRadius: 999, background: C.ember }} /></div>
-          {next ? <div style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>Up next · <span style={{ fontWeight: 700, color: C.text2 }}>{kindWord(next.step)} · {measureText(next.step.measure)}</span></div> : <div style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>Last step</div>}
+          {next ? <div style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>Up next · <span style={{ fontWeight: 700, color: C.text2 }}>{kindWord(next.step, sport)} · {measureText(next.step.measure)}</span></div> : <div style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>Last step</div>}
         </div>
         <div style={{ display: "flex", marginTop: 16 }}>
           {[["DISTANCE", `${km.toFixed(2)} km`], ["TIME", fmtClock(elapsed())], ["AVG PACE", `${fmtPaceSec(avgPace)} /km`]].map(([l, v]) => (
