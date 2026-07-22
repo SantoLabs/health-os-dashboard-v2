@@ -372,8 +372,32 @@ function Badges() {
   );
 }
 
+function DropPill({ options, value, onChange, placeholder }: { options: { key: string; label: string; icon?: string }[]; value: string; onChange: (k: string) => void; placeholder?: string }) {
+  const [open, setOpen] = useState(false);
+  const cur = options.find((o) => o.key === value);
+  return (
+    <div style={{ position: "relative" }}>
+      <button onClick={() => setOpen((o) => !o)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 999, border: `1px solid ${open ? "color-mix(in srgb, var(--ember) 55%, transparent)" : "var(--line)"}`, background: "var(--surface-2)", color: "var(--text)", cursor: "pointer", font: "inherit", fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }}>
+        {cur?.icon ? <span>{cur.icon}</span> : null}<span>{cur?.label ?? placeholder ?? "Select"}</span><span style={{ color: "var(--muted)", fontSize: 10, transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }}>▾</span>
+      </button>
+      {open ? (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
+          <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 41, minWidth: 156, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, boxShadow: "0 10px 30px rgba(0,0,0,0.28)", overflow: "hidden", maxHeight: 264, overflowY: "auto" }}>
+            {options.map((o, i) => (
+              <button key={o.key} onClick={() => { onChange(o.key); setOpen(false); }} style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "10px 13px", background: o.key === value ? "var(--surface-2)" : "transparent", border: "none", borderTop: i ? "1px solid var(--line)" : "none", color: o.key === value ? "var(--ember)" : "var(--text)", cursor: "pointer", font: "inherit", fontSize: 13, fontWeight: o.key === value ? 700 : 600, textAlign: "left" }}>
+                {o.icon ? <span>{o.icon}</span> : null}<span style={{ flex: 1 }}>{o.label}</span>{o.key === value ? <span style={{ fontSize: 12, color: "var(--ember)" }}>✓</span> : null}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 function History({ prs }: { prs: TrnPrs }) {
-  const [tab, setTab] = useState<"Personal Bests" | "Badges" | "Adherence">("Personal Bests");
+  const [tab, setTab] = useState<"Bests" | "Badges">("Bests");
   const [sport, setSport] = useState<string | null>(prs.default_sport);
   const [period, setPeriod] = useState<string>("all");
   const sportKey = sport && prs.sports.some((s) => s.key === sport) ? sport : (prs.default_sport || prs.sports[0]?.key || null);
@@ -381,27 +405,16 @@ function History({ prs }: { prs: TrnPrs }) {
 
   return (
     <div>
-      <SubPills items={["Personal Bests", "Badges", "Adherence"] as const} value={tab} onChange={setTab} />
+      <SubPills items={["Bests", "Badges"] as const} value={tab} onChange={setTab} />
 
-      {tab === "Personal Bests" ? (
+      {tab === "Bests" ? (
         prs.sports.length === 0 ? (
           <div className="subtle tiny center" style={{ padding: "20px 0" }}>No personal bests yet.</div>
         ) : (
           <div>
-            <div style={{ display: "flex", gap: 6, overflowX: "auto", scrollbarWidth: "none", padding: "2px 0 10px", WebkitOverflowScrolling: "touch" }}>
-              {prs.sports.map((s) => (
-                <button key={s.key} onClick={() => setSport(s.key)} style={{ flex: "0 0 auto", display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 13px", borderRadius: 999, border: `1px solid ${sportKey === s.key ? "color-mix(in srgb, var(--ember) 55%, transparent)" : "var(--line)"}`, background: sportKey === s.key ? "var(--t-grad)" : "var(--surface-2)", color: sportKey === s.key ? "#fff" : "var(--muted)", cursor: "pointer", font: "inherit", fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }}>
-                  <span>{s.emoji}</span>{s.label}
-                </button>
-              ))}
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
-              <div style={{ display: "flex", gap: 2, background: "var(--surface-2)", borderRadius: 999, padding: 2 }}>
-                {PB_PERIODS.map((p) => (
-                  <button key={p.key} onClick={() => setPeriod(p.key)} style={{ padding: "5px 13px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 11.5, fontWeight: 700, background: period === p.key ? "var(--t-grad)" : "transparent", color: period === p.key ? "#fff" : "var(--muted)" }}>{p.label}</button>
-                ))}
-              </div>
+            <div style={{ display: "flex", gap: 8, margin: "2px 0 12px" }}>
+              <DropPill options={prs.sports.map((s) => ({ key: s.key, label: s.label, icon: s.emoji }))} value={sportKey || ""} onChange={setSport} placeholder="Sport" />
+              <DropPill options={PB_PERIODS.map((p) => ({ key: p.key, label: p.label }))} value={period} onChange={setPeriod} placeholder="All-time" />
             </div>
 
             {recs.length === 0
@@ -409,23 +422,8 @@ function History({ prs }: { prs: TrnPrs }) {
               : recs.map((rec) => <PBRow key={rec.label} rec={rec} />)}
           </div>
         )
-      ) : tab === "Badges" ? (
-        <Badges />
       ) : (
-        <div className="card">
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>Plan adherence</div>
-            <span className="trn-soon">Phase 2</span>
-          </div>
-          <div className="subtle tiny" style={{ marginTop: 6, lineHeight: 1.5 }}>
-            Adherence measures completed sessions against a committed weekly plan. It activates once the planner ships and starts committing plans — the layout below is a preview.
-          </div>
-          <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
-            <div className="trn-cell" style={{ flex: 1 }}><div className="v tnum">80%</div><div className="l">on plan · 30d</div></div>
-            <div className="trn-cell" style={{ flex: 1 }}><div className="v tnum">4.2</div><div className="l">sessions · wk</div></div>
-            <div className="trn-cell" style={{ flex: 1 }}><div className="v tnum">96%</div><div className="l">volume hit</div></div>
-          </div>
-        </div>
+        <Badges />
       )}
     </div>
   );
