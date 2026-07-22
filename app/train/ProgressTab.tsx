@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useTrain, useApi, actionGet, actionPost, planRange, strengthSessions, cardioActivities, trainingLoad, useBadges, markBadgesSeen, type TrnPrs, type TrnProgress, type TrnPbRec, type TrnSport, type TrnBadge, type StrengthSession, type CardioActivityLite, type TrnLoadPoint } from "../lib/api";
+import { useTrain, useApi, actionGet, actionPost, planRange, strengthSessions, cardioActivities, trainingLoad, useBadges, markBadgesSeen, type TrnPrs, type TrnProgress, type TrnPbRec, type TrnSport, type TrnBadge, type StrengthSession, type CardioActivityLite, type TrnLoadPoint, type TrnThreshold } from "../lib/api";
 import { Spark, SubPills, Delta, dShort } from "./ui";
 import KaiDailyCard from "../components/KaiDailyCard";
 import ExerciseDetail from "./ExerciseDetail";
@@ -744,15 +744,29 @@ function DaySheet({ date, cells, today, onTap, onDate, onClose }: { date: string
   );
 }
 
+function overviewStats(str: StrengthSession[], car: CardioActivityLite[], from: string, to: string) {
+  const len = Math.round((Date.parse(to) - Date.parse(from)) / 86400000) + 1;
+  const pTo = isoAdd(from, -1), pFrom = isoAdd(pTo, -(len - 1));
+  const cur: Partial<Record<Sport, number>> = {}, prev: Partial<Record<Sport, number>> = {};
+  const add = (o: Partial<Record<Sport, number>>, sp: Sport, v: number) => { o[sp] = (o[sp] || 0) + v; };
+  for (const s of str) { const v = s.volume || 0; if (s.date >= from && s.date <= to) add(cur, "strength", v); else if (s.date >= pFrom && s.date <= pTo) add(prev, "strength", v); }
+  for (const a of car) { const sp = normCardio(a.sport); if (!sp) continue; const v = a.distance_km || 0; if (a.date >= from && a.date <= to) add(cur, sp, v); else if (a.date >= pFrom && a.date <= pTo) add(prev, sp, v); }
+  const order: Sport[] = ["strength", "run", "cycle", "swim", "walk"];
+  return order.filter((sp) => (cur[sp] || 0) > 0 || (prev[sp] || 0) > 0).map((sp) => {
+    const isStr = sp === "strength"; const c = cur[sp] || 0, p = prev[sp] || 0;
+    return { sport: sp, emoji: SPORT[sp].emoji, val: isStr ? Math.round(c).toLocaleString("en-US") : c.toFixed(1), unit: isStr ? "kg" : "km", delta: p > 0 ? Math.round(((c - p) / p) * 100) : null };
+  });
+}
+
 function Summary() {
   const router = useRouter();
   const [mode, setMode] = useState<"Week" | "Month">("Week");
-  const [off, setOff] = useState(0); // 0 = current window; + = older, − = future
+  const [off, setOff] = useState(0);
   const [str, setStr] = useState<StrengthSession[] | null>(null);
   const [car, setCar] = useState<CardioActivityLite[] | null>(null);
   const [plan, setPlan] = useState<PlanSession[]>([]);
+  const [selWeekStart, setSelWeekStart] = useState<string | null>(null);
   const [open, setOpen] = useState<Open>(null);
-  const [daySheet, setDaySheet] = useState<string | null>(null);
   const today = istTodayISO();
 
   useEffect(() => {
@@ -762,66 +776,118 @@ function Summary() {
     return () => { a = false; };
   }, []);
 
-  const { from, to, prevFrom, prevTo } = useMemo(() => {
-    if (mode === "Week") { const st = isoAdd(mondayOf(today), -off * 7); const en = isoAdd(st, 6); return { from: st, to: en, prevFrom: isoAdd(st, -7), prevTo: isoAdd(en, -7) }; }
-    const st = isoAddMonths(today.slice(0, 8) + "01", -off); const en = isoAdd(isoAddMonths(st, 1), -1); return { from: st, to: en, prevFrom: isoAddMonths(st, -1), prevTo: isoAdd(st, -1) };
+  const { from, to } = useMemo(() => {
+    if (mode === "Week") { const st = isoAdd(mondayOf(today), -off * 7); return { from: st, to: isoAdd(st, 6) }; }
+    const st = isoAddMonths(today.slice(0, 8) + "01", -off); return { from: st, to: isoAdd(isoAddMonths(st, 1), -1) };
   }, [mode, off, today]);
 
   useEffect(() => {
     let a = true;
-    planRange<{ sessions: PlanSession[] }>(from, to).then((r) => a && setPlan(r.sessions || [])).catch(() => a && setPlan([]));
+    planRange<{ sessions: PlanSession[] }>(mondayOf(from), isoAdd(mondayOf(to), 6)).then((r) => a && setPlan(r.sessions || [])).catch(() => a && setPlan([]));
     return () => { a = false; };
   }, [from, to]);
+  useEffect(() => { setSelWeekStart(null); }, [mode, off]);
 
   if (open?.kind === "cardio") return <CardioActivityDetail id={open.id} sport={open.sport} onBack={() => setOpen(null)} />;
   if (open?.kind === "strength") return <StrengthSessionDetail s={open.s} onBack={() => setOpen(null)} />;
 
   const loading = str == null || car == null;
-  const cells = loading ? new Map<string, Cell[]>() : buildCells(from, to, str ?? [], car ?? [], plan, today);
+  const label = mode === "Week" ? `${dnum(from)} ${MON[moni(from)]} – ${dnum(to)} ${MON[moni(to)]}` : `${MON[moni(from)]} ${from.slice(0, 4)}`;
+
+  const weeks: { start: string; label: string }[] = [];
+  if (mode === "Month") { let ws = mondayOf(from), i = 1; while (ws <= to) { weeks.push({ start: ws, label: "W" + i }); ws = isoAdd(ws, 7); i++; } }
+  const curWeek = mondayOf(today);
+  const selStart = mode === "Week" ? from : (selWeekStart || weeks.find((w) => w.start <= curWeek && curWeek <= isoAdd(w.start, 6))?.start || weeks[0]?.start || from);
+  const selEnd = isoAdd(selStart, 6);
+
+  const stats = loading ? [] : overviewStats(str ?? [], car ?? [], from, to);
+  const weekCells = loading ? new Map<string, Cell[]>() : buildCells(selStart, selEnd, str ?? [], car ?? [], plan, today);
+
   const openDate = (d: string) => router.push(`/more/schedule?date=${d}`);
   const onTap = (c: Cell) => {
     if (c.cardioId) setOpen({ kind: "cardio", id: c.cardioId, sport: CARDIO_API[c.sport] });
     else if (c.strength) setOpen({ kind: "strength", s: c.strength });
-    else openDate(c.date); // planned/future → jump to the calendar at that date
+    else openDate(c.date);
   };
-  const label = mode === "Week" ? `${dnum(from)} ${MON[moni(from)]} – ${dnum(to)} ${MON[moni(to)]}` : `${MON[moni(from)]} ${from.slice(0, 4)}`;
+  const weekCount = (ws: string) => { const we = isoAdd(ws, 6); let n = 0; for (const s of (str ?? [])) if (s.date >= ws && s.date <= we) n++; for (const a of (car ?? [])) if (a.date >= ws && a.date <= we && normCardio(a.sport)) n++; return n; };
+  const weekDots = (ws: string) => { const we = isoAdd(ws, 6); const out: string[] = []; for (const s of (str ?? [])) if (s.date >= ws && s.date <= we) out.push(SPORT.strength.color); for (const a of (car ?? [])) { const sp = normCardio(a.sport); if (sp && a.date >= ws && a.date <= we) out.push(SPORT[sp].color); } return out.slice(0, 7); };
+  const seg: React.CSSProperties = { fontSize: 11, fontWeight: 800, padding: "5px 12px", borderRadius: 9, cursor: "pointer", border: "none" };
 
   return (
     <div>
-      {/* 1 · filter */}
-      <div style={{ display: "flex", justifyContent: "center", margin: "4px 0 10px" }}>
-        <div style={{ display: "flex", gap: 3, background: "var(--surface-2)", borderRadius: 999, padding: 3 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "stretch", marginBottom: 10 }}>
+        <div style={{ display: "flex", background: "var(--surface-2)", borderRadius: 12, padding: 3 }}>
           {(["Week", "Month"] as const).map((m) => (
-            <button key={m} onClick={() => { setMode(m); setOff(0); }} style={{ padding: "6px 18px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: 700, background: mode === m ? "var(--t-grad)" : "transparent", color: mode === m ? "#fff" : "var(--muted)" }}>{m}</button>
+            <button key={m} onClick={() => { setMode(m); setOff(0); }} style={{ ...seg, background: mode === m ? "var(--t-grad)" : "transparent", color: mode === m ? "#fff" : "var(--muted)" }}>{m}</button>
           ))}
         </div>
-      </div>
-
-      <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", marginBottom: 10 }}>
-        <button aria-label="Older" onClick={() => setOff((o) => Math.min(o + 1, 104))} style={{ background: "none", border: "none", color: "var(--ember)", fontSize: 18, cursor: "pointer", padding: "0 12px", lineHeight: 1 }}>◀</button>
-        <div style={{ fontWeight: 700, fontSize: 13 }}>{label}</div>
-        <button aria-label="Newer" disabled={off <= -4} onClick={() => setOff((o) => Math.max(o - 1, -4))} style={{ background: "none", border: "none", color: off <= -4 ? "var(--faint)" : "var(--ember)", fontSize: 18, cursor: off <= -4 ? "default" : "pointer", padding: "0 12px", lineHeight: 1 }}>▶</button>
+        <div className="card" style={{ flex: 1, margin: 0, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 12px" }}>
+          <button aria-label="Older" onClick={() => setOff((o) => Math.min(o + 1, 104))} style={{ background: "none", border: "none", color: "var(--ember)", fontSize: 14, cursor: "pointer", lineHeight: 1 }}>◀</button>
+          <span style={{ fontWeight: 800, fontSize: 13 }}>{label}</span>
+          <button aria-label="Newer" disabled={off <= -4} onClick={() => setOff((o) => Math.max(o - 1, -4))} style={{ background: "none", border: "none", color: off <= -4 ? "var(--faint)" : "var(--ember)", fontSize: 14, cursor: off <= -4 ? "default" : "pointer", lineHeight: 1 }}>▶</button>
+        </div>
       </div>
 
       {loading ? <div className="muted center pad">Loading…</div> : (
         <>
-          {/* 2 · summary boxes */}
-          <SportBlocks from={from} to={to} prevFrom={prevFrom} prevTo={prevTo} str={str ?? []} car={car ?? []} />
-          {/* 3 · calendar */}
-          <div className="eyebrow">Calendar</div>
-          {mode === "Week"
-            ? <WeekGrid start={from} cells={cells} today={today} onTap={onTap} onDate={openDate} />
-            : <MonthGrid start={from} cells={cells} today={today} onDay={setDaySheet} />}
-          {/* 4 · AI card */}
-          <div style={{ height: 12 }} />
+          {stats.length > 0 ? (
+            <div className="card" style={{ display: "flex", alignItems: "stretch", padding: "10px 0", marginBottom: 8 }}>
+              {stats.map((s, i) => (
+                <div key={s.sport} style={{ flex: 1, textAlign: "center", borderRight: i < stats.length - 1 ? "1px solid var(--line)" : "none", padding: "0 4px" }}>
+                  <div style={{ fontSize: 14, lineHeight: 1 }}>{s.emoji}</div>
+                  <div className="tnum" style={{ fontWeight: 900, fontSize: 13, marginTop: 3, whiteSpace: "nowrap" }}>{s.val}</div>
+                  <div className="subtle" style={{ fontSize: 9, fontWeight: 700 }}>{s.unit}{s.delta != null ? <> · <span style={{ color: s.delta >= 0 ? "var(--success)" : "var(--danger)", fontWeight: 800 }}>{s.delta >= 0 ? "▲" : "▼"}{Math.abs(s.delta)}%</span></> : null}</div>
+                </div>
+              ))}
+            </div>
+          ) : <div className="subtle tiny center" style={{ padding: "14px 0" }}>No sessions logged in this window yet.</div>}
+
+          {mode === "Month" && weeks.length > 0 ? (
+            <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+              {weeks.map((w) => {
+                const sel = w.start === selStart;
+                return (
+                  <button key={w.start} onClick={() => setSelWeekStart(w.start)} style={{ flex: 1, background: sel ? hexA("#c0704d", 0.10) : "var(--surface)", borderRadius: 10, padding: "6px 4px", textAlign: "center", border: `1px solid ${sel ? "var(--ember)" : "var(--line)"}`, cursor: "pointer", font: "inherit" }}>
+                    <div className="subtle" style={{ fontSize: 9, fontWeight: 800 }}>{w.label}</div>
+                    <div className="tnum" style={{ fontSize: 13, fontWeight: 900, lineHeight: 1.3 }}>{weekCount(w.start)}</div>
+                    <div style={{ display: "flex", gap: 2, justifyContent: "center", height: 4 }}>{weekDots(w.start).map((c, j) => <span key={j} style={{ width: 4, height: 4, borderRadius: 999, background: c }} />)}</div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+
+          <div className="card" style={{ padding: 12, marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 900 }}>Weekly Plan</span>
+              <span className="subtle tiny">{dnum(selStart)} {MON[moni(selStart)]} – {dnum(selEnd)} {MON[moni(selEnd)]}</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
+              {Array.from({ length: 7 }).map((_, i) => {
+                const date = isoAdd(selStart, i);
+                const cs = weekCells.get(date) || [];
+                const isToday = date === today;
+                return (
+                  <div key={date} style={{ textAlign: "center", borderRadius: 8, padding: "3px 1px", background: isToday ? hexA("#c0704d", 0.10) : "transparent" }}>
+                    <div style={{ fontSize: 9, fontWeight: 800, color: isToday ? "var(--ember)" : "var(--muted)", marginBottom: 3 }}>{DOW[i][0]}</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 3, minHeight: 8 }}>
+                      {cs.slice(0, 3).map((c) => {
+                        const sc = SPORT[c.sport];
+                        return <button key={c.key} onClick={() => (c.planned ? openDate(c.date) : onTap(c))} style={{ fontSize: 8, fontWeight: 800, padding: "3px 1px", borderRadius: 6, background: c.planned ? "transparent" : hexA(sc.color, 0.16), border: `1px ${c.planned ? "dashed" : "solid"} ${hexA(sc.color, c.planned ? 0.4 : 0.5)}`, color: c.planned ? hexA(sc.color, 0.9) : "var(--text)", whiteSpace: "nowrap", overflow: "hidden", cursor: "pointer", font: "inherit", lineHeight: 1.3 }}>{c.sport === "strength" ? "Gym" : sc.label}</button>;
+                      })}
+                      {cs.length === 0 && date < today ? <div className="subtle" style={{ fontSize: 9 }}>★</div> : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           <KaiDailyCard scope="training" />
-          {/* 5 · fitness & form */}
           <div style={{ height: 14 }} />
           <OverviewFitness />
         </>
       )}
-
-      {daySheet && <DaySheet date={daySheet} cells={cells} today={today} onTap={onTap} onDate={openDate} onClose={() => setDaySheet(null)} />}
     </div>
   );
 }
@@ -835,58 +901,94 @@ function ovrForm(tsb: number): { label: string; color: string } {
   if (tsb >= -30) return { label: "Tired", color: "var(--gold)" };
   return { label: "Very tired", color: "var(--danger)" };
 }
-function MiniPmc({ pts }: { pts: TrnLoadPoint[] }) {
-  const W = 320, H = 118, pad = 8;
-  if (pts.length < 2) return <div className="subtle tiny center" style={{ padding: "22px 0" }}>Not enough data yet</div>;
-  const n = pts.length;
-  const xs = (i: number) => pad + (i / (n - 1)) * (W - 2 * pad);
-  const load = pts.flatMap((p) => [p.ctl, p.atl]);
-  let lo = Math.min(...load), hi = Math.max(...load); if (hi === lo) hi = lo + 1;
-  const ys = (v: number) => pad + (1 - (v - lo) / (hi - lo)) * (H - 2 * pad);
-  const line = (k: "ctl" | "atl") => pts.map((p, i) => `${i === 0 ? "M" : "L"}${xs(i).toFixed(1)} ${ys(p[k]).toFixed(1)}`).join(" ");
-  const last = pts[n - 1];
-  return (
-    <svg className="trn-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ height: H }}>
-      <path d={line("atl")} fill="none" stroke={FC.atl} strokeWidth="2" opacity="0.9" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-      <path d={line("ctl")} fill="none" stroke={FC.ctl} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-      <circle cx={xs(n - 1)} cy={ys(last.ctl)} r="3.4" fill={FC.ctl} />
-      <circle cx={xs(n - 1)} cy={ys(last.atl)} r="3" fill={FC.atl} />
-    </svg>
-  );
-}
+const ovrPad2 = (n: number) => String(n).padStart(2, "0");
+const ovrPaceKm = (s: number) => `${Math.floor(s / 60)}:${ovrPad2(Math.round(s % 60))}/km`;
+const ovrPace100 = (s: number) => `${Math.floor(s / 60)}:${ovrPad2(Math.round(s % 60))}/100m`;
+
 function OverviewFitness() {
   const [range, setRange] = useState<(typeof OVR_RANGES)[number]>("3M");
-  const [load, setLoad] = useState<TrnLoadPoint[] | null>(null);
+  const [resp, setResp] = useState<{ load: TrnLoadPoint[]; thresholds: TrnThreshold[] } | null>(null);
   const [failed, setFailed] = useState(false);
-  useEffect(() => { let a = true; trainingLoad(190).then((d) => a && setLoad(d.load || [])).catch(() => a && setFailed(true)); return () => { a = false; }; }, []);
+  const [cur, setCur] = useState<number | null>(null);
+  useEffect(() => { let a = true; trainingLoad(190).then((d) => a && setResp({ load: d.load || [], thresholds: d.thresholds || [] })).catch(() => a && setFailed(true)); return () => { a = false; }; }, []);
   if (failed) return null;
-  const pts = load ? load.slice(-OVR_DAYS[range]) : [];
-  const last = load && load.length ? load[load.length - 1] : null;
+
+  const pts = resp ? resp.load.slice(-OVR_DAYS[range]) : [];
+  const n = pts.length;
+  const idx = cur == null ? n - 1 : Math.max(0, Math.min(n - 1, cur));
+  const sel = pts[idx];
+  const last = resp && resp.load.length ? resp.load[resp.load.length - 1] : null;
   const ctl = last?.ctl ?? 0, atl = last?.atl ?? 0, tsb = last?.tsb ?? 0;
   const st = ovrForm(tsb);
-  const legDot = (c: string): React.CSSProperties => ({ display: "inline-block", width: 8, height: 8, borderRadius: 2, marginRight: 4, background: c });
+
+  const W = 330, H = 60, pd = 6;
+  const xs = (i: number) => (n <= 1 ? pd : pd + (i / (n - 1)) * (W - 2 * pd));
+  const load = pts.flatMap((p) => [p.ctl, p.atl]);
+  let lo = load.length ? Math.min(...load) : 0, hi = load.length ? Math.max(...load) : 1; if (hi === lo) hi = lo + 1;
+  const ys = (v: number) => pd + (1 - (v - lo) / (hi - lo)) * (H - 2 * pd);
+  const line = (k: "ctl" | "atl") => pts.map((p, i) => `${i === 0 ? "M" : "L"}${xs(i).toFixed(1)} ${ys(p[k]).toFixed(1)}`).join(" ");
+  const onMove = (e: React.PointerEvent) => { const r = e.currentTarget.getBoundingClientRect(); if (r.width > 0) setCur(Math.round(((e.clientX - r.left) / r.width) * (n - 1))); };
+  const cursorPct = `${(xs(idx) / W) * 100}%`;
+
+  const thr = (sport: string, metric: string) => resp?.thresholds.find((t) => t.sport === sport && t.metric === metric);
+  const ftp = thr("bike", "ftp_w"), lthrB = thr("bike", "lthr"), lthrR = thr("run", "lthr"), tpace = thr("run", "threshold_pace_s_per_km"), css = thr("swim", "css_pace_s_per_100m");
+  const thCell = (icon: string, lbl: string, val: string, span?: boolean) => (
+    <div style={{ background: "var(--surface-2)", borderRadius: 10, padding: "7px 10px", display: "flex", alignItems: "center", justifyContent: "space-between", gridColumn: span ? "1 / -1" : undefined }}>
+      <span className="subtle tiny">{icon} {lbl}</span><b style={{ fontSize: 12 }}>{val}</b>
+    </div>
+  );
+
   return (
     <>
-      <div className="eyebrow">Fitness &amp; Form</div>
       <section className="card" style={{ padding: 12 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-          <div className="subtle tiny" style={{ display: "flex", gap: 12 }}>
-            <span><i style={legDot(FC.ctl)} />Fitness</span>
-            <span><i style={legDot(FC.atl)} />Fatigue</span>
-          </div>
-          <SubPills items={OVR_RANGES} value={range} onChange={setRange} />
+          <span style={{ fontSize: 12, fontWeight: 900 }}>Fitness &amp; Form</span>
+          <SubPills items={OVR_RANGES} value={range} onChange={(r) => { setRange(r); setCur(null); }} />
         </div>
-        {load == null ? <div className="muted center pad">Loading…</div> : (
+        {resp == null ? <div className="muted center pad">Loading…</div> : (
           <>
-            <div style={{ display: "flex", marginBottom: 6 }}>
-              <div style={{ flex: 1, textAlign: "center" }}><span className="subtle tiny" style={{ color: FC.ctl }}>Fitness</span><div className="tnum" style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.15 }}>{ctl.toFixed(0)}</div><span className="subtle tiny">CTL · 42d</span></div>
-              <div style={{ flex: 1, textAlign: "center" }}><span className="subtle tiny" style={{ color: FC.atl }}>Fatigue</span><div className="tnum" style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.15 }}>{atl.toFixed(0)}</div><span className="subtle tiny">ATL · 7d</span></div>
-              <div style={{ flex: 1, textAlign: "center" }}><span className="subtle tiny" style={{ color: FC.tsb }}>Form</span><div className="tnum" style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.15, color: st.color }}>{tsb > 0 ? "+" : ""}{tsb.toFixed(0)}</div><span className="subtle tiny" style={{ color: st.color }}>{st.label}</span></div>
+            <div style={{ display: "flex", marginBottom: 8 }}>
+              <div style={{ flex: 1, textAlign: "center", borderRight: "1px solid var(--line)" }}><div className="tnum" style={{ fontWeight: 900, fontSize: 16, color: FC.ctl }}>{ctl.toFixed(0)}</div><div className="subtle" style={{ fontSize: 9, fontWeight: 700 }}>Fitness · CTL 42d</div></div>
+              <div style={{ flex: 1, textAlign: "center", borderRight: "1px solid var(--line)" }}><div className="tnum" style={{ fontWeight: 900, fontSize: 16, color: FC.atl }}>{atl.toFixed(0)}</div><div className="subtle" style={{ fontSize: 9, fontWeight: 700 }}>Fatigue · ATL 7d</div></div>
+              <div style={{ flex: 1, textAlign: "center" }}><div className="tnum" style={{ fontWeight: 900, fontSize: 16, color: st.color }}>{tsb > 0 ? "+" : ""}{tsb.toFixed(0)}</div><div className="subtle" style={{ fontSize: 9, fontWeight: 700 }}>Form · {st.label}</div></div>
             </div>
-            <MiniPmc pts={pts} />
+            {sel ? <div style={{ textAlign: "center", fontSize: 9, fontWeight: 800, color: "var(--ember)", background: hexA("#c0704d", 0.12), borderRadius: 999, padding: "3px 0", marginBottom: 6 }}>{dnum(sel.date)} {MON[moni(sel.date)]} · Fitness {sel.ctl.toFixed(0)} · Fatigue {sel.atl.toFixed(0)}</div> : null}
+            {n < 2 ? <div className="subtle tiny center" style={{ padding: "20px 0" }}>Not enough data yet</div> : (
+              <div style={{ position: "relative", height: H, touchAction: "none" }} onPointerDown={onMove} onPointerMove={(e) => { if (e.buttons || e.pointerType === "touch") onMove(e); }}>
+                <svg className="trn-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: "block", position: "absolute", inset: 0, height: H, width: "100%" }}>
+                  <path d={line("atl")} fill="none" stroke={FC.atl} strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+                  <path d={line("ctl")} fill="none" stroke={FC.ctl} strokeWidth="2.5" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+                </svg>
+                <div style={{ position: "absolute", top: 0, bottom: 0, left: cursorPct, width: 1, background: "var(--line)" }} />
+                <div style={{ position: "absolute", left: cursorPct, top: ys(sel.ctl), width: 7, height: 7, borderRadius: 999, background: FC.ctl, border: "1.5px solid var(--surface)", transform: "translate(-50%,-50%)" }} />
+                <div style={{ position: "absolute", left: cursorPct, top: ys(sel.atl), width: 7, height: 7, borderRadius: 999, background: FC.atl, border: "1.5px solid var(--surface)", transform: "translate(-50%,-50%)" }} />
+              </div>
+            )}
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+              {[0, Math.floor(n / 3), Math.floor((2 * n) / 3), n - 1].map((i, k) => (pts[i] ? <span key={k} className="subtle" style={{ fontSize: 8, fontWeight: 700 }}>{dnum(pts[i].date)} {MON[moni(pts[i].date)]}</span> : <span key={k} />))}
+            </div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 5 }}>
+              <span className="subtle" style={{ fontSize: 8, fontWeight: 700, display: "flex", alignItems: "center", gap: 3 }}><span style={{ width: 6, height: 6, borderRadius: 2, background: FC.ctl }} />Fitness</span>
+              <span className="subtle" style={{ fontSize: 8, fontWeight: 700, display: "flex", alignItems: "center", gap: 3 }}><span style={{ width: 6, height: 6, borderRadius: 2, background: FC.atl }} />Fatigue</span>
+            </div>
           </>
         )}
       </section>
+      {resp && resp.thresholds.length ? (
+        <>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "8px 2px 6px" }}>
+            <span style={{ fontSize: 11, fontWeight: 900 }}>Thresholds</span>
+            <span className="subtle tiny">auto-updated · TSS per session</span>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            {thCell("🚴", "FTP", ftp ? `${ftp.value.toFixed(0)} W` : "—")}
+            {thCell("🚴", "LTHR", lthrB ? `${lthrB.value.toFixed(0)} bpm` : "—")}
+            {thCell("🏃", "Thr pace", tpace ? ovrPaceKm(tpace.value) : "—")}
+            {thCell("🏃", "LTHR", lthrR ? `${lthrR.value.toFixed(0)} bpm` : "—")}
+            {thCell("🏊", "CSS", css ? ovrPace100(css.value) : "—", true)}
+          </div>
+        </>
+      ) : null}
     </>
   );
 }
