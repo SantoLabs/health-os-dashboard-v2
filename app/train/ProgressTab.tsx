@@ -1006,7 +1006,14 @@ export default function ProgressTab() {
 
   return (
     <div>
-      <SubPills items={["Overview", "Activities", "Insights", "Milestones"] as const} value={sub} onChange={setSub} />
+      <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+        {(["Overview", "Activities", "Insights", "Milestones"] as const).map((t) => {
+          const on = sub === t;
+          return (
+            <button key={t} onClick={() => setSub(t)} style={{ flex: 1, textAlign: "center", fontSize: 11.5, fontWeight: 800, padding: "7px 2px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit", lineHeight: 1.1, background: on ? "var(--t-grad)" : "var(--surface-2)", color: on ? "#fff" : "var(--muted)", border: `1px solid ${on ? "transparent" : "var(--line)"}`, whiteSpace: "nowrap" }}>{t}</button>
+          );
+        })}
+      </div>
       {sub === "Overview" ? (
         <Summary />
       ) : sub === "Activities" ? (
