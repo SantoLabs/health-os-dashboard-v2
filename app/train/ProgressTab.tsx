@@ -6,6 +6,7 @@ import { Spark, SubPills, Delta, dShort } from "./ui";
 import KaiDailyCard from "../components/KaiDailyCard";
 import ExerciseDetail from "./ExerciseDetail";
 import { CardioActivityDetail } from "./CardioTab";
+import Sheet from "../components/Sheet";
 import { useRouter } from "next/navigation";
 import InsightsTab from "./InsightsTab";
 import ActivitiesTab from "./ActivitiesTab";
@@ -688,14 +689,14 @@ function SportBlocks({ from, to, prevFrom, prevTo, str, car }: { from: string; t
   );
 }
 
-function StrengthSessionDetail({ s, onBack }: { s: StrengthSession; onBack: () => void }) {
+function StrengthSessionDetail({ s, onBack, embedded }: { s: StrengthSession; onBack: () => void; embedded?: boolean }) {
   const [ex, setEx] = useState<string | null>(null);
   if (ex) return <ExerciseDetail title={ex} onBack={() => setEx(null)} />;
   const dt = new Date(s.date + "T00:00:00");
   return (
     <div>
       <div className="trn-back">
-        <button onClick={onBack} aria-label="Back">‹</button>
+        {embedded ? null : <button onClick={onBack} aria-label="Back">‹</button>}
         <div style={{ flex: 1, minWidth: 0 }}>
           <h3>{s.name}</h3>
           <div className="sub">{dt.getDate()} {MON[dt.getMonth()]} {dt.getFullYear()} · {s.sets} sets{s.volume ? ` · ${Math.round(s.volume).toLocaleString("en-US")} kg` : ""}</div>
@@ -752,7 +753,7 @@ function overviewStats(str: StrengthSession[], car: CardioActivityLite[], from: 
   for (const s of str) { const v = s.volume || 0; if (s.date >= from && s.date <= to) add(cur, "strength", v); else if (s.date >= pFrom && s.date <= pTo) add(prev, "strength", v); }
   for (const a of car) { const sp = normCardio(a.sport); if (!sp) continue; const v = a.distance_km || 0; if (a.date >= from && a.date <= to) add(cur, sp, v); else if (a.date >= pFrom && a.date <= pTo) add(prev, sp, v); }
   const order: Sport[] = ["strength", "run", "cycle", "swim", "walk"];
-  return order.filter((sp) => (cur[sp] || 0) > 0 || (prev[sp] || 0) > 0).map((sp) => {
+  return order.filter((sp) => (cur[sp] || 0) > 0).map((sp) => {
     const isStr = sp === "strength"; const c = cur[sp] || 0, p = prev[sp] || 0;
     return { sport: sp, emoji: SPORT[sp].emoji, val: isStr ? Math.round(c).toLocaleString("en-US") : c.toFixed(1), unit: isStr ? "kg" : "km", delta: p > 0 ? Math.round(((c - p) / p) * 100) : null };
   });
@@ -788,20 +789,16 @@ function Summary() {
   }, [from, to]);
   useEffect(() => { setSelWeekStart(null); }, [mode, off]);
 
-  if (open?.kind === "cardio") return <CardioActivityDetail id={open.id} sport={open.sport} onBack={() => setOpen(null)} />;
-  if (open?.kind === "strength") return <StrengthSessionDetail s={open.s} onBack={() => setOpen(null)} />;
-
   const loading = str == null || car == null;
   const label = mode === "Week" ? `${dnum(from)} ${MON[moni(from)]} – ${dnum(to)} ${MON[moni(to)]}` : `${MON[moni(from)]} ${from.slice(0, 4)}`;
 
   const weeks: { start: string; label: string }[] = [];
   if (mode === "Month") { let ws = mondayOf(from), i = 1; while (ws <= to) { weeks.push({ start: ws, label: "W" + i }); ws = isoAdd(ws, 7); i++; } }
-  const curWeek = mondayOf(today);
-  const selStart = mode === "Week" ? from : (selWeekStart || weeks.find((w) => w.start <= curWeek && curWeek <= isoAdd(w.start, 6))?.start || weeks[0]?.start || from);
-  const selEnd = isoAdd(selStart, 6);
+  const planWeek = mode === "Week" ? from : selWeekStart; // Month: null until a week chip is tapped (inline expand)
+  const planEnd = planWeek ? isoAdd(planWeek, 6) : "";
 
   const stats = loading ? [] : overviewStats(str ?? [], car ?? [], from, to);
-  const weekCells = loading ? new Map<string, Cell[]>() : buildCells(selStart, selEnd, str ?? [], car ?? [], plan, today);
+  const weekCells = (!loading && planWeek) ? buildCells(planWeek, planEnd, str ?? [], car ?? [], plan, today) : new Map<string, Cell[]>();
 
   const openDate = (d: string) => router.push(`/more/schedule?date=${d}`);
   const onTap = (c: Cell) => {
@@ -845,11 +842,12 @@ function Summary() {
           {mode === "Month" && weeks.length > 0 ? (
             <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
               {weeks.map((w) => {
-                const sel = w.start === selStart;
+                const sel = w.start === selWeekStart;
+                const cnt = weekCount(w.start);
                 return (
-                  <button key={w.start} onClick={() => setSelWeekStart(w.start)} style={{ flex: 1, background: sel ? hexA("#c0704d", 0.10) : "var(--surface)", borderRadius: 10, padding: "6px 4px", textAlign: "center", border: `1px solid ${sel ? "var(--ember)" : "var(--line)"}`, cursor: "pointer", font: "inherit" }}>
+                  <button key={w.start} onClick={() => setSelWeekStart(sel ? null : w.start)} style={{ flex: 1, background: sel ? hexA("#c0704d", 0.10) : "var(--surface)", borderRadius: 10, padding: "6px 4px", textAlign: "center", border: `1px solid ${sel ? "var(--ember)" : "var(--line)"}`, cursor: "pointer", fontFamily: "inherit" }}>
                     <div className="subtle" style={{ fontSize: 9, fontWeight: 800 }}>{w.label}</div>
-                    <div className="tnum" style={{ fontSize: 13, fontWeight: 900, lineHeight: 1.3 }}>{weekCount(w.start)}</div>
+                    <div className="tnum" style={{ fontSize: 13, fontWeight: 900, lineHeight: 1.3 }}>{cnt || "—"}</div>
                     <div style={{ display: "flex", gap: 2, justifyContent: "center", height: 4 }}>{weekDots(w.start).map((c, j) => <span key={j} style={{ width: 4, height: 4, borderRadius: 999, background: c }} />)}</div>
                   </button>
                 );
@@ -857,37 +855,46 @@ function Summary() {
             </div>
           ) : null}
 
-          <div className="card" style={{ padding: 12, marginBottom: 12 }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 900 }}>Weekly Plan</span>
-              <span className="subtle tiny">{dnum(selStart)} {MON[moni(selStart)]} – {dnum(selEnd)} {MON[moni(selEnd)]}</span>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
-              {Array.from({ length: 7 }).map((_, i) => {
-                const date = isoAdd(selStart, i);
-                const cs = weekCells.get(date) || [];
-                const isToday = date === today;
-                return (
-                  <div key={date} style={{ textAlign: "center", borderRadius: 8, padding: "3px 1px", background: isToday ? hexA("#c0704d", 0.10) : "transparent" }}>
-                    <div style={{ fontSize: 9, fontWeight: 800, color: isToday ? "var(--ember)" : "var(--muted)", marginBottom: 3 }}>{DOW[i][0]}</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 3, minHeight: 8 }}>
-                      {cs.slice(0, 3).map((c) => {
-                        const sc = SPORT[c.sport];
-                        return <button key={c.key} onClick={() => (c.planned ? openDate(c.date) : onTap(c))} style={{ fontSize: 8, fontWeight: 800, padding: "3px 1px", borderRadius: 6, background: c.planned ? "transparent" : hexA(sc.color, 0.16), border: `1px ${c.planned ? "dashed" : "solid"} ${hexA(sc.color, c.planned ? 0.4 : 0.5)}`, color: c.planned ? hexA(sc.color, 0.9) : "var(--text)", whiteSpace: "nowrap", overflow: "hidden", cursor: "pointer", font: "inherit", lineHeight: 1.3 }}>{c.sport === "strength" ? "Gym" : sc.label}</button>;
-                      })}
-                      {cs.length === 0 && date < today ? <div className="subtle" style={{ fontSize: 9 }}>★</div> : null}
+          {planWeek ? (
+            <div className="card" style={{ padding: 12, marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 900 }}>Weekly Plan</span>
+                <span className="subtle tiny">{dnum(planWeek)} {MON[moni(planWeek)]} – {dnum(planEnd)} {MON[moni(planEnd)]}</span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
+                {Array.from({ length: 7 }).map((_, i) => {
+                  const date = isoAdd(planWeek, i);
+                  const cs = weekCells.get(date) || [];
+                  const isToday = date === today;
+                  return (
+                    <div key={date} style={{ textAlign: "center", borderRadius: 8, padding: "3px 1px", background: isToday ? hexA("#c0704d", 0.10) : "transparent" }}>
+                      <div style={{ fontSize: 9, fontWeight: 800, color: isToday ? "var(--ember)" : "var(--muted)", marginBottom: 4 }}>{DOW[i][0]}</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "center", minHeight: 16 }}>
+                        {cs.slice(0, 3).map((c) => {
+                          const sc = SPORT[c.sport];
+                          return <button key={c.key} onClick={() => (c.planned ? openDate(c.date) : onTap(c))} style={{ display: "block", width: "100%", fontSize: 9, fontWeight: 700, padding: "3px 2px", borderRadius: 6, background: c.planned ? "transparent" : hexA(sc.color, 0.16), border: `1px ${c.planned ? "dashed" : "solid"} ${hexA(sc.color, c.planned ? 0.4 : 0.5)}`, color: c.planned ? hexA(sc.color, 0.9) : "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: "pointer", fontFamily: "inherit", lineHeight: 1.25 }}>{c.sport === "strength" ? "Gym" : sc.label}</button>;
+                        })}
+                        {cs.length === 0 && date < today ? <div style={{ fontSize: 15, lineHeight: 1, color: "var(--gold)", filter: "drop-shadow(0 0 3px rgba(245,197,66,0.5))" }}>★</div> : null}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          ) : null}
 
           <KaiDailyCard scope="training" />
           <div style={{ height: 14 }} />
           <OverviewFitness />
         </>
       )}
+
+      <Sheet open={open?.kind === "cardio"} title="Activity" onClose={() => setOpen(null)}>
+        {open?.kind === "cardio" ? <CardioActivityDetail id={open.id} sport={open.sport} onBack={() => setOpen(null)} embedded /> : null}
+      </Sheet>
+      <Sheet open={open?.kind === "strength"} title="Workout" onClose={() => setOpen(null)}>
+        {open?.kind === "strength" ? <StrengthSessionDetail s={open.s} onBack={() => setOpen(null)} embedded /> : null}
+      </Sheet>
     </div>
   );
 }
