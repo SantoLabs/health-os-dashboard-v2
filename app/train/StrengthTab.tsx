@@ -7,7 +7,7 @@ import ExerciseDetail from "./ExerciseDetail";
 import WorkoutLogger from "./WorkoutLogger";
 
 const AXES = ["Chest", "Back", "Core", "Legs", "Shoulders", "Arms"];
-const WIN: [string, string][] = [["30d", "30 days"], ["60d", "60 days"], ["90d", "90 days"], ["lifetime", "Lifetime"]];
+const WIN: [string, string][] = [["15d", "15 days"], ["30d", "30 days"], ["60d", "60 days"], ["90d", "90 days"], ["lifetime", "Lifetime"]];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function Delta({ cur, prev }: { cur: number; prev: number | null }) {
@@ -40,6 +40,28 @@ function Radar({ data }: { data: RadarAxis[] }) {
 }
 
 function fmtDate(d: string) { const dt = new Date(d + "T00:00:00"); return `${dt.getDate()} ${MONTHS[dt.getMonth()]} ${dt.getFullYear()}`; }
+
+function MuscleBars({ data, showPrev }: { data: RadarAxis[]; showPrev: boolean }) {
+  const rows = [...data].sort((a, b) => b.current - a.current);
+  const max = Math.max(1, ...data.map((d) => Math.max(d.current, d.previous ?? 0)));
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+      {rows.map((r) => {
+        const d = r.previous == null ? null : r.current - r.previous;
+        return (
+          <div key={r.axis} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 62, fontSize: 12, fontWeight: 600, color: "var(--text-2)" }}>{r.axis}</div>
+            <div style={{ flex: 1, position: "relative", height: 14 }}>
+              {showPrev && r.previous != null ? <div style={{ position: "absolute", top: 1, left: 0, height: 12, width: `${Math.max(2, (r.previous / max) * 100)}%`, background: "color-mix(in srgb, var(--muted) 30%, transparent)", borderRadius: 999 }} /> : null}
+              <div style={{ position: "absolute", top: showPrev ? 3 : 1, left: 0, height: showPrev ? 8 : 12, width: `${Math.max(2, (r.current / max) * 100)}%`, background: "var(--ember)", borderRadius: 999 }} />
+            </div>
+            <div className="tnum" style={{ width: 56, textAlign: "right", fontSize: 12.5, fontWeight: 700 }}>{Math.round(r.current)}{d != null && d !== 0 ? <span style={{ fontSize: 10.5, fontWeight: 700, marginLeft: 3, color: d > 0 ? "var(--success)" : "var(--danger)" }}>{d > 0 ? "▲" : "▼"}{Math.abs(Math.round(d))}</span> : null}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 
 export default function StrengthTab() {
@@ -96,15 +118,15 @@ export default function StrengthTab() {
 
       {stats && radar.length ? (
         <div className="card" style={{ marginBottom: 8 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>Muscle balance</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>Muscle balance <span className="subtle tiny" style={{ fontWeight: 600 }}>· sets/region</span></div>
             <div style={{ display: "flex", gap: 12 }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--muted)" }}><span style={{ width: 9, height: 9, borderRadius: 2, background: "var(--ember)" }} />{win === "lifetime" ? "Lifetime" : "Selected"}</span>
-              {win !== "lifetime" ? <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--muted)" }}><span style={{ width: 9, height: 9, borderRadius: 2, background: "color-mix(in srgb, var(--muted) 55%, transparent)" }} />Prior</span> : null}
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--muted)" }}><span style={{ width: 9, height: 9, borderRadius: 2, background: "var(--ember)" }} />{win === "lifetime" ? "Lifetime" : "This period"}</span>
+              {win !== "lifetime" ? <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--muted)" }}><span style={{ width: 9, height: 9, borderRadius: 2, background: "color-mix(in srgb, var(--muted) 45%, transparent)" }} />Prior</span> : null}
             </div>
           </div>
-          <Radar data={radar} />
-          <div className="subtle tiny" style={{ textAlign: "center", opacity: 0.7 }}>Sets per muscle region{win !== "lifetime" ? ` · ${winLabel} vs the prior ${winLabel}` : " · all time"}</div>
+          <MuscleBars data={radar} showPrev={win !== "lifetime"} />
+          <div className="subtle tiny" style={{ marginTop: 10, opacity: 0.7 }}>{win !== "lifetime" ? `${winLabel} vs the prior ${winLabel}` : "All time"}</div>
         </div>
       ) : null}
 
