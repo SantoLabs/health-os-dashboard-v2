@@ -397,6 +397,16 @@ function DropPill({ options, value, onChange, placeholder }: { options: { key: s
   );
 }
 
+function SegToggle<T extends string>({ items, value, onChange }: { items: readonly T[]; value: T; onChange: (t: T) => void }) {
+  return (
+    <div style={{ display: "flex", background: "var(--surface-2)", borderRadius: 999, padding: 2, marginLeft: "auto" }}>
+      {items.map((t) => (
+        <button key={t} onClick={() => onChange(t)} style={{ fontSize: 11, fontWeight: 800, padding: "5px 11px", borderRadius: 999, border: "none", cursor: "pointer", fontFamily: "inherit", background: value === t ? "var(--surface)" : "transparent", color: value === t ? "var(--text)" : "var(--muted)", boxShadow: value === t ? "0 1px 3px rgba(0,0,0,0.18)" : "none" }}>{t}</button>
+      ))}
+    </div>
+  );
+}
+
 function History({ prs }: { prs: TrnPrs }) {
   const [tab, setTab] = useState<"Bests" | "Badges">("Bests");
   const [sport, setSport] = useState<string | null>(prs.default_sport);
@@ -406,22 +416,19 @@ function History({ prs }: { prs: TrnPrs }) {
 
   return (
     <div>
-      <SubPills items={["Bests", "Badges"] as const} value={tab} onChange={setTab} />
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <DropPill options={prs.sports.map((s) => ({ key: s.key, label: s.label, icon: s.emoji }))} value={sportKey || ""} onChange={setSport} placeholder="Sport" />
+        <DropPill options={PB_PERIODS.map((p) => ({ key: p.key, label: p.label }))} value={period} onChange={setPeriod} placeholder="All-time" />
+        <SegToggle items={["Bests", "Badges"] as const} value={tab} onChange={setTab} />
+      </div>
 
       {tab === "Bests" ? (
         prs.sports.length === 0 ? (
           <div className="subtle tiny center" style={{ padding: "20px 0" }}>No personal bests yet.</div>
+        ) : recs.length === 0 ? (
+          <div className="subtle tiny center" style={{ padding: "18px 0" }}>No personal bests in this window.</div>
         ) : (
-          <div>
-            <div style={{ display: "flex", gap: 8, margin: "2px 0 12px" }}>
-              <DropPill options={prs.sports.map((s) => ({ key: s.key, label: s.label, icon: s.emoji }))} value={sportKey || ""} onChange={setSport} placeholder="Sport" />
-              <DropPill options={PB_PERIODS.map((p) => ({ key: p.key, label: p.label }))} value={period} onChange={setPeriod} placeholder="All-time" />
-            </div>
-
-            {recs.length === 0
-              ? <div className="subtle tiny center" style={{ padding: "18px 0" }}>No personal bests in this window.</div>
-              : recs.map((rec) => <PBRow key={rec.label} rec={rec} />)}
-          </div>
+          <div>{recs.map((rec) => <PBRow key={rec.label} rec={rec} />)}</div>
         )
       ) : (
         <Badges />
