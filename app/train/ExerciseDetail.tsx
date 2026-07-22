@@ -67,21 +67,25 @@ function HowTo({ title, cat, media }: { title: string; cat: WkExercise | null; m
   );
 }
 
-export default function ExerciseDetail({ title, onBack, media }: { title: string; onBack: () => void; media?: WkMedia | null }) {
+export default function ExerciseDetail({ title, onBack, media, embedded }: { title: string; onBack: () => void; media?: WkMedia | null; embedded?: boolean }) {
   const [range, setRange] = useState<(typeof RANGES)[number]["k"]>("3M");
   const [tab, setTab] = useState<"history" | "howto">("history");
   const [cat, setCat] = useState<WkExercise | null>(null);
   const { data, error } = useTrain<TrnLift>(`lift&title=${encodeURIComponent(title)}`);
   useEffect(() => { let alive = true; wkExercises(title, {}).then((r) => { if (alive) setCat((r.exercises && r.exercises[0]) || null); }).catch(() => {}); return () => { alive = false; }; }, [title]);
 
-  if (error) return (<><BackHead title={title} onBack={onBack} /><div className="card error"><strong>Couldn&apos;t load</strong><div className="subtle">{error}</div></div></>);
-  if (!data) return (<><BackHead title={title} onBack={onBack} /><div className="muted center pad">Loading…</div></>);
+  const head = (sub?: string) => embedded
+    ? (sub ? <div className="subtle tiny" style={{ marginBottom: 8 }}>{sub}</div> : null)
+    : <BackHead title={title} sub={sub} onBack={onBack} />;
+
+  if (error) return (<>{head()}<div className="card error"><strong>Couldn&apos;t load</strong><div className="subtle">{error}</div></div></>);
+  if (!data) return (<>{head()}<div className="muted center pad">Loading…</div></>);
 
   const s = data.summary;
   if (!s) {
     return (
       <>
-        <BackHead title={title} onBack={onBack} />
+        {head()}
         <MediaHead title={title} cat={cat} media={media} />
         <div className="trn-subs" style={{ marginBottom: 12 }}>
           <button className={tab === "history" ? "trn-sub on" : "trn-sub"} onClick={() => setTab("history")}>History</button>
@@ -112,11 +116,7 @@ export default function ExerciseDetail({ title, onBack, media }: { title: string
 
   return (
     <>
-      <BackHead
-        title={title}
-        sub={`${s.muscle_group.replace(/_/g, " ")} · ${s.sessions} sessions`}
-        onBack={onBack}
-      />
+      {head(`${s.muscle_group.replace(/_/g, " ")} · ${s.sessions} sessions`)}
 
       <MediaHead title={title} cat={cat} media={media} />
 
