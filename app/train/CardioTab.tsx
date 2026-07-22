@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cardioActivities, cardioDetail, cardioSources, cardioRenameActivity, cardioDeleteActivity, type CardioActivityLite, type CardioDetail, type CardioHrZone } from "../lib/api";
 import { sportEmoji, fmtPace } from "./ui";
+import Sheet from "../components/Sheet";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -341,7 +342,7 @@ function RouteTrace({ poly }: { poly: string }) {
     </div>
   );
 }
-export function CardioActivityDetail({ id, sport, onBack, source, onChanged, onDeleted }: { id: string; sport: string; onBack: () => void; source?: string; onChanged?: (name: string) => void; onDeleted?: () => void }) {
+export function CardioActivityDetail({ id, sport, onBack, source, onChanged, onDeleted, embedded }: { id: string; sport: string; onBack: () => void; source?: string; onChanged?: (name: string) => void; onDeleted?: () => void; embedded?: boolean }) {
   const [d, setD] = useState<CardioDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [localName, setLocalName] = useState<string | null>(null);
@@ -366,7 +367,7 @@ export function CardioActivityDetail({ id, sport, onBack, source, onChanged, onD
     catch (e) { setActErr((e as Error).message); setBusy(false); }
   };
 
-  const back = <button onClick={onBack} style={{ background: "none", border: "none", color: "var(--ember)", cursor: "pointer", fontSize: 13, fontWeight: 600, padding: "4px 0" }}>{"‹"} Back</button>;
+  const back = embedded ? null : <button onClick={onBack} style={{ background: "none", border: "none", color: "var(--ember)", cursor: "pointer", fontSize: 13, fontWeight: 600, padding: "4px 0" }}>{"‹"} Back</button>;
   if (err) return <div>{back}<div className="card error" style={{ marginTop: 8 }}><strong>Couldn&apos;t load</strong><div className="subtle">{err}</div></div></div>;
   if (!d) return <div>{back}<div className="muted center pad">Loading{"…"}</div></div>;
   const a = d.activity;
@@ -517,8 +518,6 @@ export default function CardioTab() {
   useEffect(() => { if (sports.length && !sports.includes(sport)) setSport(sports[0]); }, [sports, sport]);
   useEffect(() => { setSel(null); }, [sport]);
 
-  if (sel) return <CardioActivityDetail id={sel} sport={sport} onBack={() => setSel(null)} source={sources[sel]?.source} onChanged={() => setReload((n) => n + 1)} onDeleted={() => { setSel(null); setReload((n) => n + 1); }} />;
-
   return (
     <div>
       {err ? <div className="card error"><strong>Couldn&apos;t load</strong><div className="subtle">{err}</div></div> : null}
@@ -531,6 +530,9 @@ export default function CardioTab() {
           <CardioList acts={acts} sport={sport} onOpen={setSel} sources={sources} />
         </>
       )}
+      <Sheet open={!!sel} title="Activity" onClose={() => setSel(null)}>
+        {sel ? <CardioActivityDetail id={sel} sport={sport} onBack={() => setSel(null)} source={sources[sel]?.source} onChanged={() => setReload((n) => n + 1)} onDeleted={() => { setSel(null); setReload((n) => n + 1); }} embedded /> : null}
+      </Sheet>
     </div>
   );
 }
