@@ -8,6 +8,7 @@ import ExerciseDetail from "./ExerciseDetail";
 import { CardioActivityDetail } from "./CardioTab";
 import { useRouter } from "next/navigation";
 import InsightsTab from "./InsightsTab";
+import ActivitiesTab from "./ActivitiesTab";
 
 /* Goals (Chunk 8) full CRUD, ported from /more/goals */
 type UGoal = { id: string; label: string; when_text?: string; target_date: string | null; goal_type: string; status: string; focus: string; deleted: boolean; created_at: string; updated_at: string; days_away: number | null; source?: string; completed_at?: string | null; early_days?: number | null };
@@ -902,11 +903,7 @@ export default function ProgressTab() {
       {sub === "Overview" ? (
         <Summary />
       ) : sub === "Activities" ? (
-        <div className="card" style={{ textAlign: "center", padding: "30px 16px" }}>
-          <div style={{ fontSize: 26, marginBottom: 8 }}>🏋️ 🏃</div>
-          <div style={{ fontWeight: 800, fontSize: 15 }}>Activities is moving here</div>
-          <div className="subtle tiny" style={{ marginTop: 5, lineHeight: 1.5 }}>Your strength &amp; cardio history — sessions, volume, muscle balance, charts — lands in this tab in the next update.</div>
-        </div>
+        <ActivitiesTab />
       ) : sub === "Insights" ? (
         <InsightsTab />
       ) : error ? (
