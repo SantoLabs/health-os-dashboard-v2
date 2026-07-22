@@ -54,9 +54,7 @@ function axisLabel(v: number, metric: string): string {
   return `${Math.round(v)}`;
 }
 
-function CardioChart({ acts, sport }: { acts: CardioActivityLite[]; sport: string }) {
-  const [metric, setMetric] = useState("distance");
-  const [range, setRange] = useState("1M");
+function CardioChart({ acts, sport, metric, range }: { acts: CardioActivityLite[]; sport: string; metric: string; range: string }) {
   const [hover, setHover] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const rdef = RANGES.find((r) => r[0] === range) || RANGES[1];
@@ -79,14 +77,14 @@ function CardioChart({ acts, sport }: { acts: CardioActivityLite[]; sport: strin
   const n = buckets.length;
   const ymax = niceMax(Math.max(...bvals, 0));
 
-  const W = 340, H = 190, x0 = 8, padR = 36, padT = 14, padB = 22;
+  const W = 340, H = 132, x0 = 6, padR = 34, padT = 10, padB = 20;
   const plotW = W - x0 - padR, plotH = H - padT - padB, baseY = padT + plotH;
   const X = (i: number) => n <= 1 ? x0 + plotW / 2 : x0 + (i / (n - 1)) * plotW;
   const Y = (v: number) => baseY - (v / ymax) * plotH;
   const linePts = bvals.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
   const areaPts = `${X(0).toFixed(1)},${baseY} ${linePts} ${X(n - 1).toFixed(1)},${baseY}`;
-  const grid = [0, 1 / 3, 2 / 3, 1];
-  const xTickIdx = Array.from(new Set([0, ...Array.from({ length: 4 }, (_, k) => Math.round(((k + 1) / 5) * (n - 1)))]));
+  const grid = [0, 0.5, 1];
+  const xTickIdx = Array.from(new Set([0, ...Array.from({ length: 3 }, (_, k) => Math.round(((k + 1) / 4) * (n - 1)))]));
   const xlabel = (b: Bucket) => unit === "month" ? MONTHS[b.start.getMonth()] : `${b.start.getDate()} ${MONTHS[b.start.getMonth()]}`;
 
   function onMove(e: React.PointerEvent<SVGSVGElement>) {
@@ -98,42 +96,32 @@ function CardioChart({ acts, sport }: { acts: CardioActivityLite[]; sport: strin
   }
 
   return (
-    <div className="card" style={{ marginBottom: 8 }}>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
-        {METRICS.map(([k, lbl]) => (
-          <button key={k} onClick={() => { setMetric(k); setHover(null); }} style={{ padding: "5px 10px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, background: metric === k ? "var(--t-grad)" : "var(--surface-2)", color: metric === k ? "#fff" : "var(--muted)" }}>{lbl}</button>
-        ))}
+    <div className="card" style={{ padding: "10px 12px", marginBottom: 8 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 2 }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+            <div className="tnum" style={{ fontSize: 20, fontWeight: 900 }}>{fmtMetric(total, metric)}</div>
+            {pct != null ? <span style={{ fontSize: 11, fontWeight: 800, color: pct >= 0 ? "var(--success)" : "var(--danger)" }}>{pct >= 0 ? "▲" : "▼"}{Math.abs(pct)}%</span> : null}
+          </div>
+          <div className="subtle" style={{ fontSize: 9, fontWeight: 700 }}>{cap(sport)} · {rdef[0]}{pct != null ? " · vs prior period" : ""}</div>
+        </div>
+        {hover != null ? <span style={{ fontSize: 9, fontWeight: 800, color: "var(--ember)", background: "rgba(217,111,78,0.12)", borderRadius: 999, padding: "3px 9px", whiteSpace: "nowrap" }}>{xlabel(buckets[hover])} · {fmtMetric(bvals[hover], metric)}</span> : null}
       </div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 2 }}>
-        <div className="tnum" style={{ fontSize: 26, fontWeight: 800 }}>{fmtMetric(total, metric)}</div>
-        {pct != null ? <span style={{ fontSize: 12, fontWeight: 700, color: pct >= 0 ? "var(--success)" : "var(--danger)" }}>{pct >= 0 ? "▲" : "▼"} {Math.abs(pct)}%</span> : null}
-      </div>
-      <div className="subtle tiny" style={{ marginBottom: 6 }}>{cap(sport)} · {rdef[0]}{pct != null ? " · vs prior period" : ""}</div>
-      <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block", touchAction: "none", cursor: "crosshair" }} onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={() => setHover(null)}>
-        <defs><linearGradient id="carea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--ember)" stopOpacity="0.35" /><stop offset="100%" stopColor="var(--ember)" stopOpacity="0" /></linearGradient></defs>
+      <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", display: "block", touchAction: "none", cursor: "crosshair", marginTop: 4 }} onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={() => setHover(null)}>
+        <defs><linearGradient id="carea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--ember)" stopOpacity="0.32" /><stop offset="100%" stopColor="var(--ember)" stopOpacity="0" /></linearGradient></defs>
         {grid.map((g, i) => {
           const y = baseY - g * plotH;
           return (<g key={i}>
-            <line x1={x0} y1={y} x2={x0 + plotW} y2={y} stroke="var(--line)" strokeWidth={1} />
+            <line x1={x0} y1={y} x2={x0 + plotW} y2={y} stroke="var(--line)" strokeWidth={1} strokeDasharray={g === 0 ? "0" : "3 3"} />
             <text x={W - padR + 5} y={y + 3} fill="var(--muted)" fontSize={8}>{axisLabel(ymax * g, metric)}</text>
           </g>);
         })}
         <polygon points={areaPts} fill="url(#carea)" />
         <polyline points={linePts} fill="none" stroke="var(--ember)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
         {bvals.map((v, i) => v > 0 ? <circle key={i} cx={X(i)} cy={Y(v)} r={hover === i ? 4 : 2.2} fill="var(--ember)" stroke="var(--surface)" strokeWidth={hover === i ? 1.5 : 0} /> : null)}
-        {xTickIdx.map((i) => <text key={"x" + i} x={X(i)} y={H - 6} fill="var(--muted)" fontSize={8} textAnchor="middle">{xlabel(buckets[i])}</text>)}
-        {hover != null ? (
-          <g>
-            <line x1={X(hover)} y1={padT} x2={X(hover)} y2={baseY} stroke="color-mix(in srgb, var(--ember) 50%, transparent)" strokeWidth={1} strokeDasharray="3 3" />
-            <text x={Math.max(x0 + 26, Math.min(X(hover), x0 + plotW - 26))} y={padT - 3} fill="var(--ember)" fontSize={9} fontWeight={700} textAnchor="middle">{fmtMetric(bvals[hover], metric)} · {xlabel(buckets[hover])}</text>
-          </g>
-        ) : null}
+        {xTickIdx.map((i) => <text key={"x" + i} x={X(i)} y={H - 5} fill="var(--muted)" fontSize={8} textAnchor="middle">{xlabel(buckets[i])}</text>)}
+        {hover != null ? <line x1={X(hover)} y1={padT} x2={X(hover)} y2={baseY} stroke="color-mix(in srgb, var(--ember) 50%, transparent)" strokeWidth={1} strokeDasharray="3 3" /> : null}
       </svg>
-      <div style={{ display: "flex", gap: 4, marginTop: 8, flexWrap: "wrap", justifyContent: "center" }}>
-        {RANGES.map(([k]) => (
-          <button key={k} onClick={() => { setRange(k); setHover(null); }} style={{ padding: "3px 10px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, background: range === k ? "color-mix(in srgb, var(--ember) 18%, transparent)" : "transparent", color: range === k ? "var(--ember)" : "var(--muted)" }}>{k}</button>
-        ))}
-      </div>
     </div>
   );
 }
@@ -156,45 +144,30 @@ function SourcePill({ src }: { src?: string }) {
 }
 
 function CardioList({ acts, sport, onOpen, sources }: { acts: CardioActivityLite[]; sport: string; onOpen: (id: string) => void; sources: Record<string, { source: string; name: string | null }> }) {
-  const [monthIdx, setMonthIdx] = useState(0);
-  const inSport = useMemo(() => acts.filter((a) => a.sport === sport), [acts, sport]);
-  const months = useMemo(() => {
-    const set = new Set<string>(); inSport.forEach((a) => set.add(a.date.slice(0, 7)));
-    return Array.from(set).sort().reverse();
-  }, [inSport]);
-  useEffect(() => { setMonthIdx(0); }, [sport]);
-  const curMonth = months[monthIdx] || null;
-  const rows = curMonth ? inSport.filter((a) => a.date.slice(0, 7) === curMonth) : [];
-  const monthLabel = curMonth ? `${MONTHS[parseInt(curMonth.slice(5, 7), 10) - 1]} ${curMonth.slice(0, 4)}` : "—";
-
+  const rows = useMemo(() => acts.filter((a) => a.sport === sport).slice().sort((a, b) => (a.date < b.date ? 1 : -1)), [acts, sport]);
   return (
     <div>
-      <div className="card" style={{ marginBottom: 8, padding: "8px 10px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <button aria-label="Older" disabled={monthIdx >= months.length - 1} onClick={() => setMonthIdx((i) => Math.min(months.length - 1, i + 1))} style={{ background: "none", border: "none", color: monthIdx >= months.length - 1 ? "var(--faint)" : "var(--ember)", fontSize: 22, cursor: monthIdx >= months.length - 1 ? "default" : "pointer", padding: "0 10px", lineHeight: 1 }}>‹</button>
-          <div style={{ fontWeight: 700, fontSize: 13 }}>{monthLabel}</div>
-          <button aria-label="Newer" disabled={monthIdx <= 0} onClick={() => setMonthIdx((i) => Math.max(0, i - 1))} style={{ background: "none", border: "none", color: monthIdx <= 0 ? "var(--faint)" : "var(--ember)", fontSize: 22, cursor: monthIdx <= 0 ? "default" : "pointer", padding: "0 10px", lineHeight: 1 }}>›</button>
-        </div>
-      </div>
-      <div className="eyebrow" style={{ marginTop: 0 }}>{cap(sport)} sessions</div>
-      {rows.length === 0 ? <div className="subtle tiny" style={{ padding: "8px 2px" }}>No {sport} sessions this month.</div> :
-        rows.map((a) => (
-          <div key={a.activity_id} className="card" onClick={() => onOpen(a.activity_id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", marginBottom: 8, cursor: "pointer" }}>
-            <span style={{ fontSize: 16 }}>{sportEmoji(sport)}</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 600, fontSize: 13 }}>{a.distance_km != null ? `${a.distance_km.toFixed(2)} km` : (a.duration_mins != null ? fmtHrMin(a.duration_mins) : (a.name || "Session"))}</div>
-              <div className="subtle tiny" style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                <span>{new Date(a.date + "T00:00:00").getDate()} {MONTHS[new Date(a.date + "T00:00:00").getMonth()]}{a.duration_mins != null ? ` · ${fmtHrMin(a.duration_mins)}` : ""}</span>
-                <SourcePill src={sources[a.activity_id]?.source} />
+      <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.5, color: "var(--muted)", margin: "10px 2px 6px", textTransform: "uppercase" }}>{cap(sport)} sessions</div>
+      {rows.length === 0 ? <div className="subtle tiny" style={{ padding: "8px 2px" }}>No {sport} sessions.</div> :
+        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          {rows.map((a) => (
+            <div key={a.activity_id} className="card" onClick={() => onOpen(a.activity_id)} style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 12px", margin: 0, cursor: "pointer" }}>
+              <span style={{ fontSize: 15 }}>{sportEmoji(sport)}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 800, fontSize: 12 }}>{a.distance_km != null ? `${a.distance_km.toFixed(2)} km` : (a.duration_mins != null ? fmtHrMin(a.duration_mins) : (a.name || "Session"))}</div>
+                <div className="subtle" style={{ fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+                  <span>{new Date(a.date + "T00:00:00").getDate()} {MONTHS[new Date(a.date + "T00:00:00").getMonth()]}{a.duration_mins != null ? ` · ${fmtHrMin(a.duration_mins)}` : ""}</span>
+                  <SourcePill src={sources[a.activity_id]?.source} />
+                </div>
               </div>
+              <div style={{ textAlign: "right" }}>
+                <div className="tnum" style={{ fontSize: 11, fontWeight: 800, color: "var(--text-2)" }}>{sport === "swimming" && a.avg_swolf != null ? `SWOLF ${Math.round(a.avg_swolf)}` : a.pace_min_km != null ? `${fmtPace(a.pace_min_km)}/km` : ""}</div>
+                {a.avg_hr != null ? <div className="subtle" style={{ fontSize: 9, fontWeight: 700 }}>{Math.round(a.avg_hr)} bpm</div> : null}
+              </div>
+              <span style={{ color: "var(--muted)", fontSize: 15 }}>{"›"}</span>
             </div>
-            <div style={{ textAlign: "right" }}>
-              <div className="tnum" style={{ fontSize: 13, fontWeight: 600, color: "var(--text-2)" }}>{sport === "swimming" && a.avg_swolf != null ? `SWOLF ${Math.round(a.avg_swolf)}` : a.pace_min_km != null ? `${fmtPace(a.pace_min_km)}/km` : ""}</div>
-              {a.avg_hr != null ? <div className="subtle tiny tnum">{Math.round(a.avg_hr)} bpm</div> : null}
-            </div>
-            <span style={{ color: "var(--muted)", fontSize: 18, marginLeft: 2 }}>{"›"}</span>
-          </div>
-        ))}
+          ))}
+        </div>}
     </div>
   );
 }
@@ -493,10 +466,36 @@ export function CardioActivityDetail({ id, sport, onBack, source, onChanged, onD
   );
 }
 
+function DropPill({ options, value, onChange, placeholder }: { options: { key: string; label: string; icon?: string }[]; value: string; onChange: (k: string) => void; placeholder?: string }) {
+  const [open, setOpen] = useState(false);
+  const cur = options.find((o) => o.key === value);
+  return (
+    <div style={{ position: "relative" }}>
+      <button onClick={() => setOpen((o) => !o)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 11px", borderRadius: 999, border: `1px solid ${open ? "color-mix(in srgb, var(--ember) 55%, transparent)" : "var(--line)"}`, background: "var(--surface-2)", color: "var(--text)", cursor: "pointer", font: "inherit", fontSize: 11.5, fontWeight: 800, whiteSpace: "nowrap" }}>
+        {cur?.icon ? <span>{cur.icon}</span> : null}<span>{cur?.label ?? placeholder ?? "Select"}</span><span style={{ color: "var(--muted)", fontSize: 9, transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }}>▾</span>
+      </button>
+      {open ? (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
+          <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 41, minWidth: 150, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, boxShadow: "0 10px 30px rgba(0,0,0,0.28)", overflow: "hidden", maxHeight: 264, overflowY: "auto" }}>
+            {options.map((o, i) => (
+              <button key={o.key} onClick={() => { onChange(o.key); setOpen(false); }} style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", background: o.key === value ? "var(--surface-2)" : "transparent", border: "none", borderTop: i ? "1px solid var(--line)" : "none", color: o.key === value ? "var(--ember)" : "var(--text)", cursor: "pointer", font: "inherit", fontSize: 12.5, fontWeight: o.key === value ? 700 : 600, textAlign: "left" }}>
+                {o.icon ? <span>{o.icon}</span> : null}<span style={{ flex: 1 }}>{o.label}</span>{o.key === value ? <span style={{ fontSize: 11, color: "var(--ember)" }}>✓</span> : null}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 export default function CardioTab() {
   const [acts, setActs] = useState<CardioActivityLite[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [sport, setSport] = useState<string>("running");
+  const [metric, setMetric] = useState<string>("distance");
+  const [range, setRange] = useState<string>("1M");
   const [sel, setSel] = useState<string | null>(null);
   const [sources, setSources] = useState<Record<string, { source: string; name: string | null }>>({});
   const [reload, setReload] = useState(0);
@@ -523,10 +522,12 @@ export default function CardioTab() {
       {err ? <div className="card error"><strong>Couldn&apos;t load</strong><div className="subtle">{err}</div></div> : null}
       {acts == null ? <div className="muted center pad">Loading…</div> : (
         <>
-          <div className="trn-subs" style={{ marginBottom: 12 }}>
-            {sports.map((s) => <button key={s} className={sport === s ? "trn-sub on" : "trn-sub"} onClick={() => setSport(s)}>{sportEmoji(s)} {cap(s)}</button>)}
+          <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+            <DropPill options={sports.map((s) => ({ key: s, label: cap(s), icon: sportEmoji(s) }))} value={sport} onChange={setSport} placeholder="Sport" />
+            <DropPill options={METRICS.map(([k, l]) => ({ key: k, label: l }))} value={metric} onChange={setMetric} placeholder="Metric" />
+            <DropPill options={RANGES.map(([k]) => ({ key: k, label: k }))} value={range} onChange={setRange} placeholder="Period" />
           </div>
-          <CardioChart acts={acts} sport={sport} />
+          <CardioChart acts={acts} sport={sport} metric={metric} range={range} />
           <CardioList acts={acts} sport={sport} onOpen={setSel} sources={sources} />
         </>
       )}
