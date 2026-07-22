@@ -35,6 +35,8 @@ const MP_ICONS: Record<string, ReactNode> = {
   reminders: (<svg viewBox="0 0 24 24" {...sw}><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></svg>),
   profile: (<svg viewBox="0 0 24 24" {...sw}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></svg>),
   logout: (<svg viewBox="0 0 24 24" {...sw}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></svg>),
+  body: (<svg viewBox="0 0 24 24" {...sw}><circle cx="12" cy="4.5" r="2" /><path d="M12 6.5v7M12 8.5L7 10.5M12 8.5l5 2M9.5 21l2.5-6 2.5 6" /></svg>),
+  goals: (<svg viewBox="0 0 24 24" {...sw}><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="4" /><path d="M12 12h.01" /></svg>),
 };
 
 const MORE_SECTIONS = [
@@ -43,15 +45,17 @@ const MORE_SECTIONS = [
     items: [
       { href: "/trends", key: "trends", label: "Trends" },
       { href: "/sleep", key: "sleep", label: "Sleep" },
+      { href: "/more/goals", key: "body", label: "Body" },
       { href: "/more/medical", key: "medical", label: "Medical" },
       { href: "/more/mind", key: "mind", label: "Mind" },
     ],
   },
   {
-    title: "Assistant",
+    title: "Coach",
     items: [
-      { href: "/more/ask", key: "ask", label: "Ask Health AI" },
-      { href: "/more/coach", key: "reminders", label: "Reminders & Memory" },
+      { href: "/more/ask", key: "ask", label: "Ask Kai" },
+      { href: "/more/goals", key: "goals", label: "Goals" },
+      { href: "/more/coach", key: "reminders", label: "Memory & Reminders" },
     ],
   },
 ];
