@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { strengthStats, strengthSessions, type StrengthStats, type RadarAxis, type StrengthSession } from "../lib/api";
 import { muscleTint } from "./ui";
 import ExerciseDetail from "./ExerciseDetail";
@@ -52,6 +52,7 @@ export default function StrengthTab() {
   const [sessions, setSessions] = useState<StrengthSession[] | null>(null);
   const [serr, setSerr] = useState(false);
   const [exp, setExp] = useState<Record<string, boolean>>({});
+  const [monthIdx, setMonthIdx] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -65,6 +66,10 @@ export default function StrengthTab() {
   const w = stats?.windows.find((x) => x.key === win) || null;
   const radar = stats?.radar?.[win] || [];
   const recent = sessions ? [...sessions].sort((a, b) => (a.date < b.date ? 1 : -1)) : [];
+  const months = useMemo(() => { const set = new Set<string>(); (sessions || []).forEach((s) => set.add(s.date.slice(0, 7))); return Array.from(set).sort().reverse(); }, [sessions]);
+  const curMonth = months[monthIdx] || null;
+  const monthSessions = curMonth ? recent.filter((s) => s.date.slice(0, 7) === curMonth) : recent;
+  const monthLabel = curMonth ? `${MONTHS[parseInt(curMonth.slice(5, 7), 10) - 1]} ${curMonth.slice(0, 4)}` : "";
   const tinyPill = (k: string, lbl: string) => (
     <button key={k} onClick={() => setWin(k)} style={{ padding: "3px 8px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 10, fontWeight: 800, background: win === k ? "var(--t-grad)" : "transparent", color: win === k ? "#fff" : "var(--muted)" }}>{lbl}</button>
   );
@@ -99,12 +104,21 @@ export default function StrengthTab() {
         </div>
       ) : null}
 
-      <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.5, color: "var(--muted)", margin: "10px 2px 6px" }}>SESSIONS · TAP TO EXPAND</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "10px 2px 6px" }}>
+        <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.5, color: "var(--muted)" }}>SESSIONS · TAP TO EXPAND</span>
+        {months.length > 1 ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 1, background: "var(--surface-2)", borderRadius: 999, padding: 2 }}>
+            <button aria-label="Older month" disabled={monthIdx >= months.length - 1} onClick={() => setMonthIdx((i) => Math.min(months.length - 1, i + 1))} style={{ background: "none", border: "none", cursor: monthIdx >= months.length - 1 ? "default" : "pointer", color: monthIdx >= months.length - 1 ? "var(--faint)" : "var(--ember)", fontSize: 14, lineHeight: 1, padding: "1px 7px" }}>‹</button>
+            <span className="tnum" style={{ fontSize: 10.5, fontWeight: 800, minWidth: 52, textAlign: "center" }}>{monthLabel}</span>
+            <button aria-label="Newer month" disabled={monthIdx <= 0} onClick={() => setMonthIdx((i) => Math.max(0, i - 1))} style={{ background: "none", border: "none", cursor: monthIdx <= 0 ? "default" : "pointer", color: monthIdx <= 0 ? "var(--faint)" : "var(--ember)", fontSize: 14, lineHeight: 1, padding: "1px 7px" }}>›</button>
+          </div>
+        ) : null}
+      </div>
       {sessions == null ? <div className="muted center pad">Loading…</div> :
         serr ? <div className="subtle tiny" style={{ padding: "8px 2px" }}>Couldn&apos;t load sessions.</div> :
-          recent.length === 0 ? <div className="subtle tiny" style={{ padding: "8px 2px" }}>No sessions yet.</div> :
+          monthSessions.length === 0 ? <div className="subtle tiny" style={{ padding: "8px 2px" }}>No sessions this month.</div> :
             <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-              {recent.map((s) => {
+              {monthSessions.map((s) => {
                 const open = exp[s.id] ?? false;
                 return (
                   <div key={s.id} className="card" style={{ padding: 0, overflow: "hidden", margin: 0 }}>
