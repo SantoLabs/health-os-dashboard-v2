@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useTrain, useApi, actionGet, actionPost, planRange, strengthSessions, cardioActivities, useBadges, markBadgesSeen, type TrnPrs, type TrnProgress, type TrnPbRec, type TrnSport, type TrnBadge, type StrengthSession, type CardioActivityLite } from "../lib/api";
+import { useTrain, useApi, actionGet, actionPost, planRange, strengthSessions, cardioActivities, trainingLoad, useBadges, markBadgesSeen, type TrnPrs, type TrnProgress, type TrnPbRec, type TrnSport, type TrnBadge, type StrengthSession, type CardioActivityLite, type TrnLoadPoint } from "../lib/api";
 import { Spark, SubPills, Delta, dShort } from "./ui";
 import KaiDailyCard from "../components/KaiDailyCard";
 import ExerciseDetail from "./ExerciseDetail";
 import { CardioActivityDetail } from "./CardioTab";
 import { useRouter } from "next/navigation";
-import FitnessTab from "./FitnessTab";
 import InsightsTab from "./InsightsTab";
 
 /* Goals (Chunk 8) full CRUD, ported from /more/goals */
@@ -817,6 +816,9 @@ function Summary() {
           {/* 4 · AI card */}
           <div style={{ height: 12 }} />
           <KaiDailyCard scope="training" />
+          {/* 5 · fitness & form */}
+          <div style={{ height: 14 }} />
+          <OverviewFitness />
         </>
       )}
 
@@ -825,29 +827,92 @@ function Summary() {
   );
 }
 
+const OVR_RANGES = ["6W", "3M", "6M"] as const;
+const OVR_DAYS: Record<string, number> = { "6W": 42, "3M": 91, "6M": 182 };
+const FC = { ctl: "#6d8bff", atl: "#ff7aa8", tsb: "#ffb547" };
+function ovrForm(tsb: number): { label: string; color: string } {
+  if (tsb > 5) return { label: "Fresh", color: "var(--success)" };
+  if (tsb >= -10) return { label: "Neutral", color: "var(--muted)" };
+  if (tsb >= -30) return { label: "Tired", color: "var(--gold)" };
+  return { label: "Very tired", color: "var(--danger)" };
+}
+function MiniPmc({ pts }: { pts: TrnLoadPoint[] }) {
+  const W = 320, H = 118, pad = 8;
+  if (pts.length < 2) return <div className="subtle tiny center" style={{ padding: "22px 0" }}>Not enough data yet</div>;
+  const n = pts.length;
+  const xs = (i: number) => pad + (i / (n - 1)) * (W - 2 * pad);
+  const load = pts.flatMap((p) => [p.ctl, p.atl]);
+  let lo = Math.min(...load), hi = Math.max(...load); if (hi === lo) hi = lo + 1;
+  const ys = (v: number) => pad + (1 - (v - lo) / (hi - lo)) * (H - 2 * pad);
+  const line = (k: "ctl" | "atl") => pts.map((p, i) => `${i === 0 ? "M" : "L"}${xs(i).toFixed(1)} ${ys(p[k]).toFixed(1)}`).join(" ");
+  const last = pts[n - 1];
+  return (
+    <svg className="trn-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ height: H }}>
+      <path d={line("atl")} fill="none" stroke={FC.atl} strokeWidth="2" opacity="0.9" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      <path d={line("ctl")} fill="none" stroke={FC.ctl} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      <circle cx={xs(n - 1)} cy={ys(last.ctl)} r="3.4" fill={FC.ctl} />
+      <circle cx={xs(n - 1)} cy={ys(last.atl)} r="3" fill={FC.atl} />
+    </svg>
+  );
+}
+function OverviewFitness() {
+  const [range, setRange] = useState<(typeof OVR_RANGES)[number]>("3M");
+  const [load, setLoad] = useState<TrnLoadPoint[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { let a = true; trainingLoad(190).then((d) => a && setLoad(d.load || [])).catch(() => a && setFailed(true)); return () => { a = false; }; }, []);
+  if (failed) return null;
+  const pts = load ? load.slice(-OVR_DAYS[range]) : [];
+  const last = load && load.length ? load[load.length - 1] : null;
+  const ctl = last?.ctl ?? 0, atl = last?.atl ?? 0, tsb = last?.tsb ?? 0;
+  const st = ovrForm(tsb);
+  const legDot = (c: string): React.CSSProperties => ({ display: "inline-block", width: 8, height: 8, borderRadius: 2, marginRight: 4, background: c });
+  return (
+    <>
+      <div className="eyebrow">Fitness &amp; Form</div>
+      <section className="card" style={{ padding: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <div className="subtle tiny" style={{ display: "flex", gap: 12 }}>
+            <span><i style={legDot(FC.ctl)} />Fitness</span>
+            <span><i style={legDot(FC.atl)} />Fatigue</span>
+          </div>
+          <SubPills items={OVR_RANGES} value={range} onChange={setRange} />
+        </div>
+        {load == null ? <div className="muted center pad">Loading…</div> : (
+          <>
+            <div style={{ display: "flex", marginBottom: 6 }}>
+              <div style={{ flex: 1, textAlign: "center" }}><span className="subtle tiny" style={{ color: FC.ctl }}>Fitness</span><div className="tnum" style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.15 }}>{ctl.toFixed(0)}</div><span className="subtle tiny">CTL · 42d</span></div>
+              <div style={{ flex: 1, textAlign: "center" }}><span className="subtle tiny" style={{ color: FC.atl }}>Fatigue</span><div className="tnum" style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.15 }}>{atl.toFixed(0)}</div><span className="subtle tiny">ATL · 7d</span></div>
+              <div style={{ flex: 1, textAlign: "center" }}><span className="subtle tiny" style={{ color: FC.tsb }}>Form</span><div className="tnum" style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.15, color: st.color }}>{tsb > 0 ? "+" : ""}{tsb.toFixed(0)}</div><span className="subtle tiny" style={{ color: st.color }}>{st.label}</span></div>
+            </div>
+            <MiniPmc pts={pts} />
+          </>
+        )}
+      </section>
+    </>
+  );
+}
+
 export default function ProgressTab() {
-  const [sub, setSub] = useState<"Summary" | "Fitness" | "Insights" | "Goals" | "Records" | "Body">("Summary");
-  const { data: prs, error: e1 } = useTrain<TrnPrs>("prs");
-  const { data: prog, error: e2 } = useTrain<TrnProgress>("progress");
-  const error = e1 || e2;
+  const [sub, setSub] = useState<"Overview" | "Activities" | "Insights" | "Milestones">("Overview");
+  const { data: prs, error } = useTrain<TrnPrs>("prs");
 
   return (
     <div>
-      <SubPills items={["Summary", "Fitness", "Insights", "Goals", "Records", "Body"] as const} value={sub} onChange={setSub} />
-      {sub === "Summary" ? (
+      <SubPills items={["Overview", "Activities", "Insights", "Milestones"] as const} value={sub} onChange={setSub} />
+      {sub === "Overview" ? (
         <Summary />
-      ) : sub === "Fitness" ? (
-        <FitnessTab />
-      ) : sub === "Goals" ? (
-        <GoalsTab />
+      ) : sub === "Activities" ? (
+        <div className="card" style={{ textAlign: "center", padding: "30px 16px" }}>
+          <div style={{ fontSize: 26, marginBottom: 8 }}>🏋️ 🏃</div>
+          <div style={{ fontWeight: 800, fontSize: 15 }}>Activities is moving here</div>
+          <div className="subtle tiny" style={{ marginTop: 5, lineHeight: 1.5 }}>Your strength &amp; cardio history — sessions, volume, muscle balance, charts — lands in this tab in the next update.</div>
+        </div>
       ) : sub === "Insights" ? (
         <InsightsTab />
       ) : error ? (
         <div className="card error"><strong>Couldn&apos;t load</strong><div className="subtle">{error}</div></div>
-      ) : sub === "Records" ? (
-        prs ? <History prs={prs} /> : <div className="muted center pad">Loading…</div>
       ) : (
-        prog ? <Body p={prog} /> : <div className="muted center pad">Loading…</div>
+        prs ? <History prs={prs} /> : <div className="muted center pad">Loading…</div>
       )}
     </div>
   );
