@@ -109,11 +109,13 @@ export function ZoneBar({ z }: { z: [number, number, number, number, number] }) 
 export const PRIMARY = ["Coach", "Train", "Recovery", "Progress"] as const;
 export type Primary = (typeof PRIMARY)[number];
 
+const PRIMARY_LABEL: Record<Primary, string> = { Coach: "Coach", Train: "Workouts", Recovery: "Recovery", Progress: "Progress" };
+
 export function Pills({ value, onChange }: { value: Primary; onChange: (p: Primary) => void }) {
   return (
     <div className="trn-pills">
       {PRIMARY.map((p) => (
-        <button key={p} className={value === p ? "trn-pill on" : "trn-pill"} onClick={() => onChange(p)}>{p}</button>
+        <button key={p} className={value === p ? "trn-pill on" : "trn-pill"} onClick={() => onChange(p)}>{PRIMARY_LABEL[p]}</button>
       ))}
     </div>
   );
