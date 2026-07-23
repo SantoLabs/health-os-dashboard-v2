@@ -867,6 +867,46 @@ const INJ_AREAS: { key: string; label: string; d: string; tint: string }[] = [
 const INJ_BY_KEY: Record<string, { key: string; label: string; d: string; tint: string }> = Object.fromEntries(INJ_AREAS.map((a) => [a.key, a]));
 const injLabel = (k: string | null) => (k && INJ_BY_KEY[k] ? INJ_BY_KEY[k].label : "Limitation");
 const INJ_STATUS_LABEL: Record<string, string> = { current: "Current", previous: "Previous", recurring: "Recurring" };
+type InjField = { sub?: { label: string; opts: string[] }; hurts: string[]; avoid: string[] };
+const INJ_FIELDS: Record<string, InjField> = {
+  neck: { hurts: ["Overhead lifts", "Long cycling posture", "Swimming", "Desk work", "Heavy carries"],
+          avoid: ["Heavy overhead press", "Long aero position", "Heavy shrugs", "Long swim sets", "Heavy carries"] },
+  shoulder: { hurts: ["Overhead press", "Bench / push-ups", "Pulling", "Swimming", "Daily movement"],
+              avoid: ["Overhead pressing", "Dips", "Heavy bench", "Pull-ups", "Long swim sets"] },
+  elbow_wrist: { hurts: ["Push-ups", "Bench press", "Pull-ups", "Curls", "Cycling grip"],
+                 avoid: ["Heavy pressing", "Push-ups", "Heavy curls", "Long cycling grip", "Wrist-loaded barbell work"] },
+  back: { sub: { label: "Area", opts: ["Upper back", "Lower back", "General"] },
+          hurts: ["Deadlifts", "Squats", "Running impact", "Long sitting", "Bending"],
+          avoid: ["Heavy deadlifts", "Heavy squats", "Loaded carries", "High-impact running", "Long sitting"] },
+  hip_glute: { hurts: ["Running", "Cycling", "Squats", "Lunges", "Sitting"],
+               avoid: ["Hill running", "Heavy squats", "Deep lunges", "Long rides", "Speed work"] },
+  knee: { hurts: ["Running", "Squats", "Stairs", "Cycling", "Long walks"],
+          avoid: ["Running intervals", "Heavy squats", "Lunges", "Downhill running", "Jumping"] },
+  ankle_foot: { sub: { label: "Area", opts: ["Ankle", "Heel", "Arch / plantar fascia", "Toes"] },
+                hurts: ["Running", "Walking", "Jumping", "Cycling", "Standing long"],
+                avoid: ["Speed work", "Long runs", "Jumping", "Hills", "Barefoot work"] },
+};
+const INJ_STARTED = ["Recently", "Last 7 days", "2-3 weeks", "Last month"];
+const INJ_IMPACT = ["No restriction", "Modify workouts", "Avoid movements", "Rest / skip intense"];
+const sevWord = (n: number) => (n <= 0 ? "none" : n <= 3 ? "mild" : n <= 5 ? "mild-moderate" : n <= 7 ? "moderate" : "severe");
+
+// Deterministic echo, not a model call - it can't drift into diagnostic language,
+// and the flow promises StriveOS does not diagnose or treat.
+function injKaiNote(area: string, status: string, impact: string | null, avoid: string[], feels: string | null): string {
+  const name = injLabel(area).toLowerCase();
+  const a = avoid.slice(0, 2).join(" and ").toLowerCase();
+  if (status === "previous") {
+    return feels === "Flares up"
+      ? `Healed but still flaring - Kai will rebuild ${name} work gradually${a ? ` and keep an eye on ${a}` : ""}.`
+      : `Healed - Kai will keep ${name} loading progressive${a ? ` and stay light on ${a} at first` : ""}.`;
+  }
+  if (status === "recurring") {
+    return `Recurring ${name} noted - Kai will add prep work before sessions${a ? ` and hold back ${a}` : ""}.`;
+  }
+  if (impact === "Rest / skip intense") return `Kai will keep intensity off the plan until your ${name} settles.`;
+  if (impact === "No restriction") return `Noted - Kai will train as normal but watch how your ${name} responds.`;
+  return a ? `Kai will keep ${a} off your plan while your ${name} settles.` : `Kai will adapt sessions around your ${name}.`;
+}
 
 function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
   return (
@@ -935,8 +975,26 @@ function TrainingSetup({ data, onBack, onSaved, onData }: { data: ProfileData; o
   const toggleArea = (k: string) => setInjuries((xs) => (xs.some((x) => x.area === k)
     ? xs.filter((x) => x.area !== k)
     : [...xs, { area: k, body_part: injLabel(k), status: "current", side: null, severity_0_10: null, training_impact: null, started_bucket: null, started_on: null, physio_note: "", details: {} }]));
-  const injSummary = (x: Inj) => [INJ_STATUS_LABEL[x.status] || x.status, x.side && x.side !== "na" ? x.side.charAt(0).toUpperCase() + x.side.slice(1) : null, x.severity_0_10 != null ? x.severity_0_10 + "/10" : null].filter(Boolean).join(" \u00b7 ");
-  const injDone = (x: Inj) => !!(x.status && x.training_impact);
+  const [openInj, setOpenInj] = useState(0);
+  const setIx = (i: number, p: Partial<Inj>) => setInjuries((xs) => xs.map((x, k) => (k === i ? { ...x, ...p } : x)));
+  const detArr = (x: Inj, k: string) => (Array.isArray(x.details[k]) ? (x.details[k] as string[]) : []);
+  const detStr = (x: Inj, k: string) => (x.details[k] == null ? "" : String(x.details[k]));
+  const setDet = (i: number, k: string, v: string) => setInjuries((xs) => xs.map((x, idx) => {
+    if (idx !== i) return x;
+    const d = { ...x.details }; if (v) d[k] = v; else delete d[k];
+    return { ...x, details: d };
+  }));
+  const toggleDet = (i: number, k: string, v: string) => setInjuries((xs) => xs.map((x, idx) => {
+    if (idx !== i) return x;
+    const cur = Array.isArray(x.details[k]) ? (x.details[k] as string[]) : [];
+    const next = cur.includes(v) ? cur.filter((y) => y !== v) : [...cur, v];
+    const d = { ...x.details }; if (next.length) d[k] = next; else delete d[k];
+    return { ...x, details: d };
+  }));
+  const chip = (on: boolean): React.CSSProperties => ({ fontSize: 11.5, fontWeight: on ? 800 : 600, padding: "8px 12px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (on ? "var(--ember)" : "var(--line)"), background: on ? "var(--ember-tint)" : "var(--surface-2)", color: on ? "var(--ember-strong)" : "var(--text-2)" });
+  const fieldLbl: React.CSSProperties = { display: "block", fontSize: 9.5, fontWeight: 800, letterSpacing: 0.6, color: "var(--muted)", marginBottom: 7 };
+  const injSummary = (x: Inj) => [INJ_STATUS_LABEL[x.status] || x.status, detStr(x, "sub_area") || null, x.side && x.side !== "na" ? x.side.charAt(0).toUpperCase() + x.side.slice(1) : null, x.status === "previous" ? (detStr(x, "feels_now") || null) : (x.severity_0_10 != null ? x.severity_0_10 + "/10 " + sevWord(x.severity_0_10) : null)].filter(Boolean).join(" \u00b7 ");
+  const injDone = (x: Inj) => !!(x.status && x.training_impact && (x.status === "previous" ? detStr(x, "feels_now") : x.severity_0_10 != null));
 
   // Saving with an empty list is meaningful: it records "asked, none reported".
   async function saveLimitations() {
@@ -1001,7 +1059,7 @@ function TrainingSetup({ data, onBack, onSaved, onData }: { data: ProfileData; o
     );
   }
 
-  /* ========== LIMITATIONS STEP 2 of 2: quick details (16c shell; fields land next unit) ========== */
+  /* ========== LIMITATIONS STEP 2 of 2: quick details (16c/16d/16e) ========== */
   if (injStep === 2) {
     return (
       <>
@@ -1010,19 +1068,113 @@ function TrainingSetup({ data, onBack, onSaved, onData }: { data: ProfileData; o
         <div style={{ fontSize: 12.5, color: "var(--text-2)", marginTop: 6 }}>Step 2 of 2 {"\u00b7"} quick details for selected areas</div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 9, marginTop: 18 }}>
-          {injuries.map((x) => {
+          {injuries.map((x, i) => {
             const a = INJ_BY_KEY[x.area] || INJ_BY_KEY.other;
+            const f = INJ_FIELDS[x.area];
+            const open = openInj === i;
             const done = injDone(x);
+            const prev = x.status === "previous";
+            const avoid = detArr(x, "avoid");
+            const impacts = prev ? INJ_IMPACT.slice(0, 3) : INJ_IMPACT;
             return (
-              <div key={x.area} style={{ ...S.card, display: "flex", alignItems: "center", gap: 11, padding: "13px 14px" }}>
-                <span style={{ width: 30, height: 30, borderRadius: 999, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", background: a.tint + "22" }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={a.tint} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={a.d} /></svg>
-                </span>
-                <span style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{a.label}</span>
-                  <span style={{ display: "block", fontSize: 11, color: "var(--text-2)", marginTop: 1 }}>{done ? injSummary(x) : "Add details"}</span>
-                </span>
-                <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 0.4, padding: "3px 8px", borderRadius: 999, flex: "none", background: done ? "var(--success-tint)" : "var(--surface-2)", color: done ? "var(--success)" : "var(--muted)" }}>{done ? "SET" : "1 LEFT"}</span>
+              <div key={x.area} style={{ ...S.card, padding: 0, overflow: "hidden", border: open ? "1.5px solid var(--ember)" : "1px solid var(--line)" }}>
+                <button onClick={() => setOpenInj(open ? -1 : i)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 11, padding: "13px 14px", background: open ? "var(--ember-tint)" : "transparent", border: "none", cursor: "pointer", textAlign: "left" }}>
+                  <span style={{ width: 30, height: 30, borderRadius: 999, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", background: open ? "var(--surface)" : a.tint + "22" }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={open ? "var(--ember-strong)" : a.tint} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={a.d} /></svg>
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: "block", fontSize: 13, fontWeight: 800, color: "var(--text)" }}>{a.label}</span>
+                    {!open && <span style={{ display: "block", fontSize: 11, color: "var(--text-2)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{done ? injSummary(x) : "Add details"}</span>}
+                  </span>
+                  <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 0.4, padding: "3px 8px", borderRadius: 999, flex: "none", background: done ? "var(--success-tint)" : "var(--surface-2)", color: done ? "var(--success)" : "var(--muted)" }}>{done ? "SET" : "1 LEFT"}</span>
+                </button>
+
+                {open && (
+                  <div style={{ padding: "6px 14px 16px", display: "flex", flexDirection: "column", gap: 16 }}>
+                    {f?.sub && (
+                      <div>
+                        <label style={fieldLbl}>{f.sub.label.toUpperCase()}</label>
+                        <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+                          {f.sub.opts.map((o) => <button key={o} onClick={() => setDet(i, "sub_area", detStr(x, "sub_area") === o ? "" : o)} style={chip(detStr(x, "sub_area") === o)}>{o}</button>)}
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <label style={fieldLbl}>STATUS</label>
+                      <div style={{ display: "flex", gap: 7 }}>
+                        {["current", "previous", "recurring"].map((k) => <button key={k} onClick={() => setIx(i, { status: k })} style={{ ...chip(x.status === k), flex: 1, textAlign: "center" }}>{INJ_STATUS_LABEL[k]}</button>)}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={fieldLbl}>SIDE</label>
+                      <div style={{ display: "flex", gap: 7 }}>
+                        {[["left", "Left"], ["right", "Right"], ["both", "Both"], ["na", "N/A"]].map(([k, l]) => <button key={k} onClick={() => setIx(i, { side: x.side === k ? null : k })} style={{ ...chip(x.side === k), flex: 1, textAlign: "center" }}>{l}</button>)}
+                      </div>
+                    </div>
+
+                    {prev ? (
+                      <div>
+                        <label style={fieldLbl}>HOW IT FEELS NOW</label>
+                        <div style={{ display: "flex", gap: 7 }}>
+                          {["Fully healed", "Flares up"].map((o) => <button key={o} onClick={() => setDet(i, "feels_now", detStr(x, "feels_now") === o ? "" : o)} style={{ ...chip(detStr(x, "feels_now") === o), flex: 1, textAlign: "center" }}>{o}</button>)}
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <label style={fieldLbl}>SEVERITY {x.severity_0_10 != null ? <span style={{ color: "var(--ember-strong)", letterSpacing: 0 }}>{"\u00b7"} {x.severity_0_10} {"\u00b7"} {sevWord(x.severity_0_10)}</span> : null}</label>
+                        <input type="range" min={0} max={10} step={1} value={x.severity_0_10 ?? 0} onChange={(e) => setIx(i, { severity_0_10: Number(e.target.value) })} style={{ width: "100%", accentColor: "var(--ember)" }} />
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9.5, color: "var(--muted)", marginTop: 2 }}>
+                          <span>0 none</span><span>3 mild</span><span>6 moderate</span><span>8+ severe</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {!prev && (
+                      <div>
+                        <label style={fieldLbl}>STARTED</label>
+                        <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+                          {INJ_STARTED.map((o) => <button key={o} onClick={() => setIx(i, { started_bucket: x.started_bucket === o ? null : o, started_on: null })} style={chip(x.started_bucket === o)}>{o}</button>)}
+                          <input type="date" max={todayIso()} value={x.started_on || ""} onChange={(e) => setIx(i, { started_on: e.target.value || null, started_bucket: e.target.value ? null : x.started_bucket })} style={{ ...S.input, width: "auto", flex: "1 0 130px", padding: "7px 10px", fontSize: 12 }} />
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <label style={fieldLbl}>TRAINING IMPACT</label>
+                      <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+                        {impacts.map((o) => <button key={o} onClick={() => setIx(i, { training_impact: x.training_impact === o ? null : o })} style={chip(x.training_impact === o)}>{o}</button>)}
+                      </div>
+                    </div>
+
+                    {f && (
+                      <>
+                        <div>
+                          <label style={fieldLbl}>HURTS WITH</label>
+                          <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+                            {f.hurts.map((o) => <button key={o} onClick={() => toggleDet(i, "triggers", o)} style={chip(detArr(x, "triggers").includes(o))}>{o}</button>)}
+                          </div>
+                        </div>
+                        <div>
+                          <label style={fieldLbl}>{prev ? "KAI WILL WATCH" : "KAI WILL AVOID"}</label>
+                          <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+                            {f.avoid.map((o) => { const on = avoid.includes(o); return <button key={o} onClick={() => toggleDet(i, "avoid", o)} style={chip(on)}>{on ? "\u2713 " : ""}{o}</button>; })}
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    <input style={S.input} value={x.physio_note} onChange={(e) => setIx(i, { physio_note: e.target.value })} placeholder="Add a note (optional)" />
+
+                    {x.training_impact && (
+                      <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                        <span style={{ width: 22, height: 22, borderRadius: "50%", background: "var(--ember)", color: "#fff", fontWeight: 800, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>K</span>
+                        <span style={{ fontSize: 11.5, color: "var(--text-2)", lineHeight: 1.45 }}>{injKaiNote(x.area, x.status, x.training_impact, avoid, detStr(x, "feels_now") || null)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
