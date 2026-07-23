@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useTrain, useApi, actionGet, actionPost, planRange, strengthSessions, cardioActivities, trainingLoad, useBadges, markBadgesSeen, type TrnPrs, type TrnProgress, type TrnPbRec, type TrnSport, type TrnBadge, type StrengthSession, type CardioActivityLite, type TrnLoadPoint, type TrnThreshold } from "../lib/api";
 import { Spark, SubPills, Delta, dShort } from "./ui";
 import KaiDailyCard from "../components/KaiDailyCard";
 import ExerciseDetail from "./ExerciseDetail";
 import { CardioActivityDetail } from "./CardioTab";
 import Sheet from "../components/Sheet";
+import Icon, { emojiIcon, type IconName } from "../components/Icon";
 import { useRouter } from "next/navigation";
 import InsightsTab from "./InsightsTab";
 import ActivitiesTab from "./ActivitiesTab";
@@ -15,13 +16,13 @@ import ActivitiesTab from "./ActivitiesTab";
 type UGoal = { id: string; label: string; when_text?: string; target_date: string | null; goal_type: string; status: string; focus: string; deleted: boolean; created_at: string; updated_at: string; days_away: number | null; source?: string; completed_at?: string | null; early_days?: number | null };
 type GoalsApiResp = { body_comp: { bia_bf: number; dexa_bf: number; goal_bf: number; goal_by: string; latest_weight: number; weight_as_of: string; weight_history: { kg: number; date: string; source: string }[] } };
 
-const TYPE_META: Record<string, { emoji: string; label: string }> = {
-  race: { emoji: "🏁", label: "Race" }, run: { emoji: "🏃", label: "Run" }, swim: { emoji: "🏊", label: "Swim" },
-  bike: { emoji: "🚴", label: "Bike" }, strength: { emoji: "💪", label: "Strength" }, triathlon: { emoji: "🏅", label: "Triathlon" },
-  body: { emoji: "⚖️", label: "Body" }, other: { emoji: "🎯", label: "Other" },
+const TYPE_META: Record<string, { icon: IconName; label: string }> = {
+  race: { icon: "flag", label: "Race" }, run: { icon: "run", label: "Run" }, swim: { icon: "swim", label: "Swim" },
+  bike: { icon: "bike", label: "Bike" }, strength: { icon: "strength", label: "Strength" }, triathlon: { icon: "medal", label: "Triathlon" },
+  body: { icon: "scale", label: "Body" }, other: { icon: "target", label: "Other" },
 };
 const GTYPES = Object.keys(TYPE_META);
-const tEmoji = (t: string) => TYPE_META[t]?.emoji ?? "🎯";
+const tIcon = (t: string): IconName => TYPE_META[t]?.icon ?? "target";
 const G_STATUS: Record<string, { label: string; cls: string }> = {
   not_started: { label: "Yet to start", cls: "st-todo" }, in_progress: { label: "In progress", cls: "st-prog" }, done: { label: "Done", cls: "st-done" },
 };
@@ -44,9 +45,9 @@ function completedMarker(g: UGoal): { text: string; cls: string } | null {
   if (g.early_days == null) return null;
   const n = Math.abs(g.early_days);
   const dW = n === 1 ? "day" : "days";
-  if (g.early_days > 0) { const flavor = g.early_days >= 14 ? "smashed it" : g.early_days >= 4 ? "ahead of plan" : "early"; return { text: `🎯 ${n} ${dW} early — ${flavor}`, cls: "ok" }; }
+  if (g.early_days > 0) { const flavor = g.early_days >= 14 ? "smashed it" : g.early_days >= 4 ? "ahead of plan" : "early"; return { text: `${n} ${dW} early — ${flavor}`, cls: "ok" }; }
   if (g.early_days < 0) return { text: `${n} ${dW} past target — done is done`, cls: "warn" };
-  return { text: "🎯 right on the day", cls: "ok" };
+  return { text: "right on the day", cls: "ok" };
 }
 type GSortKey = "date" | "priority" | "status" | "type";
 
@@ -126,7 +127,7 @@ function GoalsTab() {
       <div className="type-row">
         {GTYPES.map((t) => (
           <button key={t} className={t === form.goal_type ? "type-btn active" : "type-btn"} onClick={() => setForm({ ...form, goal_type: t })}>
-            <span>{TYPE_META[t].emoji}</span><span className="type-cap">{TYPE_META[t].label}</span>
+            <span><Icon name={TYPE_META[t].icon} size={13} /></span><span className="type-cap">{TYPE_META[t].label}</span>
           </button>
         ))}
       </div>
@@ -144,7 +145,7 @@ function GoalsTab() {
 
   const GoalRow = (g: UGoal) => (
     <button className="goal-row" onClick={() => startEdit(g)}>
-      <span className="cardio-ic">{tEmoji(g.goal_type)}</span>
+      <span className="cardio-ic"><Icon name={tIcon(g.goal_type)} size={15} /></span>
       <div className="cardio-main">
         <div className="session-title">{g.label}</div>
         <div className="subtle tiny">{gFmtDate(g.target_date)} · added {gFmtShort(g.created_at)}{g.updated_at && g.updated_at !== g.created_at ? ` · edited ${gFmtShort(g.updated_at)}` : ""}</div>
@@ -154,7 +155,7 @@ function GoalsTab() {
         </div>
       </div>
       {awayPill(g.days_away)}
-      <span className="chev-edit">✎</span>
+      <span className="chev-edit"><Icon name="edit" size={11} /></span>
     </button>
   );
 
@@ -162,7 +163,7 @@ function GoalsTab() {
     <div>
       {nextRace && (
         <div className="trn-race">
-          <div className="top"><span>{tEmoji(nextRace.goal_type)} Next race</span><span>{gFmtDate(nextRace.target_date)}</span></div>
+          <div className="top"><span><Icon name={tIcon(nextRace.goal_type)} size={12} /> Next race</span><span>{gFmtDate(nextRace.target_date)}</span></div>
           <div className="nm">{nextRace.label}</div>
           <div className="meta"><span className={`chip ${G_FOCUS[nextRace.focus]?.cls}`}>{G_FOCUS[nextRace.focus]?.label} focus</span></div>
           {nextRace.days_away != null && <div className="days tnum">{Math.max(0, nextRace.days_away)}<small>days to go</small></div>}
@@ -176,7 +177,7 @@ function GoalsTab() {
             <div className="lever-top">
               <span>Body fat <strong>{bc.bia_bf}%</strong> <span className="subtle tiny">BIA · DEXA {bc.dexa_bf}%</span></span>
               {!bfEdit ? (
-                <button className="goal-inline-edit" onClick={() => { setBfEdit(true); setBfVal(String(bfGoal ?? bc.goal_bf)); }}>goal {bfGoal ?? bc.goal_bf}% by {bc.goal_by} ✎</button>
+                <button className="goal-inline-edit" onClick={() => { setBfEdit(true); setBfVal(String(bfGoal ?? bc.goal_bf)); }}>goal {bfGoal ?? bc.goal_bf}% by {bc.goal_by} <Icon name="edit" size={10} /></button>
               ) : (
                 <span className="bf-edit">
                   <input className="g-input bf-input" type="number" step="0.5" value={bfVal} onChange={(e) => setBfVal(e.target.value)} autoFocus />%
@@ -220,7 +221,7 @@ function GoalsTab() {
 
       {doneGoals.length > 0 && (
         <>
-          <h2 className="section-title">Completed 🎉</h2>
+          <h2 className="section-title">Completed <Icon name="celebrate" size={14} /></h2>
           <section className="list">
             {doneGoals.map((g) => {
               const mk = completedMarker(g);
@@ -228,13 +229,13 @@ function GoalsTab() {
                 <div key={g.id} className="card goal-card done-card">
                   {editing === g.id ? EditForm : (
                     <button className="goal-row" onClick={() => startEdit(g)}>
-                      <span className="cardio-ic">🥳</span>
+                      <span className="cardio-ic"><Icon name="celebrate" size={15} /></span>
                       <div className="cardio-main">
-                        <div className="session-title done-text">{tEmoji(g.goal_type)} {g.label}</div>
+                        <div className="session-title done-text"><Icon name={tIcon(g.goal_type)} size={13} /> {g.label}</div>
                         <div className="subtle tiny">{g.completed_at ? `Completed ${gFmtDate(g.completed_at)}` : "Completed"}{g.target_date ? ` · target ${gFmtDate(g.target_date)}` : ""}</div>
                         {mk && <div className="chip-row" style={{ marginTop: 6 }}><span className={`pill ${mk.cls}`}>{mk.text}</span></div>}
                       </div>
-                      <span className="chev-edit">✎</span>
+                      <span className="chev-edit"><Icon name="edit" size={11} /></span>
                     </button>
                   )}
                 </div>
@@ -252,7 +253,7 @@ function GoalsTab() {
               <div key={g.id} className="card goal-card removed-card">
                 {confirmPurge === g.id ? (
                   <div className="goal-row static" style={{ alignItems: "flex-start" }}>
-                    <span className="cardio-ic">🗑</span>
+                    <span className="cardio-ic"><Icon name="trash" size={15} /></span>
                     <div className="cardio-main">
                       <div className="session-title">Permanently remove “{g.label}”?</div>
                       <div className="subtle tiny">This deletes it for good — it can&apos;t be restored.</div>
@@ -264,14 +265,14 @@ function GoalsTab() {
                   </div>
                 ) : (
                   <div className="goal-row static">
-                    <span className="cardio-ic">{tEmoji(g.goal_type)}</span>
+                    <span className="cardio-ic"><Icon name={tIcon(g.goal_type)} size={15} /></span>
                     <div className="cardio-main">
                       <div className="session-title struck">{g.label}</div>
                       <div className="subtle tiny">{gFmtDate(g.target_date)}</div>
                     </div>
                     <div style={{ display: "flex", gap: 8, marginLeft: "auto", flexShrink: 0 }}>
                       <button className="btn-add" onClick={() => runAct("goal_restore", g.id)} disabled={busy}>↺ Restore</button>
-                      <button onClick={() => setConfirmPurge(g.id)} disabled={busy} style={{ background: "transparent", border: "1px solid color-mix(in srgb, var(--danger) 40%, transparent)", color: "var(--danger)", borderRadius: 999, padding: "4px 12px", fontSize: 13, cursor: "pointer" }}>🗑 Remove</button>
+                      <button onClick={() => setConfirmPurge(g.id)} disabled={busy} style={{ background: "transparent", border: "1px solid color-mix(in srgb, var(--danger) 40%, transparent)", color: "var(--danger)", borderRadius: 999, padding: "4px 12px", fontSize: 13, cursor: "pointer" }}><Icon name="trash" size={11} /> Remove</button>
                     </div>
                   </div>
                 )}
@@ -291,7 +292,7 @@ const PB_PERIODS: { key: string; label: string }[] = [
   { key: "ytd", label: "YTD" },
   { key: "all", label: "All-time" },
 ];
-const MEDAL = ["🥇", "🥈", "🥉"];
+const MEDAL_TINT = ["var(--gold)", "#c3c9d1", "#c08552"];
 
 function PBRow({ rec }: { rec: TrnPbRec }) {
   const [open, setOpen] = useState(false);
@@ -301,7 +302,7 @@ function PBRow({ rec }: { rec: TrnPbRec }) {
   return (
     <div className="card" style={{ marginBottom: 8, padding: 0, overflow: "hidden" }}>
       <button onClick={() => rest.length && setOpen((o) => !o)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "13px 15px", background: "none", border: "none", color: "inherit", cursor: rest.length ? "pointer" : "default", textAlign: "left", font: "inherit" }}>
-        <span style={{ fontSize: 22, flex: "none", filter: "drop-shadow(0 0 7px rgba(245,197,66,0.55))" }}>🥇</span>
+        <span style={{ display: "inline-flex", flex: "none", filter: "drop-shadow(0 0 7px rgba(245,197,66,0.55))" }}><Icon name="medal" size={21} color="var(--gold)" /></span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{rec.label}</div>
           <div className="tnum" style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.2 }}>{gold.primary}</div>
@@ -311,7 +312,7 @@ function PBRow({ rec }: { rec: TrnPbRec }) {
       </button>
       {open && rest.map((e) => (
         <div key={e.rnk} style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 15px", borderTop: "1px solid var(--line)" }}>
-          <span style={{ fontSize: 17, flex: "none" }}>{MEDAL[e.rnk - 1] || "🎖"}</span>
+          <span style={{ display: "inline-flex", flex: "none" }}><Icon name="medal" size={16} color={MEDAL_TINT[e.rnk - 1] || "var(--muted)"} /></span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="tnum" style={{ fontSize: 15, fontWeight: 700 }}>{e.primary}</div>
             <div className="subtle tiny">{e.secondary ? `${e.secondary} · ` : ""}{e.date_label}</div>
@@ -340,7 +341,7 @@ function BadgeHex({ b, earned }: { b: TrnBadge; earned: boolean }) {
       <div style={{ position: "relative", width: 76, height: 84 }}>
         <div style={{ position: "absolute", inset: 0, clipPath: HEX_CLIP, background: earned ? `linear-gradient(150deg, ${c1}, ${c2})` : "var(--surface-2)" }} />
         <div style={{ position: "absolute", inset: 3, clipPath: HEX_CLIP, background: earned ? "rgba(0,0,0,0.14)" : "var(--surface-2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <span style={{ fontSize: 27, opacity: earned ? 1 : 0.32, filter: earned ? "none" : "grayscale(1)" }}>{earned ? b.icon : "🔒"}</span>
+          <span style={{ display: "inline-flex", opacity: earned ? 1 : 0.32, color: earned ? "#fff" : "var(--muted)" }}>{earned ? <Icon name={emojiIcon(b.icon) ?? "medal"} size={26} /> : <Icon name="lock" size={23} />}</span>
         </div>
         {earned && b.seen === false && <span style={{ position: "absolute", top: -3, right: 2, background: "var(--t-grad)", color: "#fff", fontSize: 8, fontWeight: 800, letterSpacing: "0.04em", padding: "2px 5px", borderRadius: 999, boxShadow: "0 2px 6px rgba(0,0,0,0.4)" }}>NEW</span>}
       </div>
@@ -373,7 +374,7 @@ function Badges() {
   );
 }
 
-function DropPill({ options, value, onChange, placeholder }: { options: { key: string; label: string; icon?: string }[]; value: string; onChange: (k: string) => void; placeholder?: string }) {
+function DropPill({ options, value, onChange, placeholder }: { options: { key: string; label: string; icon?: ReactNode }[]; value: string; onChange: (k: string) => void; placeholder?: string }) {
   const [open, setOpen] = useState(false);
   const cur = options.find((o) => o.key === value);
   return (
@@ -417,7 +418,7 @@ function History({ prs }: { prs: TrnPrs }) {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <DropPill options={prs.sports.map((s) => ({ key: s.key, label: s.label, icon: s.emoji }))} value={sportKey || ""} onChange={setSport} placeholder="Sport" />
+        <DropPill options={prs.sports.map((s) => ({ key: s.key, label: s.label, icon: emojiIcon(s.emoji) ? <Icon name={emojiIcon(s.emoji)!} size={13} /> : undefined }))} value={sportKey || ""} onChange={setSport} placeholder="Sport" />
         <DropPill options={PB_PERIODS.map((p) => ({ key: p.key, label: p.label }))} value={period} onChange={setPeriod} placeholder="All-time" />
         <SegToggle items={["Bests", "Badges"] as const} value={tab} onChange={setTab} />
       </div>
@@ -487,16 +488,16 @@ function Body({ p }: { p: TrnProgress }) {
 /* ═══════════════ Summary (Chunk 7 · §6) ═══════════════
    Week/Month toggle over one dynamic grid + dynamic-by-sport blocks + cached AI card.
    Actuals (strength sessions ∪ cardio activities) render solid & tappable; planned
-   future sessions render pale (same hue); empty days = ⭐ rest. Strength counted only
+   future sessions render pale (same hue); empty days = star rest. Strength counted only
    from strengthSessions and cardio sports normalised so Garmin strength_training never
    double-counts. Week-grid duplication across Coach/Schedule/Progress is accepted per plan. */
 type Sport = "run" | "cycle" | "swim" | "walk" | "strength";
-const SPORT: Record<Sport, { label: string; emoji: string; color: string }> = {
-  run: { label: "Run", emoji: "🏃", color: "#34d399" },
-  cycle: { label: "Cycle", emoji: "🚴", color: "#a78bfa" },
-  swim: { label: "Swim", emoji: "🏊", color: "#38bdf8" },
-  walk: { label: "Walk", emoji: "🚶", color: "#2dd4bf" },
-  strength: { label: "Strength", emoji: "🏋️", color: "#fbbf24" },
+const SPORT: Record<Sport, { label: string; icon: IconName; color: string }> = {
+  run: { label: "Run", icon: "run", color: "#34d399" },
+  cycle: { label: "Cycle", icon: "bike", color: "#a78bfa" },
+  swim: { label: "Swim", icon: "swim", color: "#38bdf8" },
+  walk: { label: "Walk", icon: "walk", color: "#2dd4bf" },
+  strength: { label: "Strength", icon: "strength", color: "#fbbf24" },
 };
 function normCardio(s: string): Sport | null {
   const k = (s || "").toLowerCase();
@@ -517,7 +518,7 @@ function normPlan(t: string, rest: boolean): Sport | null {
   return null;
 }
 // Strength calendar labels show the split (Upper push / Upper pull / Upper / Lower /
-// Full body / Core), not volume — the 🏋️ already says it's strength.
+// Full body / Core), not volume — the strength glyph already says it's strength.
 function muscleRegion(mg: string): "push" | "pull" | "lower" | "core" | "other" {
   const m = (mg || "").toLowerCase();
   if (m.includes("quad") || m.includes("hamstring") || m.includes("glute") || m.includes("calf") || m.includes("calves") || m.includes("adductor") || m.includes("abductor") || m.includes("hip")) return "lower";
@@ -584,7 +585,7 @@ function Chip({ c, onTap }: { c: Cell; onTap: (c: Cell) => void }) {
   const s = SPORT[c.sport];
   return (
     <button onClick={() => onTap(c)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 9px", borderRadius: 10, background: c.planned ? hexA(s.color, 0.05) : hexA(s.color, 0.16), border: `1px ${c.planned ? "dashed" : "solid"} ${hexA(s.color, c.planned ? 0.45 : 0.5)}`, color: c.planned ? hexA(s.color, 0.85) : "var(--text)", cursor: "pointer", font: "inherit", fontSize: 12, fontWeight: 600, textAlign: "left" }}>
-      <span style={{ fontSize: 13 }}>{s.emoji}</span>
+      <Icon name={s.icon} size={12} color={s.color} />
       <span>{c.label}</span>
       {c.stat ? <span className="tnum" style={{ opacity: 0.85, fontWeight: 500 }}>{c.stat}</span> : null}
     </button>
@@ -608,7 +609,7 @@ function WeekGrid({ start, cells, today, onTap, onDate }: { start: string; cells
               {cs.length > 0
                 ? cs.map((c) => <Chip key={c.key} c={c} onTap={onTap} />)
                 : past
-                  ? <span style={{ fontSize: 13, color: "var(--muted)" }}>⭐ Rest</span>
+                  ? <span style={{ fontSize: 13, color: "var(--muted)" }}><Icon name="star" size={12} color="var(--gold)" /> Rest</span>
                   : <button onClick={() => onDate(d)} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 10, background: "transparent", border: "1px dashed var(--line)", color: "var(--muted)", cursor: "pointer", font: "inherit", fontSize: 12, fontWeight: 600 }}>＋ Plan</button>}
             </div>
           </div>
@@ -682,7 +683,7 @@ function SportBlocks({ from, to, prevFrom, prevTo, str, car }: { from: string; t
         const vfont = val.length >= 8 ? 14 : val.length >= 6 ? 17 : 20; // keep long kg totals compact
         return (
           <div key={b.sport} style={{ flex: "0 0 auto", minWidth: 92, background: hexA(s.color, 0.07), border: `1px solid ${hexA(s.color, 0.18)}`, borderRadius: 14, padding: "10px 12px", textAlign: "center" }}>
-            <div style={{ fontSize: 16, lineHeight: 1 }}>{s.emoji}</div>
+            <div style={{ lineHeight: 1 }}><Icon name={s.icon} size={15} color={s.color} /></div>
             <div className="tnum" style={{ marginTop: 5, fontWeight: 800, fontSize: vfont, color: "var(--text)", letterSpacing: "-0.4px", lineHeight: 1.1, whiteSpace: "nowrap" }}>
               {val}<span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", marginLeft: 2 }}>{unit}</span>
             </div>
@@ -743,7 +744,7 @@ function DaySheet({ date, cells, today, onTap, onDate, onClose }: { date: string
             {cs.map((c) => <Chip key={c.key} c={c} onTap={(cc) => { onClose(); onTap(cc); }} />)}
           </div>
         )}
-        {cs.length === 0 && past && <div className="subtle tiny">⭐ Rest day</div>}
+        {cs.length === 0 && past && <div className="subtle tiny"><Icon name="star" size={11} color="var(--gold)" /> Rest day</div>}
         {!past && (
           <button onClick={() => { onClose(); onDate(date); }} style={{ width: "100%", padding: "11px", borderRadius: 12, background: "transparent", border: "1px dashed var(--line)", color: "var(--ember)", cursor: "pointer", font: "inherit", fontSize: 13, fontWeight: 700 }}>＋ Add or edit in calendar</button>
         )}
@@ -762,7 +763,7 @@ function overviewStats(str: StrengthSession[], car: CardioActivityLite[], from: 
   const order: Sport[] = ["strength", "run", "cycle", "swim", "walk"];
   return order.filter((sp) => (cur[sp] || 0) > 0).map((sp) => {
     const isStr = sp === "strength"; const c = cur[sp] || 0, p = prev[sp] || 0;
-    return { sport: sp, emoji: SPORT[sp].emoji, val: isStr ? Math.round(c).toLocaleString("en-US") : c.toFixed(1), unit: isStr ? "kg" : "km", delta: p > 0 ? Math.round(((c - p) / p) * 100) : null };
+    return { sport: sp, icon: SPORT[sp].icon, tint: SPORT[sp].color, val: isStr ? Math.round(c).toLocaleString("en-US") : c.toFixed(1), unit: isStr ? "kg" : "km", delta: p > 0 ? Math.round(((c - p) / p) * 100) : null };
   });
 }
 
@@ -838,7 +839,7 @@ function Summary() {
             <div className="card" style={{ display: "flex", alignItems: "stretch", padding: "10px 0", marginBottom: 8 }}>
               {stats.map((s, i) => (
                 <div key={s.sport} style={{ flex: 1, textAlign: "center", borderRight: i < stats.length - 1 ? "1px solid var(--line)" : "none", padding: "0 4px" }}>
-                  <div style={{ fontSize: 14, lineHeight: 1 }}>{s.emoji}</div>
+                  <div style={{ lineHeight: 1 }}><Icon name={s.icon} size={14} color={s.tint} /></div>
                   <div className="tnum" style={{ fontWeight: 900, fontSize: 13, marginTop: 3, whiteSpace: "nowrap" }}>{s.val}</div>
                   <div className="subtle" style={{ fontSize: 9, fontWeight: 700 }}>{s.unit}{s.delta != null ? <> · <span style={{ color: s.delta >= 0 ? "var(--success)" : "var(--danger)", fontWeight: 800 }}>{s.delta >= 0 ? "▲" : "▼"}{Math.abs(s.delta)}%</span></> : null}</div>
                 </div>
@@ -946,9 +947,9 @@ function OverviewFitness() {
 
   const thr = (sport: string, metric: string) => resp?.thresholds.find((t) => t.sport === sport && t.metric === metric);
   const ftp = thr("bike", "ftp_w"), lthrB = thr("bike", "lthr"), lthrR = thr("run", "lthr"), tpace = thr("run", "threshold_pace_s_per_km"), css = thr("swim", "css_pace_s_per_100m");
-  const thCell = (icon: string, lbl: string, val: string, span?: boolean) => (
+  const thCell = (icon: IconName, lbl: string, val: string, span?: boolean) => (
     <div style={{ background: "var(--surface-2)", borderRadius: 10, padding: "7px 10px", display: "flex", alignItems: "center", justifyContent: "space-between", gridColumn: span ? "1 / -1" : undefined }}>
-      <span className="subtle tiny">{icon} {lbl}</span><b style={{ fontSize: 12 }}>{val}</b>
+      <span className="subtle tiny"><Icon name={icon} size={11} /> {lbl}</span><b style={{ fontSize: 12 }}>{val}</b>
     </div>
   );
 
@@ -995,11 +996,11 @@ function OverviewFitness() {
             <span className="subtle tiny">auto-updated · TSS per session</span>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-            {thCell("🚴", "FTP", ftp ? `${ftp.value.toFixed(0)} W` : "—")}
-            {thCell("🚴", "LTHR", lthrB ? `${lthrB.value.toFixed(0)} bpm` : "—")}
-            {thCell("🏃", "Thr pace", tpace ? ovrPaceKm(tpace.value) : "—")}
-            {thCell("🏃", "LTHR", lthrR ? `${lthrR.value.toFixed(0)} bpm` : "—")}
-            {thCell("🏊", "CSS", css ? ovrPace100(css.value) : "—", true)}
+            {thCell("bike", "FTP", ftp ? `${ftp.value.toFixed(0)} W` : "—")}
+            {thCell("bike", "LTHR", lthrB ? `${lthrB.value.toFixed(0)} bpm` : "—")}
+            {thCell("run", "Thr pace", tpace ? ovrPaceKm(tpace.value) : "—")}
+            {thCell("run", "LTHR", lthrR ? `${lthrR.value.toFixed(0)} bpm` : "—")}
+            {thCell("swim", "CSS", css ? ovrPace100(css.value) : "—", true)}
           </div>
         </>
       ) : null}
