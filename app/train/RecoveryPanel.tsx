@@ -1,4 +1,5 @@
 "use client";
+import Icon from "../components/Icon";
 
 import { useEffect, useState } from "react";
 import { recoveryGet, planWeek, wkStart, type RecMuscle, type RecMobility, type RecRoutine } from "../lib/api";
@@ -54,7 +55,7 @@ const loadState = (pct: number) => (pct >= 80 ? "peak" : pct >= 50 ? "heavy" : p
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 function MobRow({ x }: { x: RecMobility }) {
-  return <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderTop: "1px solid var(--line)" }}><span style={{ fontSize: 14 }}>🧘</span><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 600 }}>{x.name}</div><div className="subtle tiny">{[x.primary_muscle, x.default_prescription].filter(Boolean).join(" · ")}</div></div></div>;
+  return <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderTop: "1px solid var(--line)" }}><Icon name="yoga" size={13} /><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 600 }}>{x.name}</div><div className="subtle tiny">{[x.primary_muscle, x.default_prescription].filter(Boolean).join(" · ")}</div></div></div>;
 }
 
 export default function RecoveryPanel({ onGoWorkouts }: { onGoWorkouts?: () => void }) {
