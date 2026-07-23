@@ -45,7 +45,7 @@ const MORE_SECTIONS = [
     items: [
       { href: "/trends", key: "trends", label: "Trends" },
       { href: "/sleep", key: "sleep", label: "Sleep" },
-      { href: "/more/goals", key: "body", label: "Body" },
+      { href: "/more/body", key: "body", label: "Body" },
       { href: "/more/medical", key: "medical", label: "Medical" },
       { href: "/more/mind", key: "mind", label: "Mind" },
     ],
