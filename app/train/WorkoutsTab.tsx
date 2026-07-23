@@ -191,22 +191,6 @@ function PresetAllSheet({ open, title, rows, onClose, onLoad }:
   );
 }
 
-function PresetTile({ name, meta, glyphKey, hue, onLoad }: { name: string; meta: string; glyphKey: string; hue: string; onLoad: () => void }) {
-  return (
-    <button onClick={onLoad}
-      style={{ position: "relative", overflow: "hidden", textAlign: "left", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 20, padding: 14, minHeight: 136, display: "flex", flexDirection: "column", cursor: "pointer", color: "inherit" }}>
-      <svg width="100" height="100" viewBox="0 0 24 24" fill="none" stroke={hue} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" style={{ position: "absolute", top: -16, right: -20, opacity: 0.14, transform: "rotate(-8deg)", pointerEvents: "none" }}>{PRESET_GLYPH[glyphKey]}</svg>
-      <div style={{ flex: 1, minHeight: 44 }} />
-      <div style={{ position: "relative" }}>
-        <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)" }}>{name}</div>
-        <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 2 }}>{meta}</div>
-      </div>
-      <div style={{ position: "relative", marginTop: 10 }}>
-        <span style={{ display: "inline-block", fontSize: 11.5, fontWeight: 800, color: "var(--on-inverse)", background: "var(--inverse-surface)", borderRadius: 999, padding: "6px 14px" }}>Load</span>
-      </div>
-    </button>
-  );
-}
 const strengthHue = (p: StrengthPreset) => (p.glyph === "mobility" ? "var(--success)" : "var(--ember-strong)");
 
 const PRESET_SECTIONS: { sport: PresetSport; label: string }[] = [
@@ -634,9 +618,9 @@ export default function WorkoutsTab({ onAskCoach }: { onAskCoach?: () => void })
                 );
               })}
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
               {CARDIO_PRESETS.filter((p) => presetFilter === "all" || p.sport === presetFilter).map((p) => (
-                <PresetTile key={p.id} name={p.name} meta={p.meta} glyphKey={p.glyph} hue={PRESET_HUE[p.sport]} onLoad={() => setSurface({ k: "cardio", intent: "routine", start: "build", preset: p })} />
+                <FitPresetTile key={p.id} name={p.name} meta={p.meta} glyphKey={p.glyph} hue={PRESET_HUE[p.sport]} onLoad={() => setSurface({ k: "cardio", intent: "routine", start: "build", preset: p })} />
               ))}
             </div>
           </>
@@ -668,9 +652,9 @@ export default function WorkoutsTab({ onAskCoach }: { onAskCoach?: () => void })
               );
             })}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
             {STRENGTH_PRESETS.filter((p) => strengthPresetFilter === "all" || p.glyph === strengthPresetFilter).map((p) => (
-              <PresetTile key={p.id} name={p.name} meta={p.meta} glyphKey={p.glyph} hue={strengthHue(p)} onLoad={() => setSurface({ k: "strengthLogger", autoStart: { title: p.name, items: p.items } })} />
+              <FitPresetTile key={p.id} name={p.name} meta={p.meta} glyphKey={p.glyph} hue={strengthHue(p)} onLoad={() => setSurface({ k: "strengthLogger", autoStart: { title: p.name, items: p.items } })} />
             ))}
           </div>
         </>
