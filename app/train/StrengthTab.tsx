@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { strengthStats, strengthSessions, type StrengthStats, type RadarAxis, type StrengthSession } from "../lib/api";
+import { strengthStats, strengthSessions, sessionSets, type StrengthStats, type RadarAxis, type StrengthSession, type SessionExerciseSets } from "../lib/api";
 import { muscleTint } from "./ui";
 import ExerciseDetail from "./ExerciseDetail";
 import WorkoutLogger from "./WorkoutLogger";
@@ -19,6 +19,15 @@ function Delta({ cur, prev }: { cur: number; prev: number | null }) {
   return <span style={{ fontSize: 9, fontWeight: 800, marginLeft: 3, color: up ? "var(--success)" : "var(--danger)" }}>{up ? "▲" : "▼"}{Math.abs(pct)}%</span>;
 }
 
+// One set, compactly: "60 × 15", "15 reps" (bodyweight), "1:30", "400 m".
+function setLabel(st: { weight_kg: number | null; reps: number | null; duration_s: number | null; distance_m: number | null }): string {
+  if (st.weight_kg != null && st.reps != null) return `${st.weight_kg} \u00d7 ${st.reps}`;
+  if (st.reps != null) return `${st.reps} reps`;
+  if (st.duration_s != null) { const m = Math.floor(st.duration_s / 60), sec = st.duration_s % 60; return m ? `${m}:${String(sec).padStart(2, "0")}` : `${sec}s`; }
+  if (st.distance_m != null) return `${st.distance_m} m`;
+  if (st.weight_kg != null) return `${st.weight_kg} kg`;
+  return "\u2014";
+}
 function fmtDate(d: string) { const dt = new Date(d + "T00:00:00"); return `${dt.getDate()} ${MONTHS[dt.getMonth()]} ${dt.getFullYear()}`; }
 
 // 12a muscle balance: current (ember, 5px) stacked over prior (muted, 4px), sorted desc.
@@ -51,7 +60,9 @@ export default function StrengthTab() {
   const [win, setWin] = useState<string>("30d");
   const [sessions, setSessions] = useState<StrengthSession[] | null>(null);
   const [serr, setSerr] = useState(false);
-  const [exp, setExp] = useState<Record<string, boolean>>({});
+  const [openSess, setOpenSess] = useState<StrengthSession | null>(null);
+  const [sessDetail, setSessDetail] = useState<SessionExerciseSets[] | null>(null);
+  const [sessErr, setSessErr] = useState(false);
   const [monthIdx, setMonthIdx] = useState(0);
 
   useEffect(() => {
@@ -60,6 +71,11 @@ export default function StrengthTab() {
     strengthSessions().then((s) => alive && setSessions(s)).catch(() => { if (alive) { setSerr(true); setSessions([]); } });
     return () => { alive = false; };
   }, []);
+
+  const openSession = (s: StrengthSession) => {
+    setOpenSess(s); setSessDetail(null); setSessErr(false);
+    sessionSets(s.id).then(setSessDetail).catch(() => setSessErr(true));
+  };
 
   if (editId) return <WorkoutLogger editSessionId={editId} onExitEdit={() => { setEditId(null); strengthSessions().then(setSessions).catch(() => {}); }} />;
 
@@ -105,7 +121,7 @@ export default function StrengthTab() {
       ) : null}
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "10px 2px 6px" }}>
-        <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.5, color: "var(--muted)" }}>SESSIONS · TAP TO EXPAND</span>
+        <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.5, color: "var(--muted)" }}>SESSIONS · TAP FOR DETAIL</span>
         {months.length > 1 ? (
           <div style={{ display: "flex", alignItems: "center", gap: 1, background: "var(--surface-2)", borderRadius: 999, padding: 2 }}>
             <button aria-label="Older month" disabled={monthIdx >= months.length - 1} onClick={() => setMonthIdx((i) => Math.min(months.length - 1, i + 1))} style={{ background: "none", border: "none", cursor: monthIdx >= months.length - 1 ? "default" : "pointer", color: monthIdx >= months.length - 1 ? "var(--faint)" : "var(--ember)", fontSize: 14, lineHeight: 1, padding: "1px 7px" }}>‹</button>
@@ -119,10 +135,9 @@ export default function StrengthTab() {
           monthSessions.length === 0 ? <div className="subtle tiny" style={{ padding: "8px 2px" }}>No sessions this month.</div> :
             <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
               {monthSessions.map((s) => {
-                const open = exp[s.id] ?? false;
                 return (
                   <div key={s.id} className="card" style={{ padding: 0, overflow: "hidden", margin: 0 }}>
-                    <button onClick={() => setExp((o) => ({ ...o, [s.id]: !open }))} style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", background: "none", border: "none", cursor: "pointer", color: "inherit", textAlign: "left" }}>
+                    <button onClick={() => openSession(s)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", background: "none", border: "none", cursor: "pointer", color: "inherit", textAlign: "left" }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 12, fontWeight: 800 }}>{s.name}{s.source === "hevy" ? <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 800, letterSpacing: 0.3, textTransform: "uppercase", color: "var(--muted)", border: "1px solid var(--line)", borderRadius: 5, padding: "1px 5px", verticalAlign: "middle" }}>hevy</span> : null}</div>
                         <div className="subtle" style={{ fontSize: 9, fontWeight: 700 }}>{fmtDate(s.date)}</div>
@@ -131,29 +146,54 @@ export default function StrengthTab() {
                         <div className="tnum" style={{ fontSize: 11, fontWeight: 900 }}>{s.sets} sets</div>
                         {s.volume ? <div className="subtle" style={{ fontSize: 9, fontWeight: 700 }}>{s.volume.toLocaleString("en-US")} kg</div> : null}
                       </div>
-                      <span className="subtle" style={{ fontSize: 11, display: "inline-block", transform: open ? "rotate(180deg)" : "none", transition: "transform .15s" }}>▼</span>
+                      <span className="subtle" style={{ fontSize: 12 }}>{"\u203A"}</span>
                     </button>
-                    {open ? (
-                      <div style={{ padding: "0 8px 6px" }}>
-                        {s.exercises.map((ex, i) => (
-                          <button key={ex.title + i} onClick={() => setSel(ex.title)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 8px", background: "none", border: "none", borderTop: "1px solid var(--line)", cursor: "pointer", color: "inherit", textAlign: "left" }}>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <span style={{ fontSize: 12.5, fontWeight: 600 }}>{ex.title}</span>{" "}
-                              <span className="tiny" style={{ color: muscleTint(ex.muscle_group), textTransform: "capitalize" }}>{ex.muscle_group.replace(/_/g, " ")}</span>
-                            </div>
-                            <div className="subtle tiny tnum">{ex.sets} sets{ex.volume ? ` · ${ex.volume.toLocaleString("en-US")}kg` : ""}</div>
-                            <span className="subtle" style={{ fontSize: 11 }}>›</span>
-                          </button>
-                        ))}
-                        {s.source === "app" ? (
-                          <button onClick={() => setEditId(s.id)} style={{ width: "100%", marginTop: 4, padding: "9px 8px", background: "none", border: "none", borderTop: "1px solid var(--line)", cursor: "pointer", color: "var(--ember)", fontSize: 12, fontWeight: 700, textAlign: "center" }}>Edit workout</button>
-                        ) : null}
-                      </div>
-                    ) : null}
                   </div>
                 );
               })}
             </div>}
+
+      <Sheet open={!!openSess} title={openSess ? openSess.name : ""} onClose={() => { setOpenSess(null); setSessDetail(null); }}>
+        {openSess ? (
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <span className="subtle" style={{ fontSize: 10, fontWeight: 700 }}>{fmtDate(openSess.date)}</span>
+              <span className="subtle" style={{ fontSize: 10, fontWeight: 700 }}>{"\u00b7"} {openSess.sets} sets</span>
+              {openSess.volume ? <span className="subtle" style={{ fontSize: 10, fontWeight: 700 }}>{"\u00b7"} {openSess.volume.toLocaleString("en-US")} kg</span> : null}
+              {openSess.source === "hevy" ? <span style={{ fontSize: 8.5, fontWeight: 800, letterSpacing: 0.3, textTransform: "uppercase", color: "var(--muted)", border: "1px solid var(--line)", borderRadius: 5, padding: "1px 5px" }}>hevy</span> : null}
+            </div>
+
+            {sessErr ? <div className="subtle tiny" style={{ padding: "10px 0" }}>Couldn&apos;t load the set detail.</div> :
+             sessDetail == null ? <div className="muted center pad">Loading{"\u2026"}</div> :
+             sessDetail.length === 0 ? <div className="subtle tiny" style={{ padding: "10px 0" }}>No set detail recorded for this session.</div> : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+                {sessDetail.map((ex, i) => (
+                  <div key={ex.title + i}>
+                    <button onClick={() => { setOpenSess(null); setSessDetail(null); setSel(ex.title); }}
+                      style={{ width: "100%", display: "flex", alignItems: "baseline", gap: 6, background: "none", border: "none", padding: "0 0 3px", cursor: "pointer", color: "inherit", textAlign: "left" }}>
+                      <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{ex.title}</span>
+                      {ex.muscle_group ? <span className="tiny" style={{ color: muscleTint(ex.muscle_group), textTransform: "capitalize" }}>{ex.muscle_group.replace(/_/g, " ")}</span> : null}
+                      <span className="subtle" style={{ fontSize: 11 }}>{"\u203A"}</span>
+                    </button>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "3px 5px" }}>
+                      {ex.sets.map((st, k) => (
+                        <span key={k} className="tnum" style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-2)", background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 7, padding: "2px 7px", whiteSpace: "nowrap" }}>
+                          <span style={{ color: "var(--faint)", fontWeight: 800 }}>{k + 1}</span>{"  "}{setLabel(st)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+             )}
+
+            {openSess.source === "app" ? (
+              <button onClick={() => { const id = openSess.id; setOpenSess(null); setSessDetail(null); setEditId(id); }}
+                style={{ width: "100%", marginTop: 12, padding: "9px 8px", background: "none", border: "1px solid var(--line)", borderRadius: 10, cursor: "pointer", color: "var(--ember)", fontSize: 12, fontWeight: 800 }}>Edit workout</button>
+            ) : null}
+          </div>
+        ) : null}
+      </Sheet>
 
       <Sheet open={!!sel} title={sel || "Exercise"} onClose={() => setSel(null)}>
         {sel ? <ExerciseDetail title={sel} onBack={() => setSel(null)} embedded /> : null}
