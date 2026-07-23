@@ -1,4 +1,5 @@
 "use client";
+import Icon from "./Icon";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -91,7 +92,7 @@ export default function KaiDailyCard({ liveReadiness, scope }: { liveReadiness?:
 
       {card.streak && card.streak > 0 ? (
         <div style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10.5, fontWeight: 700, color: GREEN, background: "color-mix(in srgb, var(--success) 14%, transparent)", border: "1px solid color-mix(in srgb, var(--success) 32%, transparent)", borderRadius: 999, padding: "3px 9px", marginBottom: 9 }}>
-          🔥 {card.streak}-day protein streak
+          <Icon name="fire" size={11} /> {card.streak}-day protein streak
         </div>
       ) : null}
 
