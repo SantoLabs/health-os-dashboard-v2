@@ -1,4 +1,5 @@
 "use client";
+import Icon, { type IconName } from "../components/Icon";
 
 import { useEffect, useMemo, useState } from "react";
 import { SubPills } from "./ui";
@@ -120,11 +121,11 @@ export default function FitnessTab() {
           <b>Thresholds</b><span className="subtle tiny">auto-updated · TSS per session</span>
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {thCell("🚴", "FTP", ftp ? `${ftp.value.toFixed(0)} W` : "—", ftp?.source)}
-          {thCell("🚴", "LTHR", lthrB ? `${lthrB.value.toFixed(0)} bpm` : "—", lthrB?.source)}
-          {thCell("🏃", "Thr pace", tpace ? paceKm(tpace.value) : "—", tpace?.source)}
-          {thCell("🏃", "LTHR", lthrR ? `${lthrR.value.toFixed(0)} bpm` : "—", lthrR?.source)}
-          {thCell("🏊", "CSS", css ? pace100(css.value) : "—", css?.source)}
+          {thCell("bike", "FTP", ftp ? `${ftp.value.toFixed(0)} W` : "—", ftp?.source)}
+          {thCell("bike", "LTHR", lthrB ? `${lthrB.value.toFixed(0)} bpm` : "—", lthrB?.source)}
+          {thCell("run", "Thr pace", tpace ? paceKm(tpace.value) : "—", tpace?.source)}
+          {thCell("run", "LTHR", lthrR ? `${lthrR.value.toFixed(0)} bpm` : "—", lthrR?.source)}
+          {thCell("swim", "CSS", css ? pace100(css.value) : "—", css?.source)}
         </div>
       </section>
     </div>
