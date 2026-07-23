@@ -18,13 +18,7 @@ export const kg = (n: number | null | undefined): string =>
 export const daysAgo = (d: string): number =>
   Math.max(0, Math.round((Date.now() - new Date(d + "T00:00:00").getTime()) / 86400000));
 
-export const sportEmoji = (s: string): string => {
-  const k = (s || "").toLowerCase();
-  if (k.includes("swim")) return "🏊";
-  if (k.includes("run")) return "🏃";
-  if (k.includes("cycl") || k.includes("rid") || k.includes("bik")) return "🚴";
-  return "💪";
-};
+// sportEmoji removed — superseded by sportIcon()/Icon in ../components/Icon.
 
 // muscle-group → soft accent for lift row icons
 const MUSCLE_TINT: Record<string, string> = {
