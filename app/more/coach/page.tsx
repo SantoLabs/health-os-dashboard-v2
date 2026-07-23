@@ -1,4 +1,6 @@
 "use client";
+import Icon from "../../components/Icon";
+import type { ReactNode } from "react";
 
 // Kai hub — leads with a Notifications ingress (the full Due/Upcoming/History list
 // lives in the Notification Center) plus the editable "What Kai remembers" memory
@@ -60,7 +62,7 @@ export default function CoachHubPage() {
     <Screen title="Kai">
       <button onClick={() => router.push("/more/coach/notifications")}
         style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, background: dueCount > 0 ? "rgba(79,156,249,.08)" : SURF, border: "1px solid " + (dueCount > 0 ? "rgba(79,156,249,.4)" : BORDER), borderRadius: 14, padding: "13px 14px", marginBottom: 16, cursor: "pointer", textAlign: "left" }}>
-        <span style={{ fontSize: 20 }}>🔔</span>
+        <Icon name="bell" size={19} color="var(--muted)" />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13.5, fontWeight: 800, color: H }}>Notifications</div>
           <div style={{ fontSize: 11.5, color: dueCount > 0 ? ACCENT_LT : MUTED, marginTop: 2, fontWeight: dueCount > 0 ? 700 : 500 }}>{dueCount > 0 ? `${dueCount} due now` : "Reminders & check-ins"}</div>
@@ -100,7 +102,7 @@ export default function CoachHubPage() {
           )}
 
           {memory === null ? <Sk /> : memory.length === 0 ? (
-            <Empty icon="🧠" title="Nothing remembered yet" sub="When you tell Kai a lasting preference or goal, it’ll offer to remember it — or add one here." />
+            <Empty icon={<Icon name="brain" size={26} />} title="Nothing remembered yet" sub="When you tell Kai a lasting preference or goal, it’ll offer to remember it — or add one here." />
           ) : (
             memory.map((m) => (
               <div key={m.id} style={{ background: SURF, border: "1px solid " + BORDER, borderRadius: 14, padding: "12px 13px", marginBottom: 10 }}>
@@ -119,7 +121,7 @@ export default function CoachHubPage() {
       ) : (
         <div>
           {insights === null ? <Sk /> : insights.length === 0 ? (
-            <Empty icon="★" title="No saved insights yet" sub="Tap “Save” under any Kai answer to keep it here for quick reference." />
+            <Empty icon={<Icon name="star" size={26} />} title="No saved insights yet" sub="Tap “Save” under any Kai answer to keep it here for quick reference." />
           ) : (
             insights.map((it) => (
               <div key={it.id} style={{ background: SURF, border: "1px solid " + BORDER, borderRadius: 14, padding: "12px 13px", marginBottom: 10 }}>
@@ -138,7 +140,7 @@ export default function CoachHubPage() {
 }
 
 const Sk = () => <div style={{ height: 80, borderRadius: 14, background: SURF, border: "1px solid " + BORDER, opacity: 0.5 }} />;
-const Empty = ({ icon, title, sub }: { icon: string; title: string; sub: string }) => (
+const Empty = ({ icon, title, sub }: { icon: ReactNode; title: string; sub: string }) => (
   <div style={{ textAlign: "center", padding: "40px 20px", color: SECOND }}>
     <div style={{ fontSize: 34, marginBottom: 10 }}>{icon}</div>
     <div style={{ fontSize: 14.5, fontWeight: 700, color: H, marginBottom: 6 }}>{title}</div>
