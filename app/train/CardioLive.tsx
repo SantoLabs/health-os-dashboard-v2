@@ -1,4 +1,5 @@
 "use client";
+import Icon from "../components/Icon";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CardioRoutine, CardioStructure, CardioStep, CardioLoop, CardioStepOrLoop, CardioMeasure, CardioTarget } from "../lib/api";
@@ -359,7 +360,7 @@ export default function CardioLive({ routine, onExit }: { routine: CardioRoutine
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 18px 0", maxWidth: 480, margin: "0 auto", width: "100%" }}>
           <button onClick={onExit} aria-label="Back" style={{ width: 38, height: 38, borderRadius: 12, background: C.surface2, border: `1px solid ${C.line}`, color: C.text, fontSize: 20, cursor: "pointer" }}>‹</button>
           <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.12em", color: C.muted }}>{hdrLabel}</div>
-          <button onClick={() => setVoiceOn((v) => !v)} aria-label="Voice" style={{ width: 38, height: 38, borderRadius: 12, background: C.surface2, border: `1px solid ${C.line}`, color: voiceOn ? C.gold : C.faint, fontSize: 16, cursor: "pointer" }}>{voiceOn ? "🔊" : "🔇"}</button>
+          <button onClick={() => setVoiceOn((v) => !v)} aria-label="Voice" style={{ width: 38, height: 38, borderRadius: 12, background: C.surface2, border: `1px solid ${C.line}`, color: voiceOn ? C.gold : C.faint, fontSize: 16, cursor: "pointer" }}><Icon name={voiceOn ? "volumeOn" : "volumeOff"} size={15} /></button>
         </div>
         <div style={{ flex: 1, overflowY: "auto", padding: "0 18px 18px", maxWidth: 480, margin: "0 auto", width: "100%" }}>
           <div style={{ textAlign: "center", marginTop: 18 }}>
