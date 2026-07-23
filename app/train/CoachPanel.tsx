@@ -1,4 +1,5 @@
 "use client";
+import Icon from "../components/Icon";
 
 import { useEffect, useState, useCallback } from "react";
 import KaiDailyCard from "../components/KaiDailyCard";
@@ -154,7 +155,7 @@ export default function CoachPanel() {
                     <div style={{ fontSize: 13, marginTop: 4 }}>{p.activity}</div>
                     {p.rationale ? <div className="tiny" style={{ marginTop: 6, lineHeight: 1.5, fontStyle: "italic", color: "var(--text-2)" }}>“{p.rationale}”</div> : null}
                     {flags.map((f, j) => (
-                      <div key={j} className="tiny" style={{ marginTop: 6, color: f.severity === "warn" ? "var(--gold)" : "var(--ember)" }}>⚠ {f.message}</div>
+                      <div key={j} className="tiny" style={{ marginTop: 6, color: f.severity === "warn" ? "var(--gold)" : "var(--ember)" }}><Icon name="warning" size={11} /> {f.message}</div>
                     ))}
 
                     {declineFor === p.id ? (
