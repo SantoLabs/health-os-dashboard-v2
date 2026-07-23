@@ -1,4 +1,5 @@
 "use client";
+import Icon from "./Icon";
 
 // Shared Kai chat primitives — design tokens, the KaiMark avatar, the three
 // confirm-first action cards (food / schedule / target), the ActionCard
@@ -111,7 +112,7 @@ function FoodActionCard({ msg, onApplied, onUndone }: { msg: KaiMessage; onAppli
   return (
     <div style={{ marginTop: 8, borderRadius: 16, padding: 13, background: RAISED, border: "1px solid " + BORDER_STRONG }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        <span style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(91,155,255,.16)", color: PROT, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>{editing ? "✎" : "+"}</span>
+        <span style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(91,155,255,.16)", color: PROT, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>{editing ? <Icon name="edit" size={12} /> : "+"}</span>
         <span style={{ fontSize: 13, fontWeight: 700, color: H }}>{editing ? "Adjust amounts" : a.title}</span>
         <span style={{ marginLeft: "auto", fontSize: 10.5, fontWeight: 800, color: PROT, background: "rgba(91,155,255,.12)", border: "1px solid rgba(91,155,255,.3)", borderRadius: 999, padding: "3px 8px" }}>+{dProt}g protein</span>
       </div>
@@ -210,7 +211,7 @@ function ScheduleActionCard({ msg, onApplied, onUndone }: { msg: KaiMessage; onA
   return (
     <div style={{ marginTop: 8, borderRadius: 16, padding: 13, background: RAISED, border: "1px solid " + BORDER_STRONG }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <span style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(217,111,78,.16)", color: ACCENT, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>🗓</span>
+        <span style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(217,111,78,.16)", color: ACCENT, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}><Icon name="calendar" size={12} /></span>
         <span style={{ fontSize: 13, fontWeight: 700, color: H }}>{a.title || "Reschedule session"}</span>
       </div>
 
@@ -395,7 +396,7 @@ function PantryActionCard({ msg, onApplied, onUndone }: CardProps) {
   if (kept) return <div style={keptStyle}>Won't save that.</div>;
   return (
     <div style={proposedWrap}>
-      <div style={cardHead}><span style={cardIcon(PROT)}>🥫</span><span style={cardTitle}>{a.title || "Add to pantry"}</span>{a.delta_badge ? <span style={badgePill(a.delta_badge.color)}>{a.delta_badge.text}</span> : null}</div>
+      <div style={cardHead}><span style={cardIcon(PROT)}><Icon name="food" size={12} /></span><span style={cardTitle}>{a.title || "Add to pantry"}</span>{a.delta_badge ? <span style={badgePill(a.delta_badge.color)}>{a.delta_badge.text}</span> : null}</div>
       <div style={{ background: SUNKEN, borderRadius: 12, padding: "11px 13px" }}>
         <div style={{ fontSize: 13.5, fontWeight: 700, color: H }}>{label}</div>
         <div style={{ fontSize: 10.5, color: FAINT, marginTop: 3 }}>per {String(row.per_unit || "serving")} · <span style={{ color: PROT }}>{row.protein_g}P</span> · <span style={{ color: CARB }}>{row.carbs_g}C</span> · <span style={{ color: FAT }}>{row.fat_g}F</span> · {row.kcal} kcal {row.category ? `· ${row.category}` : ""}</div>
@@ -430,7 +431,7 @@ function ReminderActionCard({ msg, onApplied, onUndone }: CardProps) {
   if (kept) return <div style={keptStyle}>No reminder set.</div>;
   return (
     <div style={proposedWrap}>
-      <div style={cardHead}><span style={cardIcon(ACCENT)}>{isCheckin ? "💬" : "🔔"}</span><span style={cardTitle}>{isCheckin ? "Schedule check-in" : "Set reminder"}</span>{when ? <span style={badgePill(ACCENT)}>{when}</span> : null}</div>
+      <div style={cardHead}><span style={cardIcon(ACCENT)}><Icon name={isCheckin ? "chat" : "bell"} size={12} /></span><span style={cardTitle}>{isCheckin ? "Schedule check-in" : "Set reminder"}</span>{when ? <span style={badgePill(ACCENT)}>{when}</span> : null}</div>
       <div style={{ background: SUNKEN, borderRadius: 12, padding: "11px 13px" }}>
         <div style={{ fontSize: 13.5, fontWeight: 700, color: H }}>{String(p.title || d.title || "Reminder")}</div>
         {p.body || d.body ? <div style={{ fontSize: 11.5, color: SECOND, marginTop: 4, lineHeight: 1.45 }}>{String(p.body || d.body)}</div> : null}
@@ -463,7 +464,7 @@ function MemoryActionCard({ msg, onApplied, onUndone }: CardProps) {
   if (kept) return <div style={keptStyle}>Won't remember that.</div>;
   return (
     <div style={{ marginTop: 8, borderRadius: 16, padding: 13, background: "rgba(70,199,154,.07)", border: "1px solid rgba(70,199,154,.3)" }}>
-      <div style={cardHead}><span style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(70,199,154,.16)", color: FIBR, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>🧠</span><span style={cardTitle}>Remember this?</span>{p.category ? <span style={{ marginLeft: "auto", fontSize: 10.5, fontWeight: 800, color: FIBR, background: "rgba(70,199,154,.12)", border: "1px solid rgba(70,199,154,.3)", borderRadius: 999, padding: "3px 8px" }}>{String(p.category)}</span> : null}</div>
+      <div style={cardHead}><span style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(70,199,154,.16)", color: FIBR, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}><Icon name="brain" size={12} /></span><span style={cardTitle}>Remember this?</span>{p.category ? <span style={{ marginLeft: "auto", fontSize: 10.5, fontWeight: 800, color: FIBR, background: "rgba(70,199,154,.12)", border: "1px solid rgba(70,199,154,.3)", borderRadius: 999, padding: "3px 8px" }}>{String(p.category)}</span> : null}</div>
       <div style={{ fontSize: 13, color: BODY, lineHeight: 1.5 }}>“{String(p.text || "")}”</div>
       {err && <div style={errStyle}>{err}</div>}
       <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
@@ -505,7 +506,7 @@ function CapabilityActionCard({ msg, onApplied, onUndone }: CardProps) {
   if (kept) return <div style={keptStyle}>Won't track that as a new build.</div>;
   return (
     <div style={{ marginTop: 8, borderRadius: 16, padding: 13, background: "rgba(70,199,154,.07)", border: "1px solid rgba(70,199,154,.3)" }}>
-      <div style={cardHead}><span style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(70,199,154,.16)", color: FIBR, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>🌱</span><span style={cardTitle}>{a.title || `Mark ${kindLabel} as a new capability`}</span>{a.delta_badge?.text ? <span style={{ marginLeft: "auto", fontSize: 10.5, fontWeight: 800, color: FIBR, background: "rgba(70,199,154,.12)", border: "1px solid rgba(70,199,154,.3)", borderRadius: 999, padding: "3px 8px" }}>{a.delta_badge.text}</span> : null}</div>
+      <div style={cardHead}><span style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(70,199,154,.16)", color: FIBR, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}><Icon name="plant" size={12} /></span><span style={cardTitle}>{a.title || `Mark ${kindLabel} as a new capability`}</span>{a.delta_badge?.text ? <span style={{ marginLeft: "auto", fontSize: 10.5, fontWeight: 800, color: FIBR, background: "rgba(70,199,154,.12)", border: "1px solid rgba(70,199,154,.3)", borderRadius: 999, padding: "3px 8px" }}>{a.delta_badge.text}</span> : null}</div>
       <div style={{ background: SUNKEN, borderRadius: 12, padding: "11px 13px", display: "flex", alignItems: "center", gap: 10 }}>
         <span style={{ fontSize: 14, fontWeight: 800, color: H }}>{kindLabel}</span>
         {since ? <span style={{ fontSize: 12, color: SECOND }}>started {since}</span> : null}
@@ -562,7 +563,7 @@ function PlanActionCard({ msg, onApplied, onUndone }: CardProps) {
   return (
     <div style={{ marginTop: 8, borderRadius: 16, padding: 13, background: RAISED, border: "1px solid " + BORDER_STRONG }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        <span style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(217,111,78,.16)", color: ACCENT, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>🗓</span>
+        <span style={{ width: 24, height: 24, borderRadius: 7, background: "rgba(217,111,78,.16)", color: ACCENT, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}><Icon name="calendar" size={12} /></span>
         <span style={{ fontSize: 13, fontWeight: 700, color: H }}>{a.title || "Add to schedule"}</span>
         {a.delta_badge?.text ? <span style={{ marginLeft: "auto", fontSize: 10.5, fontWeight: 700, color: ACCENT_LT, background: "rgba(217,111,78,.14)", borderRadius: 999, padding: "3px 9px" }}>{a.delta_badge.text}</span> : null}
       </div>
@@ -680,9 +681,9 @@ export function CameraButton({ onImage, disabled }: { onImage: (img: PickedImage
         <>
           <div onClick={() => setMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 80 }} />
           <div style={{ position: "absolute", bottom: 52, left: 0, zIndex: 81, background: RAISED, border: "1px solid " + BORDER_STRONG, borderRadius: 13, boxShadow: "0 8px 28px rgba(0,0,0,.5)", overflow: "hidden", minWidth: 168 }}>
-            <button style={item} onClick={() => { setMenu(false); camRef.current?.click(); }}>📷 Take photo</button>
+            <button style={item} onClick={() => { setMenu(false); camRef.current?.click(); }}><Icon name="camera" size={12} /> Take photo</button>
             <div style={{ height: 1, background: BORDER }} />
-            <button style={item} onClick={() => { setMenu(false); upRef.current?.click(); }}>🖼️ Upload photo</button>
+            <button style={item} onClick={() => { setMenu(false); upRef.current?.click(); }}><Icon name="image" size={12} /> Upload photo</button>
           </div>
         </>
       ) : null}
