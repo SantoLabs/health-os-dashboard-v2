@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { cardioActivities, cardioDetail, cardioSources, cardioRenameActivity, cardioDeleteActivity, type CardioActivityLite, type CardioDetail, type CardioHrZone } from "../lib/api";
-import { sportEmoji, fmtPace } from "./ui";
+import { fmtPace } from "./ui";
+import Icon, { sportIcon } from "../components/Icon";
 import Sheet from "../components/Sheet";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -152,7 +153,7 @@ function CardioList({ acts, sport, onOpen, sources }: { acts: CardioActivityLite
         <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
           {rows.map((a) => (
             <div key={a.activity_id} className="card" onClick={() => onOpen(a.activity_id)} style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 12px", margin: 0, cursor: "pointer" }}>
-              <span style={{ fontSize: 15 }}>{sportEmoji(sport)}</span>
+              <Icon name={sportIcon(sport)} size={15} color="var(--muted)" />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 800, fontSize: 12 }}>{a.distance_km != null ? `${a.distance_km.toFixed(2)} km` : (a.duration_mins != null ? fmtHrMin(a.duration_mins) : (a.name || "Session"))}</div>
                 <div className="subtle" style={{ fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
@@ -384,7 +385,7 @@ export function CardioActivityDetail({ id, sport, onBack, source, onChanged, onD
     <div>
       {back}
       <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "6px 0 12px" }}>
-        <span style={{ fontSize: 20 }}>{sportEmoji(sport)}</span>
+        <Icon name={sportIcon(sport)} size={19} color="var(--ember)" />
         <div style={{ flex: 1, minWidth: 0 }}>
           {editing ? (
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -397,12 +398,12 @@ export function CardioActivityDetail({ id, sport, onBack, source, onChanged, onD
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <div style={{ fontWeight: 700, fontSize: 15 }}>{displayName || `${cap(sport)} session`}</div>
               <SourcePill src={source} />
-              {inApp ? <button onClick={() => { setNameInput(displayName || ""); setEditing(true); }} aria-label="Rename" style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 13, padding: 0 }}>✎</button> : null}
+              {inApp ? <button onClick={() => { setNameInput(displayName || ""); setEditing(true); }} aria-label="Rename" style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 13, padding: 0 }}><Icon name="edit" size={13} /></button> : null}
             </div>
           )}
           <div className="subtle tiny">{new Date(a.date + "T00:00:00").getDate()} {MONTHS[new Date(a.date + "T00:00:00").getMonth()]} {new Date(a.date + "T00:00:00").getFullYear()}</div>
         </div>
-        {inApp && !editing ? <button onClick={() => setConfirmDel(true)} aria-label="Delete" style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 15, padding: 4 }}>🗑</button> : null}
+        {inApp && !editing ? <button onClick={() => setConfirmDel(true)} aria-label="Delete" style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 15, padding: 4 }}><Icon name="trash" size={15} /></button> : null}
       </div>
       {actErr ? <div className="subtle tiny" style={{ color: "var(--danger)", marginBottom: 8 }}>{actErr}</div> : null}
       {confirmDel ? (
@@ -466,7 +467,7 @@ export function CardioActivityDetail({ id, sport, onBack, source, onChanged, onD
   );
 }
 
-function DropPill({ options, value, onChange, placeholder }: { options: { key: string; label: string; icon?: string }[]; value: string; onChange: (k: string) => void; placeholder?: string }) {
+function DropPill({ options, value, onChange, placeholder }: { options: { key: string; label: string; icon?: ReactNode }[]; value: string; onChange: (k: string) => void; placeholder?: string }) {
   const [open, setOpen] = useState(false);
   const cur = options.find((o) => o.key === value);
   return (
@@ -523,7 +524,7 @@ export default function CardioTab() {
       {acts == null ? <div className="muted center pad">Loading…</div> : (
         <>
           <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-            <DropPill options={sports.map((s) => ({ key: s, label: cap(s), icon: sportEmoji(s) }))} value={sport} onChange={setSport} placeholder="Sport" />
+            <DropPill options={sports.map((s) => ({ key: s, label: cap(s), icon: <Icon name={sportIcon(s)} size={13} /> }))} value={sport} onChange={setSport} placeholder="Sport" />
             <DropPill options={METRICS.map(([k, l]) => ({ key: k, label: l }))} value={metric} onChange={setMetric} placeholder="Metric" />
             <DropPill options={RANGES.map(([k]) => ({ key: k, label: k }))} value={range} onChange={setRange} placeholder="Period" />
           </div>
