@@ -1,4 +1,5 @@
 "use client";
+import Icon from "../../components/Icon";
 
 import { useEffect, useState, useRef, type CSSProperties } from "react";
 import { nutriPost, nutriFoods, nutriTemplates, nutriHistory, nutriPantry, nutriProfile } from "../../lib/api";
@@ -259,7 +260,7 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
 
   // shared itemized review (D)
   function renderReview(kind: string) {
-    if (busy && !items.length) return <div style={{ ...sub, marginTop: 12 }}>{kind === "photo" ? "✨ Analysing photo…" : "✨ Estimating…"}</div>;
+    if (busy && !items.length) return <div style={{ ...sub, marginTop: 12 }}>{kind === "photo" ? "Analysing photo…" : "Estimating…"}</div>;
     if (!items.length) return null;
     return (
       <div style={{ marginTop: 12 }}>
@@ -268,7 +269,7 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
           <span style={{ fontSize: 11, color: FAINT }}>edit qty · remove · add</span>
         </div>
         {pantryUsed.length > 0 && (
-          <div style={{ fontSize: 11, color: FIBR, marginBottom: 8 }}>🧺 From your pantry: {pantryUsed.join(", ")}</div>
+          <div style={{ fontSize: 11, color: FIBR, marginBottom: 8 }}><Icon name="basket" size={10} /> From your pantry: {pantryUsed.join(", ")}</div>
         )}
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {items.map((it, i) => (
@@ -276,7 +277,7 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 700, color: H, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cap(it.name)}</div>
-                  {it.pantry_used && <div style={{ fontSize: 10.5, color: FIBR, marginTop: 2 }}>🧺 {it.pantry_used}</div>}
+                  {it.pantry_used && <div style={{ fontSize: 10.5, color: FIBR, marginTop: 2 }}><Icon name="basket" size={10} /> {it.pantry_used}</div>}
                 </div>
                 <button onClick={() => delItem(i)} aria-label="Remove" style={{ width: 24, height: 24, borderRadius: 7, border: "1px solid " + CB, background: CHIP_IDLE, color: FAINTER, fontSize: 12, cursor: "pointer", flexShrink: 0 }}>✕</button>
               </div>
@@ -300,7 +301,7 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
               <button onClick={() => { setAddOpen(false); setAddName(""); }} style={{ flex: 1, padding: 10, borderRadius: 11, border: "1px solid " + CB, background: CHIP_IDLE, color: MUTED, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
-              <button onClick={addItemAI} disabled={addBusy || !addName.trim()} style={{ flex: 2, padding: 10, borderRadius: 11, border: "none", background: ACCENT, color: "#fff", fontSize: 12.5, fontWeight: 800, cursor: "pointer", opacity: addBusy || !addName.trim() ? 0.6 : 1 }}>{addBusy ? "Adding…" : "✨ Add item"}</button>
+              <button onClick={addItemAI} disabled={addBusy || !addName.trim()} style={{ flex: 2, padding: 10, borderRadius: 11, border: "none", background: ACCENT, color: "#fff", fontSize: 12.5, fontWeight: 800, cursor: "pointer", opacity: addBusy || !addName.trim() ? 0.6 : 1 }}>{addBusy ? "Adding…" : <><Icon name="sparkle" size={11} /> Add item</>}</button>
             </div>
           </div>
         ) : (
@@ -379,7 +380,7 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
                     {!q.trim() && <div style={sub}>Search, or just type the macros below to log it.</div>}
                     {q.trim() && !aiMode && (
                       <>
-                        <button onClick={() => setAiMode(true)} style={{ width: "100%", padding: 11, borderRadius: 11, border: "1px solid " + CHIP_SEL_B, background: CHIP_SEL, color: ACCENT_LT, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{"✨ Ask AI to estimate “" + q.trim() + "”"}</button>
+                        <button onClick={() => setAiMode(true)} style={{ width: "100%", padding: 11, borderRadius: 11, border: "1px solid " + CHIP_SEL_B, background: CHIP_SEL, color: ACCENT_LT, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>{"Ask AI to estimate “" + q.trim() + "”"}</button>
                         <div style={{ ...sub, marginTop: 8 }}>Not in the library yet — AI can estimate it (saved for next time), or type the macros below.</div>
                       </>
                     )}
@@ -394,7 +395,7 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
                         </div>
                         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                           <button onClick={() => setAiMode(false)} style={{ flex: 1, padding: 10, borderRadius: 11, border: "1px solid " + CB, background: CHIP_IDLE, color: MUTED, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
-                          <button onClick={aiEstimateFood} disabled={busy} style={{ flex: 2, padding: 10, borderRadius: 11, border: "none", background: ACCENT, color: "#fff", fontSize: 12.5, fontWeight: 800, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>{busy ? "Estimating…" : "✨ Estimate with AI"}</button>
+                          <button onClick={aiEstimateFood} disabled={busy} style={{ flex: 2, padding: 10, borderRadius: 11, border: "none", background: ACCENT, color: "#fff", fontSize: 12.5, fontWeight: 800, cursor: "pointer", opacity: busy ? 0.6 : 1 }}>{busy ? "Estimating…" : <><Icon name="sparkle" size={11} /> Estimate with AI</>}</button>
                         </div>
                       </div>
                     )}
@@ -434,7 +435,7 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
           <div style={{ marginTop: 12 }}>
             <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="e.g. 3 roti, 1 katori dal, paneer bhurji, 1 katori curd" style={{ width: "100%", boxSizing: "border-box", padding: "11px 12px", borderRadius: 12, border: "1px solid " + IB, background: "var(--surface-2)", color: BODY, fontSize: 13.5, outline: "none", resize: "vertical" }} />
             {renderPantryToggle()}
-            <button onClick={() => runEstimate("describe")} disabled={busy || !text.trim()} style={{ width: "100%", marginTop: 8, padding: 11, borderRadius: 12, border: "1px solid " + CHIP_SEL_B, background: CHIP_SEL, color: ACCENT_LT, fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: busy || !text.trim() ? 0.6 : 1 }}>{busy && !items.length ? "Estimating…" : items.length ? "↻ Re-estimate" : "✨ Estimate items"}</button>
+            <button onClick={() => runEstimate("describe")} disabled={busy || !text.trim()} style={{ width: "100%", marginTop: 8, padding: 11, borderRadius: 12, border: "1px solid " + CHIP_SEL_B, background: CHIP_SEL, color: ACCENT_LT, fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: busy || !text.trim() ? 0.6 : 1 }}>{busy && !items.length ? "Estimating…" : items.length ? "↻ Re-estimate" : "Estimate items"}</button>
             {renderReview("describe")}
           </div>
         )}
@@ -447,7 +448,7 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
                 <video ref={videoRef} playsInline muted style={{ width: "100%", display: "block", maxHeight: 320, objectFit: "cover" }} />
                 <div style={{ display: "flex", gap: 8, padding: 10 }}>
                   <button onClick={stopCam} style={{ flex: 1, padding: 11, borderRadius: 11, border: "1px solid " + CB, background: CHIP_IDLE, color: MUTED, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Cancel</button>
-                  <button onClick={capturePhoto} style={{ flex: 2, padding: 11, borderRadius: 11, border: "none", background: ACCENT, color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>📸 Capture</button>
+                  <button onClick={capturePhoto} style={{ flex: 2, padding: 11, borderRadius: 11, border: "none", background: ACCENT, color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer" }}><Icon name="camera" size={12} /> Capture</button>
                 </div>
               </div>
             ) : (
@@ -474,7 +475,7 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
             {tmpls && tmpls.map((t) => (
               <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, background: CARD, border: "1px solid " + CB, borderRadius: 12, padding: "9px 11px" }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: BODY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name} {t.pinned ? "📌" : ""}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: BODY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name} {t.pinned ? <Icon name="pin" size={10} /> : null}</div>
                   <div style={{ fontSize: 10.5, color: FAINT, marginTop: 1 }}>{t.kcal} kcal · P {t.protein} · C {t.carbs} · F {t.fats}</div>
                 </div>
                 <button onClick={() => delTemplate(t)} aria-label="Remove" style={{ width: 26, height: 26, borderRadius: 7, border: "1px solid " + CB, background: CHIP_IDLE, color: FAINTER, fontSize: 12, cursor: "pointer" }}>✕</button>
