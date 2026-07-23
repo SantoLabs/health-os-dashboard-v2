@@ -109,7 +109,7 @@ export function ZoneBar({ z }: { z: [number, number, number, number, number] }) 
 export const PRIMARY = ["Coach", "Train", "Recovery", "Progress"] as const;
 export type Primary = (typeof PRIMARY)[number];
 
-const PRIMARY_LABEL: Record<Primary, string> = { Coach: "Coach", Train: "Workouts", Recovery: "Recovery", Progress: "Progress" };
+const PRIMARY_LABEL: Record<Primary, string> = { Coach: "Coach", Train: "Workout", Recovery: "Recovery", Progress: "Progress" };
 
 export function Pills({ value, onChange }: { value: Primary; onChange: (p: Primary) => void }) {
   return (
