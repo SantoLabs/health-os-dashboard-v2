@@ -516,7 +516,7 @@ export async function nutriPicksSet<T>(picks: unknown): Promise<T> {
 // ---- profile (brain configuration layer; dedicated service-role fn) ----
 export type EquipItem = { item_key: string; category: string; label: string; discipline: string | null; sort: number; parent_key: string | null; select_mode: string };
 export type ProfileGoal = { id?: string; title: string; kind: string; target_json: Record<string, unknown>; priority: number };
-export type ProfileInjury = { id?: string; body_part: string; injury_type: string | null; severity_1_5: number | null; status: string; affects_activities: unknown; physio_note: string | null; date_logged?: string; date_resolved?: string | null };
+export type ProfileInjury = { id?: string; body_part: string; injury_type: string | null; severity_1_5: number | null; status: string; affects_activities: unknown; physio_note: string | null; date_logged?: string; date_resolved?: string | null; area: string | null; side: string | null; severity_0_10: number | null; training_impact: string | null; started_bucket: string | null; started_on: string | null; details: Record<string, unknown> };
 export type ProfileData = {
   identity: {
     name: string | null; email: string | null; dob: string | null; age: number | null;
@@ -537,6 +537,7 @@ export type ProfileData = {
   app_prefs: Record<string, unknown>;
   reminders: Record<string, unknown>;
   connected_apps: { key: string; label: string; desc: string; connected: boolean; last_synced: string | null }[];
+  injuries_reviewed_at: string | null;
   goal_hierarchy: HierGoal[];
   supporting_goals: { catalog: SupportItem[]; selected: string[]; custom_labels: Record<string, string> };
 };
