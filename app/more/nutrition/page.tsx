@@ -1,4 +1,5 @@
 "use client";
+import Icon from "../../components/Icon";
 
 import { useEffect, useState, useCallback, type CSSProperties } from "react";
 import { Screen } from "../../components/Screen";
@@ -127,7 +128,7 @@ export default function NutritionPage() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: MUTED }}>{week ? monOf(week.days[0].date) + (monOf(week.days[0].date) !== monOf(week.days[6].date) ? " – " + monOf(week.days[6].date) : "") : ""}</div>
         <div style={{ display: "flex", gap: 6 }}>
-          <button onClick={() => setSetupOpen(true)} aria-label="Settings" style={navBtn}>⚙</button>
+          <button onClick={() => setSetupOpen(true)} aria-label="Settings" style={navBtn}><Icon name="gear" size={15} /></button>
           <button onClick={() => shiftWeek(-1)} aria-label="Previous week" style={navBtn}>‹</button>
           <button onClick={() => shiftWeek(1)} aria-label="Next week" style={navBtn}>›</button>
         </div>
@@ -157,7 +158,7 @@ export default function NutritionPage() {
 
       {gaps.length > 0 && (
         <button onClick={() => jumpTo(gaps[0])} style={{ width: "100%", textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between", background: "color-mix(in srgb, var(--gold) 12%, transparent)", border: "1px solid color-mix(in srgb, var(--gold) 35%, transparent)", borderRadius: 13, padding: "10px 13px", marginBottom: 12, cursor: "pointer" }}>
-          <span style={{ fontSize: 12.5, color: "var(--gold)", fontWeight: 600 }}>🗓️ {gaps.length} unlogged {gaps.length === 1 ? "day" : "days"} this past week</span>
+          <span style={{ fontSize: 12.5, color: "var(--gold)", fontWeight: 600 }}><Icon name="calendar" size={11} /> {gaps.length} unlogged {gaps.length === 1 ? "day" : "days"} this past week</span>
           <span style={{ fontSize: 11.5, fontWeight: 800, color: PARTIAL }}>Backfill →</span>
         </button>
       )}
@@ -191,7 +192,7 @@ export default function NutritionPage() {
 
       {proteinLeft > 0 && day && day.meals.length > 0 && (
         <div style={{ background: "linear-gradient(90deg, var(--ember-tint), var(--surface))", border: "1px solid " + CHIP_SEL_B, borderRadius: 14, padding: "11px 13px", marginBottom: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: ACCENT_LT }}>🎯 {proteinLeft}g protein to go</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: ACCENT_LT }}><Icon name="target" size={12} /> {proteinLeft}g protein to go</div>
           <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>{Math.round(tot ? tot.protein : 0)} of {t ? t.protein : 0}g — log a protein-rich item to close the gap.</div>
         </div>
       )}
@@ -201,7 +202,7 @@ export default function NutritionPage() {
           <div style={{ fontSize: 13.5, fontWeight: 700, color: H }}>Nothing logged for {nice(sel)}</div>
           <div style={{ fontSize: 11.5, color: FAINT, marginTop: 3 }}>Backfill it so your streak and trends stay accurate.</div>
           <div style={{ display: "flex", gap: 8, marginTop: 11 }}>
-            <button onClick={openCopy} style={{ flex: 1, padding: 11, borderRadius: 12, border: "1px solid " + CHIP_SEL_B, background: CHIP_SEL, color: ACCENT_LT, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>📋 Copy a day</button>
+            <button onClick={openCopy} style={{ flex: 1, padding: 11, borderRadius: 12, border: "1px solid " + CHIP_SEL_B, background: CHIP_SEL, color: ACCENT_LT, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}><Icon name="clipboard" size={12} /> Copy a day</button>
             <button onClick={openAdd} style={{ flex: 1, padding: 11, borderRadius: 12, border: "none", background: ACCENT, color: "#fff", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>+ Add food</button>
           </div>
         </div>
