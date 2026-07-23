@@ -7,6 +7,7 @@ import CardioFree from "./CardioFree";
 import CardioSwim from "./CardioSwim";
 import WorkoutLogger, { RoutineBuilder } from "./WorkoutLogger";
 import TodaySuggestion from "./TodaySuggestion";
+import Sheet from "../components/Sheet";
 import FuelToday from "./FuelToday";
 import { CARDIO_PRESETS, STRENGTH_PRESETS, type CardioPreset, type PresetSport, type GlyphKey, type StrengthPreset } from "./presets";
 import { cardioList, cardioDelete, cardioPrescribe, cardioGet, wkRoutines, wkDeleteRoutine, wkActive } from "../lib/api";
@@ -87,11 +88,11 @@ function strengthMeta(r: WkRoutineSummary): string {
 }
 
 // ---- ghost glyph (decoration only; ~14% opacity, hue = discipline) ----
-function Glyph({ kind, hue }: { kind: GlyphKind; hue: string }) {
+function Glyph({ kind, hue, size = 96 }: { kind: GlyphKind; hue: string; size?: number }) {
   const common = {
-    width: 96, height: 96, viewBox: "0 0 24 24", fill: "none", stroke: hue,
-    strokeWidth: 1.6, strokeLinecap: "round" as const, strokeLinejoin: "round" as const,
-    style: { position: "absolute" as const, top: -14, right: -18, opacity: 0.14, transform: "rotate(-8deg)", pointerEvents: "none" as const },
+    width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: hue,
+    strokeWidth: size < 60 ? 2 : 1.6, strokeLinecap: "round" as const, strokeLinejoin: "round" as const,
+    style: { position: "absolute" as const, top: size < 60 ? -8 : -14, right: size < 60 ? -10 : -18, opacity: size < 60 ? 0.13 : 0.14, transform: "rotate(-8deg)", pointerEvents: "none" as const },
   };
   switch (kind) {
     case "bike":
@@ -107,6 +108,32 @@ function Glyph({ kind, hue }: { kind: GlyphKind; hue: string }) {
     default: // strength
       return (<svg {...common}><path d="M6.5 7v10M17.5 7v10M3 9.5v5M21 9.5v5M6.5 12h11" /></svg>);
   }
+}
+
+// ---- 16d fitted tile: 3-up, compact, keeps a shrunken ghost glyph ----
+function FitTile({ name, meta, glyph, hue, action, onAction }:
+  { name: string; meta: string; glyph: GlyphKind; hue: string; action: string; onAction: () => void }) {
+  return (
+    <button onClick={onAction}
+      style={{ position: "relative", overflow: "hidden", textAlign: "left", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: "8px 9px", cursor: "pointer", color: "inherit", fontFamily: "inherit", display: "block", width: "100%" }}>
+      <Glyph kind={glyph} hue={hue} size={46} />
+      <div style={{ position: "relative", fontSize: 10, fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
+      <div style={{ position: "relative", fontSize: 8, fontWeight: 700, color: "var(--muted)", marginBottom: 5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{meta}</div>
+      <div style={{ position: "relative", fontSize: 9, fontWeight: 900, color: "var(--ember)" }}>{"\u25B6"} {action}</div>
+    </button>
+  );
+}
+
+// ---- 16d shelf header: tiny title + "All N \u203A" ----
+function ShelfHead({ label, hue, count, onAll }: { label: string; hue?: string; count: number; onAll: () => void }) {
+  return (
+    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "10px 2px 5px" }}>
+      <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: "0.5px", color: "var(--faint)", display: "inline-flex", alignItems: "center", gap: 6 }}>
+        {hue ? <span style={{ width: 8, height: 8, borderRadius: 3, background: hue }} /> : null}{label}
+      </span>
+      <button onClick={onAll} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 8.5, fontWeight: 800, color: "var(--ember)", padding: 0 }}>All {count} {"\u203A"}</button>
+    </div>
+  );
 }
 
 // ---- small icons ----
@@ -133,6 +160,37 @@ const PRESET_GLYPH: Record<string, JSX.Element> = {
   mobility: (<path d="M3 8h10a3 3 0 1 0-3-3M3 13h14a3 3 0 1 1-3 3M3 18h7" />),
 };
 
+function FitPresetTile({ name, meta, glyphKey, hue, onLoad }: { name: string; meta: string; glyphKey: string; hue: string; onLoad: () => void }) {
+  return (
+    <button onClick={onLoad}
+      style={{ position: "relative", overflow: "hidden", textAlign: "left", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 12, padding: "8px 9px", cursor: "pointer", color: "inherit", fontFamily: "inherit", display: "block", width: "100%" }}>
+      <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke={hue} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" style={{ position: "absolute", top: -8, right: -10, opacity: 0.13, transform: "rotate(-8deg)", pointerEvents: "none" }}>{PRESET_GLYPH[glyphKey]}</svg>
+      <div style={{ position: "relative", fontSize: 10, fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
+      <div style={{ position: "relative", fontSize: 8, fontWeight: 700, color: "var(--muted)", marginBottom: 5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{meta}</div>
+      <div style={{ position: "relative", fontSize: 9, fontWeight: 900, color: "var(--ember)" }}>{"\u25B6"} Load</div>
+    </button>
+  );
+}
+
+// Shared "All N" bottom card for the preset shelves.
+function PresetAllSheet({ open, title, rows, onClose, onLoad }:
+  { open: boolean; title: string; rows: { id: string; name: string; meta: string }[]; onClose: () => void; onLoad: (id: string) => void }) {
+  return (
+    <Sheet open={open} title={title} onClose={onClose}>
+      <div>
+        {rows.map((x) => (
+          <button key={x.id} onClick={() => onLoad(x.id)}
+            style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 0", background: "none", border: "none", borderBottom: "1px solid var(--line)", cursor: "pointer", color: "inherit", fontFamily: "inherit", textAlign: "left" }}>
+            <span style={{ flex: 1, minWidth: 0, fontSize: 11, fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{x.name}</span>
+            <span style={{ fontSize: 9, fontWeight: 700, color: "var(--muted)", whiteSpace: "nowrap" }}>{x.meta}</span>
+            <span style={{ fontSize: 11, fontWeight: 900, color: "var(--ember)" }}>{"\u25B6"}</span>
+          </button>
+        ))}
+      </div>
+    </Sheet>
+  );
+}
+
 function PresetTile({ name, meta, glyphKey, hue, onLoad }: { name: string; meta: string; glyphKey: string; hue: string; onLoad: () => void }) {
   return (
     <button onClick={onLoad}
@@ -156,6 +214,8 @@ const PRESET_SECTIONS: { sport: PresetSport; label: string }[] = [
 ];
 
 function PresetLibrary({ onExit, onLoad }: { onExit: () => void; onLoad: (p: CardioPreset) => void }) {
+  const [all, setAll] = useState<PresetSport | null>(null);
+  const allList = all ? CARDIO_PRESETS.filter((p) => p.sport === all) : [];
   return (
     <div className="card" style={{ marginBottom: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -170,13 +230,15 @@ function PresetLibrary({ onExit, onLoad }: { onExit: () => void; onLoad: (p: Car
         if (!list.length) return null;
         return (
           <div key={sec.sport}>
-            <div className="eyebrow" style={{ marginTop: 18, marginBottom: 8 }}>{sec.label}</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              {list.map((p) => <PresetTile key={p.id} name={p.name} meta={p.meta} glyphKey={p.glyph} hue={PRESET_HUE[p.sport]} onLoad={() => onLoad(p)} />)}
+            <ShelfHead label={sec.label} hue={PRESET_HUE[sec.sport]} count={list.length} onAll={() => setAll(sec.sport)} />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+              {list.slice(0, 3).map((p) => <FitPresetTile key={p.id} name={p.name} meta={p.meta} glyphKey={p.glyph} hue={PRESET_HUE[p.sport]} onLoad={() => onLoad(p)} />)}
             </div>
           </div>
         );
       })}
+      <PresetAllSheet open={!!all} title={all ? all.toUpperCase() : ""} rows={allList.map((p) => ({ id: p.id, name: p.name, meta: p.meta }))}
+        onClose={() => setAll(null)} onLoad={(id) => { const p = allList.find((x) => x.id === id); setAll(null); if (p) onLoad(p); }} />
     </div>
   );
 }
@@ -186,6 +248,8 @@ const STRENGTH_SECTIONS: { glyph: "strength" | "mobility"; label: string }[] = [
 ];
 
 function StrengthPresetLibrary({ onExit, onLoad }: { onExit: () => void; onLoad: (p: StrengthPreset) => void }) {
+  const [all, setAll] = useState<"strength" | "mobility" | null>(null);
+  const allList = all ? STRENGTH_PRESETS.filter((p) => p.glyph === all) : [];
   return (
     <div className="card" style={{ marginBottom: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -200,13 +264,15 @@ function StrengthPresetLibrary({ onExit, onLoad }: { onExit: () => void; onLoad:
         if (!list.length) return null;
         return (
           <div key={sec.glyph}>
-            <div className="eyebrow" style={{ marginTop: 18, marginBottom: 8 }}>{sec.label}</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              {list.map((p) => <PresetTile key={p.id} name={p.name} meta={p.meta} glyphKey={p.glyph} hue={strengthHue(p)} onLoad={() => onLoad(p)} />)}
+            <ShelfHead label={sec.label} hue={sec.glyph === "mobility" ? "var(--success)" : "var(--ember-strong)"} count={list.length} onAll={() => setAll(sec.glyph)} />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+              {list.slice(0, 3).map((p) => <FitPresetTile key={p.id} name={p.name} meta={p.meta} glyphKey={p.glyph} hue={strengthHue(p)} onLoad={() => onLoad(p)} />)}
             </div>
           </div>
         );
       })}
+      <PresetAllSheet open={!!all} title={all ? all.toUpperCase() : ""} rows={allList.map((p) => ({ id: p.id, name: p.name, meta: p.meta }))}
+        onClose={() => setAll(null)} onLoad={(id) => { const p = allList.find((x) => x.id === id); setAll(null); if (p) onLoad(p); }} />
     </div>
   );
 }
@@ -216,6 +282,7 @@ export default function WorkoutsTab({ onAskCoach }: { onAskCoach?: () => void })
   const [surface, setSurface] = useState<Surface>({ k: "home" });
   const [presetFilter, setPresetFilter] = useState<"all" | PresetSport>("all");
   const [strengthPresetFilter, setStrengthPresetFilter] = useState<"all" | "strength" | "mobility">("all");
+  const [sheet, setSheet] = useState<{ title: string; items: { id: string; name: string; meta: string; glyph: GlyphKind; hue: string }[] } | null>(null);
 
   const [cardio, setCardio] = useState<CardioRoutine[] | null>(null);
   const [strength, setStrength] = useState<WkRoutineSummary[] | null>(null);
@@ -447,6 +514,26 @@ export default function WorkoutsTab({ onAskCoach }: { onAskCoach?: () => void })
     .map((s) => ({ s, list: (cardio || []).filter((r) => sportOf(r.sport) === s.key) }))
     .filter((g) => g.list.length > 0);
 
+  // 16d shelves. Cardio groups by sport; strength groups by Strength / Mobility
+  // (derived from strengthKind) — it had no grouping at all before.
+  const groups: { key: string; label: string; hue: string; glyph: GlyphKind; items: { id: string; name: string; meta: string; glyph: GlyphKind; hue: string }[] }[] = isCardio
+    ? cardioGroups.map((g) => ({
+        key: g.s.key, label: g.s.label, hue: g.s.hue, glyph: g.s.glyph,
+        items: g.list.map((x) => ({ id: x.id, name: x.name, meta: cardioMeta(x), glyph: g.s.glyph, hue: g.s.hue })),
+      }))
+    : (["strength", "mobility"] as GlyphKind[]).map((k) => {
+        const hue = k === "mobility" ? "var(--success)" : "var(--ember-strong)";
+        return {
+          key: k, label: k === "mobility" ? "MOBILITY" : "STRENGTH", hue, glyph: k,
+          items: (strength || []).filter((x) => strengthKind(x) === k).map((x) => ({ id: x.id, name: x.name, meta: strengthMeta(x), glyph: k, hue })),
+        };
+      }).filter((g) => g.items.length > 0);
+
+  const startRoutine = (id: string, name: string) => {
+    if (isCardio) startLive(id);
+    else setSurface({ k: "strengthLogger", autoStart: { routine_id: id, title: name } });
+  };
+
   return (
     <div className="trainv2">
       {/* toggle spine */}
@@ -498,40 +585,22 @@ export default function WorkoutsTab({ onAskCoach }: { onAskCoach?: () => void })
 
       {/* zone 2 — Your routines */}
       <span className="eyebrow">Your routines</span>
-      {isCardio ? (
-        cardio === null ? (
-          <div className="muted center pad">Loading…</div>
-        ) : cardio.length === 0 ? (
-          <EmptyRoutines label="cardio" />
-        ) : (
-          <div>
-            {cardioGroups.map((g) => (
-              <div key={g.s.key} style={{ marginBottom: 6 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, margin: "10px 2px 8px", fontSize: 10, fontWeight: 700, letterSpacing: "0.05em", color: "var(--faint)" }}>
-                  <span style={{ width: 8, height: 8, borderRadius: 3, background: g.s.hue }} />{g.s.label}
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  {g.list.map((r) => (
-                    <RoutineTile key={r.id} id={r.id} tag="CARDIO" tagHue="var(--gold)" title={r.name} meta={cardioMeta(r)} glyph={g.s.glyph} glyphHue={g.s.hue} />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )
-      ) : strength === null ? (
+      {(isCardio ? cardio : strength) === null ? (
         <div className="muted center pad">Loading…</div>
-      ) : strength.length === 0 ? (
-        <EmptyRoutines label="strength" />
+      ) : groups.length === 0 ? (
+        <EmptyRoutines label={isCardio ? "cardio" : "strength"} />
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          {strength.map((r) => {
-            const kind = strengthKind(r);
-            const hue = kind === "mobility" ? "var(--success)" : "var(--ember-strong)";
-            return (
-              <RoutineTile key={r.id} id={r.id} tag={kind === "mobility" ? "MOBILITY" : "STRENGTH"} tagHue={hue} title={r.name} meta={strengthMeta(r)} glyph={kind} glyphHue={hue} />
-            );
-          })}
+        <div>
+          {groups.map((g) => (
+            <div key={g.key} style={{ marginBottom: 8 }}>
+              <ShelfHead label={g.label} hue={g.hue} count={g.items.length} onAll={() => setSheet({ title: g.label, items: g.items })} />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                {g.items.slice(0, 3).map((it) => (
+                  <FitTile key={it.id} name={it.name} meta={it.meta} glyph={it.glyph} hue={it.hue} action="Start" onAction={() => startRoutine(it.id, it.name)} />
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -613,6 +682,28 @@ export default function WorkoutsTab({ onAskCoach }: { onAskCoach?: () => void })
           <FuelToday />
         </div>
       ) : null}
+
+      <Sheet open={!!sheet} title={sheet ? `${sheet.title} \u00b7 ${sheet.items.length}` : ""} onClose={() => { setSheet(null); setOpenTray(null); setConfirmDel(null); }}>
+        {sheet ? (
+          <div>
+            {sheet.items.map((it) => (
+              <div key={it.id} style={{ borderBottom: "1px solid var(--line)", padding: "7px 0" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 11, fontWeight: 900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.name}</span>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: "var(--muted)", whiteSpace: "nowrap" }}>{it.meta}</span>
+                  <button aria-label="Start" onClick={() => { setSheet(null); startRoutine(it.id, it.name); }}
+                    style={{ background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 11, fontWeight: 900, color: "var(--ember)", padding: "2px 4px" }}>{"\u25B6"}</button>
+                  <button aria-label="Actions" onClick={() => { setConfirmDel(null); setOpenTray(openTray === it.id ? null : it.id); }}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--faint)", padding: "2px 2px" }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><circle cx="5" cy="12" r="1.3" /><circle cx="12" cy="12" r="1.3" /><circle cx="19" cy="12" r="1.3" /></svg>
+                  </button>
+                </div>
+                {openTray === it.id ? tray(it.id, it.name) : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </Sheet>
 
       <div style={{ margin: "16px 4px 4px", textAlign: "center", fontSize: 12, color: "var(--muted)" }}>
         Want a full plan? <button onClick={() => onAskCoach?.()} style={{ background: "none", border: "none", padding: 0, font: "inherit", fontWeight: 700, color: "var(--ember-strong)", cursor: "pointer" }}>Ask your coach →</button>
