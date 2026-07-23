@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useApi, actionGet, actionPost } from "../../lib/api";
 import { Screen } from "../../components/Screen";
+import Icon, { type IconName } from "../../components/Icon";
 
 type Goals = {
   body_comp: {
@@ -19,13 +20,13 @@ type UGoal = {
   completed_at?: string | null; early_days?: number | null;
 };
 
-const TYPE_META: Record<string, { emoji: string; label: string }> = {
-  race: { emoji: "🏁", label: "Race" }, run: { emoji: "🏃", label: "Run" }, swim: { emoji: "🏊", label: "Swim" },
-  bike: { emoji: "🚴", label: "Bike" }, strength: { emoji: "💪", label: "Strength" }, triathlon: { emoji: "🏅", label: "Triathlon" },
-  body: { emoji: "⚖️", label: "Body" }, other: { emoji: "🎯", label: "Other" },
+const TYPE_META: Record<string, { icon: IconName; label: string }> = {
+  race: { icon: "flag", label: "Race" }, run: { icon: "run", label: "Run" }, swim: { icon: "swim", label: "Swim" },
+  bike: { icon: "bike", label: "Bike" }, strength: { icon: "strength", label: "Strength" }, triathlon: { icon: "medal", label: "Triathlon" },
+  body: { icon: "scale", label: "Body" }, other: { icon: "target", label: "Other" },
 };
 const TYPES = Object.keys(TYPE_META);
-const tEmoji = (t: string) => TYPE_META[t]?.emoji ?? "🎯";
+const tIcon = (t: string): IconName => TYPE_META[t]?.icon ?? "target";
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   not_started: { label: "Yet to start", cls: "st-todo" },
@@ -58,10 +59,10 @@ function completedMarker(g: UGoal): { text: string; cls: string } | null {
   const dW = n === 1 ? "day" : "days";
   if (g.early_days > 0) {
     const flavor = g.early_days >= 14 ? "smashed it" : g.early_days >= 4 ? "ahead of plan" : "early";
-    return { text: `🎯 ${n} ${dW} early — ${flavor}`, cls: "ok" };
+    return { text: `${n} ${dW} early — ${flavor}`, cls: "ok" };
   }
   if (g.early_days < 0) return { text: `${n} ${dW} past target — done is done`, cls: "warn" };
-  return { text: "🎯 right on the day", cls: "ok" };
+  return { text: "right on the day", cls: "ok" };
 }
 
 type SortKey = "date" | "priority" | "status" | "type";
@@ -144,7 +145,7 @@ export default function GoalsPage() {
       <div className="type-row">
         {TYPES.map((t) => (
           <button key={t} className={t === form.goal_type ? "type-btn active" : "type-btn"} onClick={() => setForm({ ...form, goal_type: t })}>
-            <span>{TYPE_META[t].emoji}</span><span className="type-cap">{TYPE_META[t].label}</span>
+            <span><Icon name={TYPE_META[t].icon} size={13} /></span><span className="type-cap">{TYPE_META[t].label}</span>
           </button>
         ))}
       </div>
@@ -162,7 +163,7 @@ export default function GoalsPage() {
 
   const GoalRow = (g: UGoal) => (
     <button className="goal-row" onClick={() => startEdit(g)}>
-      <span className="cardio-ic">{tEmoji(g.goal_type)}</span>
+      <span className="cardio-ic"><Icon name={tIcon(g.goal_type)} size={15} /></span>
       <div className="cardio-main">
         <div className="session-title">{g.label}</div>
         <div className="subtle tiny">{fmtDate(g.target_date)} · added {fmtShort(g.created_at)}{g.updated_at && g.updated_at !== g.created_at ? ` · edited ${fmtShort(g.updated_at)}` : ""}</div>
@@ -172,7 +173,7 @@ export default function GoalsPage() {
         </div>
       </div>
       {awayPill(g.days_away)}
-      <span className="chev-edit">✎</span>
+      <span className="chev-edit"><Icon name="edit" size={11} /></span>
     </button>
   );
 
@@ -186,7 +187,7 @@ export default function GoalsPage() {
               <span>Body fat <strong>{bc.bia_bf}%</strong> <span className="subtle tiny">BIA · DEXA {bc.dexa_bf}%</span></span>
               {!bfEdit ? (
                 <button className="goal-inline-edit" onClick={() => { setBfEdit(true); setBfVal(String(bfGoal ?? bc.goal_bf)); }}>
-                  goal {bfGoal ?? bc.goal_bf}% by {bc.goal_by} ✎
+                  goal {bfGoal ?? bc.goal_bf}% by {bc.goal_by} <Icon name="edit" size={10} />
                 </button>
               ) : (
                 <span className="bf-edit">
@@ -230,7 +231,7 @@ export default function GoalsPage() {
 
       {done.length > 0 && (
         <>
-          <h2 className="section-title">Completed 🎉</h2>
+          <h2 className="section-title">Completed <Icon name="celebrate" size={14} /></h2>
           <section className="list">
             {done.map((g) => {
               const mk = completedMarker(g);
@@ -238,16 +239,16 @@ export default function GoalsPage() {
               <div key={g.id} className="card goal-card done-card">
                 {editing === g.id ? EditForm : (
                   <button className="goal-row" onClick={() => startEdit(g)}>
-                    <span className="cardio-ic">🥳</span>
+                    <span className="cardio-ic"><Icon name="celebrate" size={15} /></span>
                     <div className="cardio-main">
-                      <div className="session-title done-text">{tEmoji(g.goal_type)} {g.label}</div>
+                      <div className="session-title done-text"><Icon name={tIcon(g.goal_type)} size={13} /> {g.label}</div>
                       <div className="subtle tiny">
                         {g.completed_at ? `Completed ${fmtDate(g.completed_at)}` : "Completed"}
                         {g.target_date ? ` · target ${fmtDate(g.target_date)}` : ""}
                       </div>
                       {mk && <div className="chip-row" style={{ marginTop: 6 }}><span className={`pill ${mk.cls}`}>{mk.text}</span></div>}
                     </div>
-                    <span className="chev-edit">✎</span>
+                    <span className="chev-edit"><Icon name="edit" size={11} /></span>
                   </button>
                 )}
               </div>
@@ -265,7 +266,7 @@ export default function GoalsPage() {
               <div key={g.id} className="card goal-card removed-card">
                 {confirmPurge === g.id ? (
                   <div className="goal-row static" style={{ alignItems: "flex-start" }}>
-                    <span className="cardio-ic">🗑</span>
+                    <span className="cardio-ic"><Icon name="trash" size={15} /></span>
                     <div className="cardio-main">
                       <div className="session-title">Permanently remove “{g.label}”?</div>
                       <div className="subtle tiny">This deletes it for good — it can’t be restored.</div>
@@ -283,7 +284,7 @@ export default function GoalsPage() {
                   </div>
                 ) : (
                   <div className="goal-row static">
-                    <span className="cardio-ic">{tEmoji(g.goal_type)}</span>
+                    <span className="cardio-ic"><Icon name={tIcon(g.goal_type)} size={15} /></span>
                     <div className="cardio-main">
                       <div className="session-title struck">{g.label}</div>
                       <div className="subtle tiny">{fmtDate(g.target_date)}</div>
@@ -292,7 +293,7 @@ export default function GoalsPage() {
                       <button className="btn-add" onClick={() => act("goal_restore", g.id)} disabled={busy}>↺ Restore</button>
                       <button onClick={() => setConfirmPurge(g.id)} disabled={busy}
                         style={{ background: "transparent", border: "1px solid rgba(248,113,113,0.4)", color: "#f87171", borderRadius: 999, padding: "4px 12px", fontSize: 13, cursor: "pointer" }}>
-                        🗑 Remove
+                        <Icon name="trash" size={11} /> Remove
                       </button>
                     </div>
                   </div>
