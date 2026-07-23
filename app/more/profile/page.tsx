@@ -77,7 +77,7 @@ function Hub({ data, onOpen, onPickPhoto, uploading }: { data: ProfileData; onOp
   const meta = [id.age != null ? `${id.age} yrs` : null, id.height_cm != null ? `${id.height_cm} cm` : null, id.weight_kg != null ? `${Math.round(id.weight_kg * 10) / 10} kg` : null, id.home_city].filter(Boolean).join(" \u00b7 ");
 
   const basicsDone = !!(id.name && id.dob && id.height_cm);
-  const healthDone = !!(data.health_mode.primary && data.goals.length);
+  const healthDone = (data.goal_hierarchy || []).some((g) => g.tier === "primary");
   const trainingDone = !!(data.training_prefs.training_days?.length);
   const rem = data.reminders as { notify_workout?: boolean; notify_meal?: boolean; notify_bedtime?: boolean; quiet_start?: string | null };
   const appDone = !!(rem.notify_workout || rem.notify_meal || rem.notify_bedtime || rem.quiet_start);
@@ -105,7 +105,7 @@ function Hub({ data, onOpen, onPickPhoto, uploading }: { data: ProfileData; onOp
       <div style={S.secLabel as React.CSSProperties}>Setup</div>
       <div style={{ height: 10 }} />
       <SectionRow title="Account + Basics" sub="Name, DOB, body stats, units, location" tone={basicsDone ? "done" : "todo"} chip={basicsDone ? "DONE" : "SET UP"} onClick={() => onOpen("basics")} />
-      <SectionRow title="Health Setup" sub="Health Mode, goals & sleep targets" tone={healthDone ? "done" : "todo"} chip={healthDone ? "DONE" : "SET UP"} onClick={() => onOpen("health")} />
+      <SectionRow title="Health Setup" sub="Goals, priorities & sleep targets" tone={healthDone ? "done" : "todo"} chip={healthDone ? "DONE" : "SET UP"} onClick={() => onOpen("health")} />
       <SectionRow title="Training Setup" sub="Preferences, equipment & access, injuries" tone={trainingDone ? "done" : "todo"} chip={trainingDone ? "DONE" : "SET UP"} onClick={() => onOpen("training")} />
       <SectionRow title="App Preferences" sub="Connected apps, reminders & quiet hours" tone={appDone ? "done" : "todo"} chip={appDone ? "DONE" : "SET UP"} onClick={() => onOpen("appprefs")} />
 
@@ -215,22 +215,49 @@ function BasicsEditor({ data, onBack, onSaved, onPickPhoto, uploading }: { data:
   );
 }
 
-/* ---------- health setup editor (mode + goals + sleep) ---------- */
-type Goal = { id?: string; title: string; detail: string; kind: string };
-const MODES = [
-  { key: "performance", label: "Performance", sub: "Train to compete" },
-  { key: "longevity", label: "Longevity", sub: "Health-first" },
-  { key: "recomp", label: "Recomp", sub: "Body change" },
+/* ---------- goal setup: select + rank + hierarchy (P2, turn 15) ---------- */
+const GOAL_CATS: { key: string; label: string; d: string }[] = [
+  { key: "run", label: "Run", d: "M5 19l4-6 3 2 3-7M15 5.6a1.4 1.4 0 1 0 .01 0" },
+  { key: "swim", label: "Swim", d: "M2 18c2 0 2 1.4 4 1.4S8 18 10 18s2 1.4 4 1.4S16 18 18 18s2 1.4 4 1.4M6 13l4-2 4 3M17 7.6a1.4 1.4 0 1 0 .01 0" },
+  { key: "bike", label: "Bike", d: "M5.5 17.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M18.5 17.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M5.5 14l4-6h5l4 6M9.5 8h4" },
+  { key: "triathlon", label: "Triathlon", d: "M8 8.5a2.6 2.6 0 1 0 .01 0M16 8.5a2.6 2.6 0 1 0 .01 0M12 16a2.6 2.6 0 1 0 .01 0" },
+  { key: "strength", label: "Strength", d: "M6.5 6.5v11M17.5 6.5v11M3 9v6M21 9v6M6.5 12h11" },
+  { key: "hyrox", label: "Hyrox", d: "M4 18h16l-1.5 3h-13zM7 13h10l1.2 5H5.8zM9 6h6l.8 7H8.2z" },
+  { key: "body_comp", label: "Body comp", d: "M12 3.2a2.4 2.4 0 1 0 .01 0M8.5 21v-5.5l-1.8-3.6L9.5 10h5l2.8 1.9-1.8 3.6V21" },
+  { key: "weight_loss", label: "Weight loss", d: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M12 8v8M8.5 12.5L12 16l3.5-3.5" },
+  { key: "vo2max", label: "VO2 max", d: "M3 12h4l2 5 4-12 2 7h6" },
+  { key: "lifestyle", label: "Lifestyle", d: "M12 20s-7-4.3-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.7-7 9-7 9z" },
+  { key: "recovery", label: "Recovery", d: "M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6zM12 9.5v5M9.5 12h5" },
+  { key: "medical", label: "Medical", d: "M6 3v5a4 4 0 0 0 8 0V3M10 15v1a4 4 0 0 0 8 0v-2M18 11.5a2 2 0 1 0 .01 0" },
+  { key: "custom", label: "Custom", d: "M12 5v14M5 12h14" },
 ];
-const GOAL_PRESETS = ["Marathon", "Hyrox", "10k PR", "VO2 max", "Body fat %"];
+const CAT_BY_KEY: Record<string, { key: string; label: string; d: string }> = Object.fromEntries(GOAL_CATS.map((c) => [c.key, c]));
+const catLabel = (k: string | null) => (k && CAT_BY_KEY[k] ? CAT_BY_KEY[k].label : "Goal");
+const MAX_MAIN = 3;
 
-function HealthSetup({ data, onBack, onSaved }: { data: ProfileData; onBack: () => void; onSaved: (d: ProfileData) => void }) {
-  const [primary, setPrimary] = useState<string | null>(data.health_mode.primary);
-  const [goals, setGoals] = useState<Goal[]>((data.goals || []).map((g) => ({ id: g.id, title: g.title, kind: g.kind || "custom", detail: String((g.target_json as { detail?: string })?.detail || "") })));
-  const [editIdx, setEditIdx] = useState(-1);
-  const [adding, setAdding] = useState(false);
-  const [dTitle, setDTitle] = useState("");
-  const [dDetail, setDDetail] = useState("");
+type Chosen = { goalId: string | null; category: string; label: string };
+
+function CatIcon({ d, color }: { d: string; color: string }) {
+  return <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>;
+}
+
+function TierPill({ rank }: { rank: number }) {
+  const primary = rank === 1;
+  return (
+    <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.6, padding: "3px 7px", borderRadius: 999, whiteSpace: "nowrap", background: primary ? "var(--ember-tint)" : "var(--surface-2)", color: primary ? "var(--ember-strong)" : "var(--muted)" }}>
+      {primary ? "PRIMARY GOAL" : "SECONDARY GOAL"}
+    </span>
+  );
+}
+
+function HealthSetup({ data, onBack, onSaved, onData }: { data: ProfileData; onBack: () => void; onSaved: (d: ProfileData) => void; onData: (d: ProfileData) => void }) {
+  const hier = data.goal_hierarchy || [];
+  const tiered = hier.filter((g) => g.tier).slice().sort((a, b) => (a.rank ?? 9) - (b.rank ?? 9));
+
+  const [step, setStep] = useState<"home" | "select" | "rank" | "saved">("home");
+  const [chosen, setChosen] = useState<Chosen[]>([]);
+  const [pickCat, setPickCat] = useState<string | null>(null);
+  const [limitHit, setLimitHit] = useState(false);
   const [bed, setBed] = useState<Bed | null>(null);
   const bedOrig = useRef<Bed | null>(null);
   const [saving, setSaving] = useState(false);
@@ -240,24 +267,53 @@ function HealthSetup({ data, onBack, onSaved }: { data: ProfileData; onBack: () 
     actionGet<Bed>("bedtime_goal").then((d) => { const b = { target_hour: d.target_hour, winddown_hour: d.winddown_hour, grace_hour: d.grace_hour }; setBed(b); bedOrig.current = b; }).catch(() => {});
   }, []);
 
-  const move = (i: number, dir: number) => setGoals((gs) => { const j = i + dir; if (j < 0 || j >= gs.length) return gs; const c = gs.slice(); const t = c[i]; c[i] = c[j]; c[j] = t; return c; });
-  const del = (i: number) => { setEditIdx(-1); setGoals((gs) => gs.filter((_, k) => k !== i)); };
-  const patch = (i: number, p: Partial<Goal>) => setGoals((gs) => gs.map((g, k) => (k === i ? { ...g, ...p } : g)));
-  const addGoal = () => { const t = dTitle.trim(); if (!t) return; setGoals((gs) => [...gs, { title: t, detail: dDetail.trim(), kind: "custom" }]); setDTitle(""); setDDetail(""); setAdding(false); };
-
   const clamp = (h: number) => Math.max(19, Math.min(26, Math.round(h * 4) / 4));
   const setBedK = (k: keyof Bed, v: number) => setBed((b) => (b ? { ...b, [k]: v } : b));
   const stepBtn: React.CSSProperties = { width: 36, height: 36, borderRadius: 10, border: "1px solid var(--line)", background: "var(--surface-2)", color: "var(--text)", fontSize: 19, cursor: "pointer", lineHeight: 1 };
   const smallBtn: React.CSSProperties = { width: 28, height: 28, borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--text-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flex: "none", fontSize: 14, lineHeight: 1 };
+  const cta: React.CSSProperties = { width: "100%", padding: 14, borderRadius: 14, border: "none", background: "var(--ember)", color: "#fff", fontWeight: 800, fontSize: 14.5, cursor: "pointer", boxShadow: "var(--shadow-pop)" };
+  const hint: React.CSSProperties = { textAlign: "center", fontSize: 10.5, color: "var(--muted)", marginTop: 10 };
 
-  async function save() {
+  /* ---- step 1: select ---- */
+  const startFlow = () => {
+    setChosen(tiered.map((g) => ({ goalId: g.id, category: g.category || "custom", label: g.label })));
+    setLimitHit(false); setStep("select");
+  };
+  const isChosen = (cat: string) => chosen.some((c) => c.category === cat);
+  const freeGoalsIn = (cat: string) => hier.filter((g) => (g.category || "custom") === cat && !chosen.some((c) => c.goalId === g.id));
+
+  function tapCat(cat: string) {
+    setLimitHit(false);
+    if (isChosen(cat)) { setChosen((cs) => cs.filter((c) => c.category !== cat)); return; }
+    if (chosen.length >= MAX_MAIN) { setLimitHit(true); return; }
+    const existing = freeGoalsIn(cat);
+    if (existing.length) { setPickCat(cat); return; }
+    setChosen((cs) => [...cs, { goalId: null, category: cat, label: catLabel(cat) }]);
+  }
+  const attach = (cat: string, g: { id: string; label: string } | null) => {
+    setChosen((cs) => [...cs, g ? { goalId: g.id, category: cat, label: g.label } : { goalId: null, category: cat, label: catLabel(cat) }]);
+    setPickCat(null);
+  };
+
+  /* ---- step 2: rank ---- */
+  const move = (i: number, dir: number) => setChosen((cs) => { const j = i + dir; if (j < 0 || j >= cs.length) return cs; const c = cs.slice(); const t = c[i]; c[i] = c[j]; c[j] = t; return c; });
+
+  async function saveGoals() {
     setSaving(true); setErr(null);
     try {
-      await profileSave("health_mode_save", { health_mode_primary: primary });
-      const d = await profileSave("goals_save", { goals: goals.map((g, i) => ({ id: g.id, title: g.title.trim(), kind: g.kind, target_json: g.detail.trim() ? { detail: g.detail.trim() } : {}, priority: i })) });
+      const payload = chosen.map((c, i) => ({ id: c.goalId ?? undefined, label: c.label, category: c.category, tier: i === 0 ? "primary" : "secondary", rank: i + 1 }));
+      const d = await profileSave("goal_tiers_save", { goals: payload });
+      onData(d); setStep("saved");
+    } catch (e) { setErr((e as Error).message); } finally { setSaving(false); }
+  }
+
+  async function saveSleep() {
+    setSaving(true); setErr(null);
+    try {
       if (bed && bedOrig.current && (bed.target_hour !== bedOrig.current.target_hour || bed.winddown_hour !== bedOrig.current.winddown_hour || bed.grace_hour !== bedOrig.current.grace_hour)) {
         await actionPost("bedtime_target_save", bed); bedOrig.current = bed;
       }
+      const d = await profileGet();
       onSaved(d);
     } catch (e) { setErr((e as Error).message); } finally { setSaving(false); }
   }
@@ -268,78 +324,205 @@ function HealthSetup({ data, onBack, onSaved }: { data: ProfileData; onBack: () 
     ["Grace window", `\u00b1 ${Math.round(bed.grace_hour * 60)} min`, () => setBedK("grace_hour", Math.max(0, Math.round((bed.grace_hour - 0.25) * 4) / 4)), () => setBedK("grace_hour", Math.min(1, Math.round((bed.grace_hour + 0.25) * 4) / 4))],
   ] : [];
 
-  return (
-    <>
-      <EdHead title="Health Setup" onBack={onBack} right={<StatusChip tone={primary && goals.length ? "done" : "todo"} label={primary && goals.length ? "DONE" : "SET UP"} />} />
+  /* ================= STEP: SELECT ================= */
+  if (step === "select") {
+    return (
+      <>
+        <EdHead title="" onBack={() => setStep("home")} right={<span style={{ fontSize: 11, fontWeight: 800, color: "var(--ember-strong)" }}>{chosen.length} of {MAX_MAIN}</span>} />
+        <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.15, color: "var(--text)" }}>What are you working toward?</div>
+        <div style={{ fontSize: 12.5, color: "var(--text-2)", marginTop: 6 }}>Pick up to {MAX_MAIN} main goals. You{"\u2019"}ll rank them next.</div>
 
-      <div style={S.secLabel as React.CSSProperties}>Health Mode</div>
-      <div style={{ height: 10 }} />
-      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-        {MODES.map((m) => {
-          const on = primary === m.key;
-          return (
-            <button key={m.key} onClick={() => setPrimary(m.key)} style={{ flex: 1, borderRadius: 16, padding: "13px 8px", textAlign: "center", cursor: "pointer", border: "1px solid " + (on ? "var(--text)" : "var(--line)"), background: on ? "var(--text)" : "var(--surface)" }}>
-              <div style={{ fontSize: 12.5, fontWeight: 800, color: on ? "var(--surface)" : "var(--text-2)" }}>{m.label}</div>
-              <div style={{ fontSize: 10, marginTop: 2, color: on ? "var(--surface-2)" : "var(--muted)" }}>{m.sub}</div>
-            </button>
-          );
-        })}
-      </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginTop: 18 }}>
+          {GOAL_CATS.map((c) => {
+            const on = isChosen(c.key);
+            const custom = c.key === "custom";
+            return (
+              <button key={c.key} onClick={() => tapCat(c.key)} style={{ position: "relative", borderRadius: 16, padding: "12px 4px 10px", display: "flex", flexDirection: "column", alignItems: "center", gap: 7, cursor: "pointer", textAlign: "center", background: on ? "var(--ember-tint)" : custom ? "transparent" : "var(--surface)", border: on ? "1.5px solid var(--ember)" : custom ? "1px dashed var(--line-2)" : "1px solid var(--line)" }}>
+                {on && <span style={{ position: "absolute", top: 5, right: 5, width: 14, height: 14, borderRadius: 999, background: "var(--ember)", display: "flex", alignItems: "center", justifyContent: "center" }}><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg></span>}
+                <CatIcon d={c.d} color={on ? "var(--ember-strong)" : custom ? "var(--muted)" : "var(--text-2)"} />
+                <span style={{ fontSize: 9.5, fontWeight: on ? 800 : 700, color: on ? "var(--ember-strong)" : custom ? "var(--muted)" : "var(--text)", lineHeight: 1.2 }}>{c.label}</span>
+              </button>
+            );
+          })}
+        </div>
 
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "0 2px" }}>
-        <span style={S.secLabel as React.CSSProperties}>{"Goals & targets"}</span>
-        <span style={{ fontSize: 10.5, color: "var(--muted)" }}>Priority order</span>
-      </div>
-      <div style={{ height: 10 }} />
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {goals.map((g, i) => (
-          <div key={i} style={{ ...S.card, padding: "12px 13px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-              <div style={{ width: 24, height: 24, borderRadius: "50%", flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, background: i === 0 ? "var(--ember)" : "var(--surface-2)", color: i === 0 ? "#fff" : "var(--muted)" }}>{i + 1}</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.title || "Untitled goal"}</div>
-                {g.detail && <div style={{ fontSize: 11.5, color: "var(--text-2)", marginTop: 1 }}>{g.detail}</div>}
+        {limitHit && <div style={{ marginTop: 14, background: "var(--surface-2)", borderRadius: 13, padding: "11px 14px", fontSize: 11.5, color: "var(--text-2)", lineHeight: 1.45 }}>That{"\u2019"}s your {MAX_MAIN}. You can add supporting goals later.</div>}
+
+        {chosen.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <div style={S.secLabel as React.CSSProperties}>Selected</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+              {chosen.map((c) => (
+                <div key={c.category} style={{ ...S.card, display: "flex", alignItems: "center", gap: 10, padding: "10px 12px" }}>
+                  <CatIcon d={CAT_BY_KEY[c.category]?.d || ""} color="var(--ember-strong)" />
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.label}</span>
+                  <span style={{ fontSize: 10, color: "var(--muted)", flex: "none" }}>{c.goalId ? "existing" : "new"}</span>
+                  <button aria-label="Remove" onClick={() => setChosen((cs) => cs.filter((x) => x.category !== c.category))} style={{ ...smallBtn, color: "var(--danger)" }}>{"\u00d7"}</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {err && <div style={{ color: "var(--danger)", fontSize: 13, marginTop: 14 }}>{err}</div>}
+        <div style={{ marginTop: 22 }}>
+          <button onClick={() => setStep("rank")} disabled={!chosen.length} style={{ ...cta, opacity: chosen.length ? 1 : 0.5, cursor: chosen.length ? "pointer" : "default" }}>Continue {"\u00b7"} rank goals</button>
+          <div style={hint}>You can change this later</div>
+        </div>
+
+        {pickCat && (
+          <div className="sheet-back" onClick={() => setPickCat(null)}>
+            <div className="sheet-panel" onClick={(e) => e.stopPropagation()}>
+              <div className="sheet-handle" />
+              <div className="sheet-head">
+                <span className="sheet-title">{catLabel(pickCat)}</span>
+                <button className="sheet-x" onClick={() => setPickCat(null)}>{"\u00d7"}</button>
               </div>
-              <div style={{ display: "flex", gap: 6, flex: "none" }}>
-                <button aria-label="Move up" onClick={() => move(i, -1)} disabled={i === 0} style={{ ...smallBtn, opacity: i === 0 ? 0.4 : 1 }}>{"\u2191"}</button>
-                <button aria-label="Move down" onClick={() => move(i, 1)} disabled={i === goals.length - 1} style={{ ...smallBtn, opacity: i === goals.length - 1 ? 0.4 : 1 }}>{"\u2193"}</button>
-                <button aria-label="Edit" onClick={() => setEditIdx(editIdx === i ? -1 : i)} style={smallBtn}>{"\u270e"}</button>
-                <button aria-label="Delete" onClick={() => del(i)} style={{ ...smallBtn, color: "var(--danger)" }}>{"\u00d7"}</button>
+              <div style={{ fontSize: 12, color: "var(--text-2)", margin: "0 0 12px", lineHeight: 1.45 }}>You already have goals here. Pick one so Kai builds on it instead of starting a duplicate.</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {freeGoalsIn(pickCat).map((g) => (
+                  <button key={g.id} onClick={() => attach(pickCat, { id: g.id, label: g.label })} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: 12, border: "1px solid var(--line)", background: "var(--surface)", cursor: "pointer", textAlign: "left" }}>
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ display: "block", fontSize: 13.5, fontWeight: 700, color: "var(--text)" }}>{g.label}</span>
+                      <span style={{ display: "block", fontSize: 11, color: "var(--muted)", marginTop: 1 }}>{g.target_date ? new Date(g.target_date + "T00:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "No date"}</span>
+                    </span>
+                    <Chevron />
+                  </button>
+                ))}
+                <button onClick={() => attach(pickCat, null)} style={{ padding: "12px 14px", borderRadius: 12, border: "1px dashed var(--line-2)", background: "transparent", color: "var(--ember-strong)", fontWeight: 800, fontSize: 13, cursor: "pointer" }}>+ Create a new {catLabel(pickCat).toLowerCase()} goal</button>
               </div>
             </div>
-            {editIdx === i && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
-                <input style={S.input} value={g.title} onChange={(e) => patch(i, { title: e.target.value })} placeholder="Goal" />
-                <input style={S.input} value={g.detail} onChange={(e) => patch(i, { detail: e.target.value })} placeholder="Detail (optional)" />
-              </div>
-            )}
           </div>
-        ))}
-        {!goals.length && !adding && <div style={{ fontSize: 12.5, color: "var(--muted)", padding: "2px 2px 4px" }}>No goals yet. Add what you are working toward - priority 1 shapes your plan.</div>}
-      </div>
+        )}
+      </>
+    );
+  }
 
-      {adding ? (
-        <div style={{ ...S.card, padding: 13, marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
-          <input style={S.input} value={dTitle} onChange={(e) => setDTitle(e.target.value)} placeholder="Goal (e.g. Ironman 70.3)" />
-          <input style={S.input} value={dDetail} onChange={(e) => setDDetail(e.target.value)} placeholder="Detail (optional)" />
-          <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-            {GOAL_PRESETS.map((p) => (
-              <button key={p} onClick={() => setDTitle(p)} style={{ fontSize: 11.5, fontWeight: 700, color: "var(--text-2)", background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: 999, padding: "6px 12px", cursor: "pointer" }}>{p}</button>
-            ))}
-          </div>
-          <div style={{ display: "flex", gap: 10, marginTop: 2 }}>
-            <button onClick={() => { setAdding(false); setDTitle(""); setDDetail(""); }} style={{ flex: 1, padding: 11, borderRadius: 11, border: "1px solid var(--line)", background: "var(--surface-2)", color: "var(--text-2)", fontWeight: 700, fontSize: 13.5, cursor: "pointer" }}>Cancel</button>
-            <button onClick={addGoal} disabled={!dTitle.trim()} style={{ flex: 1, padding: 11, borderRadius: 11, border: "none", background: dTitle.trim() ? "var(--ember)" : "var(--surface-2)", color: dTitle.trim() ? "#fff" : "var(--muted)", fontWeight: 800, fontSize: 13.5, cursor: dTitle.trim() ? "pointer" : "default" }}>Add goal</button>
+  /* ================= STEP: RANK ================= */
+  if (step === "rank") {
+    return (
+      <>
+        <EdHead title="" onBack={() => setStep("select")} />
+        <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.15, color: "var(--text)" }}>Prioritize your goals</div>
+        <div style={{ fontSize: 12.5, color: "var(--text-2)", marginTop: 6 }}>Kai will use this order when goals conflict.</div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 18 }}>
+          {chosen.map((c, i) => (
+            <div key={c.category} style={{ ...S.card, display: "flex", alignItems: "center", gap: 11, padding: "13px 13px", border: i === 0 ? "1.5px solid var(--ember)" : "1px solid var(--line)", background: i === 0 ? "var(--ember-tint)" : "var(--surface)" }}>
+              <span style={{ width: 26, height: 26, borderRadius: "50%", flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, background: i === 0 ? "var(--ember)" : "var(--surface-2)", color: i === 0 ? "#fff" : "var(--muted)" }}>{i + 1}</span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontSize: 13.5, fontWeight: 800, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.label}</span>
+                <span style={{ display: "block", marginTop: 3 }}><TierPill rank={i + 1} /></span>
+              </span>
+              <span style={{ display: "flex", gap: 6, flex: "none" }}>
+                <button aria-label="Move up" onClick={() => move(i, -1)} disabled={i === 0} style={{ ...smallBtn, opacity: i === 0 ? 0.4 : 1 }}>{"\u2191"}</button>
+                <button aria-label="Move down" onClick={() => move(i, 1)} disabled={i === chosen.length - 1} style={{ ...smallBtn, opacity: i === chosen.length - 1 ? 0.4 : 1 }}>{"\u2193"}</button>
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ ...S.card, padding: "13px 14px", marginTop: 16, background: "var(--surface-2)" }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: "var(--text)", marginBottom: 4 }}>How Kai uses this</div>
+          <div style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.5 }}>
+            If two goals conflict, Kai protects your primary goal first.
+            {chosen.length > 1 ? ` With ${chosen[0].label} as primary, ${chosen[1].label} adapts around it rather than the other way round.` : ""}
           </div>
         </div>
-      ) : (
-        <button onClick={() => setAdding(true)} style={{ marginTop: 10, width: "100%", padding: 11, borderRadius: 12, border: "1px dashed var(--line-2)", background: "transparent", color: "var(--ember-strong)", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>+ Add goal</button>
-      )}
 
-      <div style={{ ...S.card, display: "flex", gap: 11, padding: "13px 14px", margin: "18px 0 0", background: "var(--ember-tint)" }}>
-        <div style={{ width: 26, height: 26, borderRadius: "50%", background: "var(--ember)", color: "#fff", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>K</div>
-        <div style={{ fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.45 }}>Priority 1 drives your plan - Kai builds around it and rebalances when your mode changes. Nothing is lost.</div>
+        {err && <div style={{ color: "var(--danger)", fontSize: 13, marginTop: 14 }}>{err}</div>}
+        <div style={{ marginTop: 22 }}>
+          <button onClick={saveGoals} disabled={saving} style={{ ...cta, opacity: saving ? 0.7 : 1 }}>{saving ? "Saving\u2026" : "Save goals"}</button>
+          <div style={hint}>Use the arrows to reorder {"\u00b7"} change anytime</div>
+        </div>
+      </>
+    );
+  }
+
+  /* ================= STEP: SAVED (confirmation) ================= */
+  if (step === "saved") {
+    const p = tiered[0], secs = tiered.slice(1);
+    return (
+      <>
+        <div style={{ height: 8 }} />
+        <div style={{ width: 46, height: 46, borderRadius: "50%", background: "var(--success-tint)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+        </div>
+        <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: -0.5, color: "var(--text)" }}>Goals added</div>
+        {p && <div style={{ fontSize: 12.5, color: "var(--text-2)", marginTop: 6 }}>{p.label} is now your primary goal.</div>}
+
+        {p && (
+          <div style={{ ...S.card, padding: "15px 15px", marginTop: 18, background: "var(--ember-tint)", border: "1.5px solid var(--ember)" }}>
+            <div style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 0.6, color: "var(--ember-strong)" }}>PRIMARY GOAL</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 7 }}>
+              <CatIcon d={CAT_BY_KEY[p.category || "custom"]?.d || ""} color="var(--ember-strong)" />
+              <span style={{ fontSize: 15.5, fontWeight: 800, color: "var(--text)" }}>{p.label}</span>
+            </div>
+          </div>
+        )}
+
+        {secs.length > 0 && (
+          <>
+            <div style={{ ...(S.secLabel as React.CSSProperties), marginTop: 20 }}>Secondary goals</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 9 }}>
+              {secs.map((g) => (
+                <div key={g.id} style={{ ...S.card, display: "flex", alignItems: "center", gap: 11, padding: "12px 13px" }}>
+                  <span style={{ width: 24, height: 24, borderRadius: "50%", flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, background: "var(--surface-2)", color: "var(--muted)" }}>{g.rank}</span>
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        <div style={{ ...S.card, display: "flex", gap: 11, padding: "13px 14px", marginTop: 18, background: "var(--surface-2)" }}>
+          <div style={{ width: 26, height: 26, borderRadius: "50%", background: "var(--ember)", color: "#fff", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>K</div>
+          <div style={{ fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.45 }}>Kai will use your goal priority to personalize training, recovery, nutrition and weekly planning.</div>
+        </div>
+
+        <div style={{ marginTop: 20 }}>
+          <button onClick={() => setStep("home")} style={cta}>Done</button>
+          <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+            <a href="/more/goals" style={{ flex: 1, padding: 12, borderRadius: 12, border: "1px solid var(--line)", background: "var(--surface-2)", color: "var(--text-2)", fontWeight: 700, fontSize: 13, cursor: "pointer", textAlign: "center", textDecoration: "none" }}>View goals</a>
+            <button onClick={startFlow} style={{ flex: 1, padding: 12, borderRadius: 12, border: "1px solid var(--line)", background: "var(--surface-2)", color: "var(--text-2)", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Edit goals</button>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  /* ================= STEP: HOME ================= */
+  return (
+    <>
+      <EdHead title="Health Setup" onBack={onBack} right={<StatusChip tone={tiered.length ? "done" : "todo"} label={tiered.length ? "DONE" : "SET UP"} />} />
+
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "0 2px" }}>
+        <span style={S.secLabel as React.CSSProperties}>Goals</span>
+        {tiered.length > 0 && <button onClick={startFlow} style={{ fontSize: 12, fontWeight: 800, color: "var(--ember-strong)", background: "none", border: "none", cursor: "pointer" }}>Edit</button>}
       </div>
+      <div style={{ height: 10 }} />
+
+      {tiered.length === 0 ? (
+        <div style={{ ...S.card, padding: "20px 16px", textAlign: "center" }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)", marginBottom: 5 }}>Tell Kai what you{"\u2019"}re working toward</div>
+          <div style={{ fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.5, marginBottom: 14 }}>Pick up to {MAX_MAIN} main goals and rank them. Your primary goal drives the plan.</div>
+          <button onClick={startFlow} style={{ ...cta, width: "auto", padding: "12px 22px" }}>Set up goals</button>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {tiered.map((g, i) => (
+            <div key={g.id} style={{ ...S.card, display: "flex", alignItems: "center", gap: 11, padding: "13px 13px", border: i === 0 ? "1.5px solid var(--ember)" : "1px solid var(--line)", background: i === 0 ? "var(--ember-tint)" : "var(--surface)" }}>
+              <span style={{ width: 26, height: 26, borderRadius: "50%", flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, background: i === 0 ? "var(--ember)" : "var(--surface-2)", color: i === 0 ? "#fff" : "var(--muted)" }}>{g.rank ?? i + 1}</span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontSize: 13.5, fontWeight: 800, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</span>
+                <span style={{ display: "block", marginTop: 3 }}><TierPill rank={g.rank ?? i + 1} /></span>
+              </span>
+              <CatIcon d={CAT_BY_KEY[g.category || "custom"]?.d || ""} color={i === 0 ? "var(--ember-strong)" : "var(--muted)"} />
+            </div>
+          ))}
+          <div style={{ fontSize: 10.5, color: "var(--muted)", margin: "2px 2px 0" }}>Supporting goals arrive in the next update. Other goals you track live in More {"\u203a"} Goals.</div>
+        </div>
+      )}
 
       <div style={{ ...(S.secLabel as React.CSSProperties), marginTop: 22 }}>Sleep targets</div>
       <div style={{ height: 10 }} />
@@ -360,7 +543,7 @@ function HealthSetup({ data, onBack, onSaved }: { data: ProfileData; onBack: () 
       )}
 
       {err && <div style={{ color: "var(--danger)", fontSize: 13, marginTop: 14 }}>{err}</div>}
-      <button onClick={save} disabled={saving} style={{ width: "100%", margin: "18px 0 4px", padding: 14, borderRadius: 13, border: "none", background: "var(--ember)", color: "#fff", fontWeight: 800, fontSize: 15, cursor: saving ? "default" : "pointer", opacity: saving ? 0.7 : 1 }}>{saving ? "Saving\u2026" : "Save Health Setup"}</button>
+      <button onClick={saveSleep} disabled={saving} style={{ width: "100%", margin: "18px 0 4px", padding: 14, borderRadius: 13, border: "none", background: "var(--ember)", color: "#fff", fontWeight: 800, fontSize: 15, cursor: saving ? "default" : "pointer", opacity: saving ? 0.7 : 1 }}>{saving ? "Saving\u2026" : "Save sleep targets"}</button>
     </>
   );
 }
@@ -799,7 +982,7 @@ export default function ProfilePage() {
       {cropSrc && <CropModal src={cropSrc} onCancel={closeCrop} onUse={onCropped} />}
       {data && view === "hub" && <Hub data={data} onOpen={setView} onPickPhoto={pickPhoto} uploading={uploading} />}
       {data && view === "basics" && <BasicsEditor data={data} onBack={() => setView("hub")} onSaved={(d) => { setData(d); setView("hub"); }} onPickPhoto={pickPhoto} uploading={uploading} />}
-      {data && view === "health" && <HealthSetup data={data} onBack={() => setView("hub")} onSaved={(d) => { setData(d); setView("hub"); }} />}
+      {data && view === "health" && <HealthSetup data={data} onBack={() => setView("hub")} onSaved={(d) => { setData(d); setView("hub"); }} onData={setData} />}
       {data && view === "training" && <TrainingSetup data={data} onBack={() => setView("hub")} onSaved={(d) => { setData(d); setView("hub"); }} />}
       {data && view === "appprefs" && <AppPrefsEditor data={data} onBack={() => setView("hub")} onSaved={(d) => { setData(d); setView("hub"); }} />}
     </Screen>
