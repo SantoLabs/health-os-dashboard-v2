@@ -339,8 +339,11 @@ function HealthSetup({ data, onBack, onSaved, onData }: { data: ProfileData; onB
   const hier = data.goal_hierarchy || [];
   const tiered = hier.filter((g) => g.tier).slice().sort((a, b) => (a.rank ?? 9) - (b.rank ?? 9));
 
-  const [step, setStep] = useState<"home" | "select" | "rank" | "details" | "saved">("home");
+  const [step, setStep] = useState<"home" | "select" | "rank" | "details" | "supporting" | "saved">("home");
   const [openIdx, setOpenIdx] = useState(0);
+  const [sup, setSup] = useState<string[]>(data.supporting_goals?.selected || []);
+  const [supCustom, setSupCustom] = useState<string>((data.supporting_goals?.custom_labels || {}).custom || "");
+  const [supFrom, setSupFrom] = useState<"flow" | "home">("flow");
   const [chosen, setChosen] = useState<Chosen[]>([]);
   const [pickCat, setPickCat] = useState<string | null>(null);
   const [limitHit, setLimitHit] = useState(false);
@@ -404,7 +407,25 @@ function HealthSetup({ data, onBack, onSaved, onData }: { data: ProfileData; onB
         return { id: c.goalId ?? undefined, label: c.goalId ? c.label : (t || c.label), category: c.category, tier: i === 0 ? "primary" : "secondary", rank: i + 1, details: c.details, target_date: c.target_date };
       });
       const d = await profileSave("goal_tiers_save", { goals: payload });
-      onData(d); setStep("saved");
+      onData(d); setSupFrom("flow"); setStep("supporting");
+    } catch (e) { setErr((e as Error).message); } finally { setSaving(false); }
+  }
+
+  const openSupporting = () => {
+    setChosen(tiered.map((g) => ({ goalId: g.id, category: g.category || "custom", label: g.label, details: (g.details || {}) as Record<string, unknown>, target_date: g.target_date })));
+    setSup(data.supporting_goals?.selected || []);
+    setSupFrom("home"); setStep("supporting");
+  };
+  const supCatalog = data.supporting_goals?.catalog || [];
+  const rankedCats = new Set(chosen.length ? chosen.map((c) => c.category) : tiered.map((g) => g.category || "custom"));
+  const supLabel = (k: string) => supCatalog.find((x) => x.key === k)?.label || k;
+
+  async function saveSup() {
+    setSaving(true); setErr(null);
+    try {
+      const selected = sup.map((k) => (k === "custom" ? { key: k, custom_label: supCustom.trim() || null } : k));
+      const d = await profileSave("supporting_goals_save", { selected });
+      onData(d); setStep(supFrom === "home" ? "home" : "saved");
     } catch (e) { setErr((e as Error).message); } finally { setSaving(false); }
   }
 
@@ -620,6 +641,53 @@ function HealthSetup({ data, onBack, onSaved, onData }: { data: ProfileData; onB
     );
   }
 
+  /* ================= STEP: SUPPORTING GOALS (optional) ================= */
+  if (step === "supporting") {
+    return (
+      <>
+        <EdHead title="" onBack={() => setStep(supFrom === "home" ? "home" : "details")} right={<span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 0.6, padding: "3px 8px", borderRadius: 999, background: "var(--surface-2)", color: "var(--muted)" }}>OPTIONAL</span>} />
+        <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.15, color: "var(--text)" }}>Add supporting goals?</div>
+        <div style={{ fontSize: 12.5, color: "var(--text-2)", marginTop: 6 }}>These help Kai support your main goals without changing your priority.</div>
+
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 18 }}>
+          {supCatalog.map((it) => {
+            const on = sup.includes(it.key);
+            const blocked = !!it.twin_category && rankedCats.has(it.twin_category);
+            return (
+              <button key={it.key} disabled={blocked}
+                onClick={() => setSup((xs) => (xs.includes(it.key) ? xs.filter((x) => x !== it.key) : [...xs, it.key]))}
+                style={{ fontSize: 12, fontWeight: on ? 800 : 600, padding: "10px 14px", borderRadius: 999, cursor: blocked ? "default" : "pointer", opacity: blocked ? 0.45 : 1, border: "1px solid " + (on ? "var(--ember)" : "var(--line)"), background: on ? "var(--ember-tint)" : "var(--surface-2)", color: on ? "var(--ember-strong)" : "var(--text-2)" }}>
+                {it.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {supCatalog.some((it) => !!it.twin_category && rankedCats.has(it.twin_category)) && (
+          <div style={{ fontSize: 10.5, color: "var(--muted)", margin: "10px 2px 0", lineHeight: 1.45 }}>Greyed-out options are already covered by one of your main goals.</div>
+        )}
+
+        {sup.includes("custom") && (
+          <div style={{ marginTop: 14 }}>
+            <label style={S.fieldLabel}>Your custom supporting goal</label>
+            <input style={S.input} value={supCustom} onChange={(e) => setSupCustom(e.target.value)} placeholder="e.g. 10 min mobility daily" />
+          </div>
+        )}
+
+        <div style={{ ...S.card, display: "flex", gap: 11, padding: "13px 14px", marginTop: 18, background: "var(--surface-2)" }}>
+          <div style={{ width: 26, height: 26, borderRadius: "50%", background: "var(--ember)", color: "#fff", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>K</div>
+          <div style={{ fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.45 }}>These shape how Kai guides you {"\u2014"} they don{"\u2019"}t set targets. Your actual numbers stay where they live: sleep in the stepper below, protein in Nutrition, follow-ups in Medical.</div>
+        </div>
+
+        {err && <div style={{ color: "var(--danger)", fontSize: 13, marginTop: 14 }}>{err}</div>}
+        <div style={{ marginTop: 20 }}>
+          <button onClick={saveSup} disabled={saving} style={{ ...cta, opacity: saving ? 0.7 : 1 }}>{saving ? "Saving\u2026" : `Save supporting goals${sup.length ? " \u00b7 " + sup.length : ""}`}</button>
+          <button onClick={() => setStep(supFrom === "home" ? "home" : "saved")} style={{ width: "100%", marginTop: 10, padding: 12, borderRadius: 12, border: "none", background: "transparent", color: "var(--text-2)", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Skip for now</button>
+        </div>
+      </>
+    );
+  }
+
   /* ================= STEP: SAVED (confirmation) ================= */
   if (step === "saved") {
     const p = tiered[0], secs = tiered.slice(1);
@@ -651,6 +719,17 @@ function HealthSetup({ data, onBack, onSaved, onData }: { data: ProfileData; onB
                   <span style={{ width: 24, height: 24, borderRadius: "50%", flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, background: "var(--surface-2)", color: "var(--muted)" }}>{g.rank}</span>
                   <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</span>
                 </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {(data.supporting_goals?.selected || []).length > 0 && (
+          <>
+            <div style={{ ...(S.secLabel as React.CSSProperties), marginTop: 20 }}>Supporting goals</div>
+            <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginTop: 9 }}>
+              {(data.supporting_goals?.selected || []).map((k) => (
+                <span key={k} style={{ fontSize: 11.5, fontWeight: 700, padding: "7px 12px", borderRadius: 999, background: "var(--surface-2)", border: "1px solid var(--line)", color: "var(--text-2)" }}>{supLabel(k)}</span>
               ))}
             </div>
           </>
@@ -701,8 +780,26 @@ function HealthSetup({ data, onBack, onSaved, onData }: { data: ProfileData; onB
               <CatIcon d={CAT_BY_KEY[g.category || "custom"]?.d || ""} color={i === 0 ? "var(--ember-strong)" : "var(--muted)"} />
             </div>
           ))}
-          <div style={{ fontSize: 10.5, color: "var(--muted)", margin: "2px 2px 0" }}>Supporting goals arrive in the next update. Other goals you track live in More {"\u203a"} Goals.</div>
+          <div style={{ fontSize: 10.5, color: "var(--muted)", margin: "2px 2px 0" }}>Other goals you track live in More {"\u203a"} Goals.</div>
         </div>
+      )}
+
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "22px 2px 0" }}>
+        <span style={S.secLabel as React.CSSProperties}>Supporting goals</span>
+        <button onClick={openSupporting} style={{ fontSize: 12, fontWeight: 800, color: "var(--ember-strong)", background: "none", border: "none", cursor: "pointer" }}>{(data.supporting_goals?.selected || []).length ? "Edit" : "+ Add"}</button>
+      </div>
+      <div style={{ height: 10 }} />
+      {(data.supporting_goals?.selected || []).length ? (
+        <>
+          <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+            {(data.supporting_goals?.selected || []).map((k) => (
+              <span key={k} style={{ fontSize: 11.5, fontWeight: 700, padding: "7px 12px", borderRadius: 999, background: "var(--surface-2)", border: "1px solid var(--line)", color: "var(--text-2)" }}>{k === "custom" && supCustom ? supCustom : supLabel(k)}</span>
+            ))}
+          </div>
+          <div style={{ fontSize: 10.5, color: "var(--muted)", margin: "8px 2px 0", lineHeight: 1.45 }}>Habits and guardrails that shape Kai{"\u2019"}s guidance. They don{"\u2019"}t set targets.</div>
+        </>
+      ) : (
+        <div style={{ fontSize: 12.5, color: "var(--muted)", padding: "2px 2px 4px", lineHeight: 1.5 }}>None yet. Add habits or guardrails {"\u2014"} sleep consistency, injury prevention {"\u2014"} and Kai will weigh them in your guidance.</div>
       )}
 
       <div style={{ ...(S.secLabel as React.CSSProperties), marginTop: 22 }}>Sleep targets</div>
