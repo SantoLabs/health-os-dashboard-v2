@@ -100,7 +100,7 @@ export default function KaiFab() {
     const text = q.trim(); if ((!text && !img) || busy) return;
     setErr(null); setInput("");
     const staged = img; setImg(null);
-    setMessages((m) => [...m, { id: "tmp-" + Date.now(), role: "user", text: staged ? (text || "📷 Photo") : text }]);
+    setMessages((m) => [...m, { id: "tmp-" + Date.now(), role: "user", text: staged ? (text || "Photo") : text }]);
     setBusy(true);
     try {
       const r = staged
