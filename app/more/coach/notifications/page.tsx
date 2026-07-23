@@ -1,4 +1,5 @@
 "use client";
+import Icon from "../../../components/Icon";
 
 // Notification Center — full grouped view of reminders & check-ins (Due / Upcoming / History).
 // Reached from the global bell ("See all") and the Kai hub ingress tile.
@@ -70,7 +71,7 @@ export default function NotificationCenterPage() {
     <Screen title="Notifications">
       {err && <div style={{ fontSize: 12, color: FAT, marginBottom: 12 }}>{err}</div>}
       {data === null ? <Sk /> : empty ? (
-        <Empty icon="🔔" title="Nothing here yet" sub="Ask Kai things like “remind me to take creatine at 9pm” or “check in on my knee each morning,” and they’ll show up here." />
+        <Empty icon={<Icon name="bell" size={26} />} title="Nothing here yet" sub="Ask Kai things like “remind me to take creatine at 9pm” or “check in on my knee each morning,” and they’ll show up here." />
       ) : (
         <>
           {due.length > 0 && (
@@ -119,7 +120,7 @@ function Row({ r, group, busy, snoozeOpen, onSnoozeToggle, onSnooze, onOp, onAns
   return (
     <div style={{ background: due ? "rgba(79,156,249,.08)" : SURF, border: "1px solid " + (due ? "rgba(79,156,249,.4)" : BORDER), borderRadius: 14, padding: "12px 13px", marginBottom: 10, opacity: hist ? 0.78 : 1 }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-        <span style={{ fontSize: 17, lineHeight: 1.2 }}>{isCheckin ? "💬" : "🔔"}</span>
+        <span style={{ fontSize: 17, lineHeight: 1.2 }}><Icon name={isCheckin ? "chat" : "bell"} size={16} /></span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13.5, fontWeight: 700, color: H }}>{r.title}</div>
           {r.body ? <div style={{ fontSize: 11.5, color: SECOND, marginTop: 2 }}>{r.body}</div> : null}
@@ -157,7 +158,7 @@ const Label = ({ children }: { children: ReactNode }) => (
   <div style={{ fontSize: 10.5, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".6px", color: FAINT, margin: "4px 2px 9px" }}>{children}</div>
 );
 const Sk = () => <div style={{ height: 80, borderRadius: 14, background: SURF, border: "1px solid " + BORDER, opacity: 0.5 }} />;
-const Empty = ({ icon, title, sub }: { icon: string; title: string; sub: string }) => (
+const Empty = ({ icon, title, sub }: { icon: ReactNode; title: string; sub: string }) => (
   <div style={{ textAlign: "center", padding: "40px 20px", color: SECOND }}>
     <div style={{ fontSize: 34, marginBottom: 10 }}>{icon}</div>
     <div style={{ fontSize: 14.5, fontWeight: 700, color: H, marginBottom: 6 }}>{title}</div>
