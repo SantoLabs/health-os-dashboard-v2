@@ -537,7 +537,17 @@ export type ProfileData = {
   app_prefs: Record<string, unknown>;
   reminders: Record<string, unknown>;
   connected_apps: { key: string; label: string; desc: string; connected: boolean; last_synced: string | null }[];
+  goal_hierarchy: HierGoal[];
+  supporting_goals: { catalog: SupportItem[]; selected: string[]; custom_labels: Record<string, string> };
 };
+
+export type HierGoal = {
+  id: string; label: string; category: string | null;
+  tier: string | null; rank: number | null; details: Record<string, unknown>;
+  goal_type: string; event_type: string | null; target_date: string | null;
+  status: string; race_spec: Record<string, unknown> | null;
+};
+export type SupportItem = { key: string; label: string; twin_category: string | null; sort: number };
 
 export async function profileGet(): Promise<ProfileData> {
   const res = await authedFetch(`/functions/v1/profile`, {
