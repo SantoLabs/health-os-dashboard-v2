@@ -13,7 +13,7 @@ export type IconName =
   | "camera" | "fire" | "calendar" | "chat" | "flag" | "trophy" | "pin" | "wind"
   | "volumeOn" | "volumeOff" | "star" | "brain" | "sleep" | "gear" | "scale"
   | "basket" | "warning" | "chart" | "heart" | "medical" | "plane" | "drink"
-  | "inbox" | "folder" | "clipboard" | "mic" | "food" | "plant" | "image";
+  | "inbox" | "folder" | "clipboard" | "mic" | "food" | "plant" | "image" | "lock";
 
 const P: Record<IconName, ReactNode> = {
   // ---- 17d verbatim ----
@@ -68,6 +68,7 @@ const P: Record<IconName, ReactNode> = {
   mic: (<><path d="M12 2 C10.1 2 8.6 3.5 8.6 5.4 L8.6 11.6 C8.6 13.5 10.1 15 12 15 C13.9 15 15.4 13.5 15.4 11.6 L15.4 5.4 C15.4 3.5 13.9 2 12 2 Z" /><path d="M5.4 10.6 C6 10.6 6.4 11 6.4 11.6 C6.4 14.7 8.9 17.2 12 17.2 C15.1 17.2 17.6 14.7 17.6 11.6 C17.6 11 18 10.6 18.6 10.6 C19.2 10.6 19.6 11 19.6 11.6 C19.6 15.5 16.6 18.7 13 19.1 L13 20.4 L15.4 20.4 C16 20.4 16.4 20.8 16.4 21.4 C16.4 22 16 22.4 15.4 22.4 L8.6 22.4 C8 22.4 7.6 22 7.6 21.4 C7.6 20.8 8 20.4 8.6 20.4 L11 20.4 L11 19.1 C7.4 18.7 4.4 15.5 4.4 11.6 C4.4 11 4.8 10.6 5.4 10.6 Z" opacity=".7" /></>),
   food: (<><path d="M7.4 2.6 L16.6 2.6 C17.2 2.6 17.6 3 17.6 3.6 L17.6 5.4 C17.6 6 17.2 6.4 16.6 6.4 L7.4 6.4 C6.8 6.4 6.4 6 6.4 5.4 L6.4 3.6 C6.4 3 6.8 2.6 7.4 2.6 Z" opacity=".62" /><path d="M6.4 8.2 L17.6 8.2 C18.7 8.2 19.6 9.1 19.6 10.2 L19.6 19.6 C19.6 20.7 18.7 21.6 17.6 21.6 L6.4 21.6 C5.3 21.6 4.4 20.7 4.4 19.6 L4.4 10.2 C4.4 9.1 5.3 8.2 6.4 8.2 Z M8.4 11.6 L8.4 13.6 L15.6 13.6 L15.6 11.6 Z" /></>),
   plant: (<><path d="M12 21.6 C11.4 21.6 11 21.2 11 20.6 L11 12.4 C11 11.8 11.4 11.4 12 11.4 C12.6 11.4 13 11.8 13 12.4 L13 20.6 C13 21.2 12.6 21.6 12 21.6 Z" /><path d="M11.6 13.4 C11.6 13.4 5 13.2 4.4 6.6 C4.4 6.6 11.4 6.2 11.6 13.4 Z" /><path d="M12.6 11.6 C12.6 11.6 12.4 4.6 19.4 4 C19.4 4 19.8 11.2 12.6 11.6 Z" opacity=".62" /></>),
+  lock: (<><path d="M12 1.6 C9 1.6 6.6 4 6.6 7 L6.6 9.6 L9.4 9.6 L9.4 7 C9.4 5.6 10.6 4.4 12 4.4 C13.4 4.4 14.6 5.6 14.6 7 L14.6 9.6 L17.4 9.6 L17.4 7 C17.4 4 15 1.6 12 1.6 Z" opacity=".6" /><path d="M5.4 10.8 L18.6 10.8 C19.7 10.8 20.6 11.7 20.6 12.8 L20.6 20.4 C20.6 21.5 19.7 22.4 18.6 22.4 L5.4 22.4 C4.3 22.4 3.4 21.5 3.4 20.4 L3.4 12.8 C3.4 11.7 4.3 10.8 5.4 10.8 Z M12 14.4 C11 14.4 10.2 15.2 10.2 16.2 C10.2 16.9 10.6 17.5 11.2 17.8 L11.2 19.2 C11.2 19.6 11.6 20 12 20 C12.4 20 12.8 19.6 12.8 19.2 L12.8 17.8 C13.4 17.5 13.8 16.9 13.8 16.2 C13.8 15.2 13 14.4 12 14.4 Z" /></>),
   image: (<path d="M4 3.6 L20 3.6 C21.1 3.6 22 4.5 22 5.6 L22 18.4 C22 19.5 21.1 20.4 20 20.4 L4 20.4 C2.9 20.4 2 19.5 2 18.4 L2 5.6 C2 4.5 2.9 3.6 4 3.6 Z M8.4 6.6 C7.2 6.6 6.2 7.6 6.2 8.8 C6.2 10 7.2 11 8.4 11 C9.6 11 10.6 10 10.6 8.8 C10.6 7.6 9.6 6.6 8.4 6.6 Z M4 18.4 L20 18.4 L20 14 L15.6 9.6 L10.4 14.8 L7.6 12 L4 15.6 Z" />),
 };
 
@@ -96,4 +97,23 @@ export function sportIcon(s: string | null | undefined): IconName {
   if (k.includes("sauna")) return "sauna";
   if (k.includes("brick") || k.includes("multi")) return "session";
   return "strength";
+}
+
+// Server-supplied emoji (badge_def.icon, prs.sports[].emoji) → glyph. Lets us
+// render solid icons without a data migration; unknown emoji fall back to null
+// so callers can decide (usually: show nothing rather than a wrong glyph).
+const EMOJI_MAP: Record<string, IconName> = {
+  "\u{1F3CB}": "strength", "\u{1F4AA}": "strength", "\u{1F6B4}": "bike", "\u{1F3CA}": "swim",
+  "\u{1F3C3}": "run", "\u{1F6B6}": "walk", "\u{1F3C5}": "medal", "\u{1F947}": "medal",
+  "\u{1F948}": "medal", "\u{1F949}": "medal", "\u{1F396}": "medal", "\u{1F3C6}": "trophy",
+  "\u{1F4C6}": "calendar", "\u{1F5D3}": "calendar", "\u{1F4C5}": "calendar", "\u{1F525}": "fire",
+  "\u{1F3C1}": "flag", "\u{1F3AF}": "target", "\u2696": "scale", "\u{1F389}": "celebrate",
+  "\u{1F973}": "celebrate", "\u{1F5D1}": "trash", "\u270E": "edit", "\u270F": "edit",
+  "\u2B50": "star", "\u{1F512}": "lock", "\u{1F9D8}": "yoga", "\u{1F634}": "sleep",
+  "\u{1F9E0}": "brain", "\u2728": "sparkle", "\u{1F514}": "bell", "\u{1F4AC}": "chat",
+};
+export function emojiIcon(e: string | null | undefined): IconName | null {
+  if (!e) return null;
+  const bare = e.replace(/\uFE0F/g, "").trim();
+  return EMOJI_MAP[bare] ?? null;
 }
