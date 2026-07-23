@@ -838,14 +838,6 @@ const TIME_OPTS = [{ k: "morning", l: "Morning" }, { k: "midday", l: "Midday" },
 const STRENGTH_OPTS = [30, 45, 60, 75, 90, 120];
 const CARDIO_OPTS = [30, 45, 60, 90, 120, 150, 180, 240];
 const fmtSession = (m: number): string => (m < 60 ? m + " min" : m % 60 === 0 ? m / 60 + (m === 60 ? " hr" : " hrs") : Math.floor(m / 60) + "h " + (m % 60) + "m");
-const CAT_ORDER = ["facility", "endurance", "home", "cardio"];
-const CAT_LABEL: Record<string, string> = { facility: "Facilities", endurance: "Endurance gear", home: "Home equipment", cardio: "Cardio machines" };
-const CAT_ICON: Record<string, string> = {
-  facility: "M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6",
-  endurance: "M6.5 6.5v11M17.5 6.5v11M3 9v6M21 9v6M6.5 12h11",
-  home: "M6.5 6.5v11M17.5 6.5v11M3 9v6M21 9v6M6.5 12h11",
-  cardio: "M3 12h4l2 5 4-12 2 7h6",
-};
 const STATUS_LABEL: Record<string, string> = { active: "Active", managing: "Managing", recovered: "Recovered" };
 
 function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
@@ -856,7 +848,7 @@ function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
   );
 }
 
-function TrainingSetup({ data, onBack, onSaved }: { data: ProfileData; onBack: () => void; onSaved: (d: ProfileData) => void }) {
+function TrainingSetup({ data, onBack, onSaved, onData }: { data: ProfileData; onBack: () => void; onSaved: (d: ProfileData) => void; onData: (d: ProfileData) => void }) {
   const tp = data.training_prefs;
   const [days, setDays] = useState<number[]>(tp.training_days || []);
   const [ptime, setPtime] = useState<string | null>(tp.preferred_time);
@@ -865,7 +857,8 @@ function TrainingSetup({ data, onBack, onSaved }: { data: ProfileData; onBack: (
   const selStyle: React.CSSProperties = { ...S.input, padding: "11px 12px", fontSize: 14, cursor: "pointer" };
   const [skip, setSkip] = useState<boolean>(!!tp.skip_build_phase);
   const [selected, setSelected] = useState<string[]>(data.equipment.selected || []);
-  const [sheetCat, setSheetCat] = useState<string | null>(null);
+  const [eqStep, setEqStep] = useState(0);
+  const [eqOther, setEqOther] = useState<string>(data.equipment.other || "");
   type Inj = { id?: string; body_part: string; injury_type: string; status: string; note: string; date_resolved?: string | null };
   const [injuries, setInjuries] = useState<Inj[]>((data.injuries || []).map((x) => ({ id: x.id, body_part: x.body_part, injury_type: x.injury_type || "", status: x.status || "active", note: x.physio_note || "", date_resolved: x.date_resolved })));
   const [injEdit, setInjEdit] = useState(-1);
@@ -873,11 +866,36 @@ function TrainingSetup({ data, onBack, onSaved }: { data: ProfileData; onBack: (
   const [err, setErr] = useState<string | null>(null);
 
   const catalog = data.equipment.catalog || [];
-  const byCat = (cat: string) => catalog.filter((e) => e.category === cat);
-  const cats = CAT_ORDER.filter((c) => byCat(c).length);
+  const tops = catalog.filter((e) => !e.parent_key).slice().sort((a, b) => a.sort - b.sort);
+  const kidsOf = (k: string) => catalog.filter((e) => e.parent_key === k).slice().sort((a, b) => a.sort - b.sort);
+  const hasFollowUp = (k: string) => k === "other" || kidsOf(k).length > 0;
   const selSet = new Set(selected);
-  const toggleItem = (k: string) => setSelected((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
-  const groupSummary = (cat: string) => byCat(cat).filter((e) => selSet.has(e.item_key)).map((e) => e.label);
+  const chosenTops = tops.filter((t) => selSet.has(t.item_key));
+  const followUpTops = chosenTops.filter((t) => hasFollowUp(t.item_key));
+  // turning a facility off also clears anything picked underneath it
+  const toggleTop = (k: string) => setSelected((s) => {
+    if (s.includes(k)) { const kk = new Set(kidsOf(k).map((x) => x.item_key)); return s.filter((x) => x !== k && !kk.has(x)); }
+    return [...s, k];
+  });
+  const toggleChild = (parent: string, k: string, single: boolean) => setSelected((s) => {
+    if (!single) return s.includes(k) ? s.filter((x) => x !== k) : [...s, k];
+    const kk = kidsOf(parent).map((x) => x.item_key);
+    const base = s.filter((x) => !kk.includes(x));
+    return s.includes(k) ? base : [...base, k];
+  });
+  const eqSummary = chosenTops.map((t) => {
+    const ks = kidsOf(t.item_key).filter((x) => selSet.has(x.item_key)).map((x) => x.label);
+    return t.label + (ks.length ? " (" + ks.join(", ") + ")" : "");
+  }).join(" \u00b7 ");
+
+  async function saveEquip() {
+    setSaving(true); setErr(null);
+    try {
+      const d = await profileSave("equipment_save", { selected, equipment_other: selSet.has("other") ? (eqOther.trim() || null) : null });
+      onData(d); setEqStep(0);
+    } catch (e) { setErr((e as Error).message); } finally { setSaving(false); }
+  }
+
   const toggleDay = (d: number) => setDays((ds) => (ds.includes(d) ? ds.filter((x) => x !== d) : [...ds, d].sort((a, b) => a - b)));
 
   const setInj = (i: number, p: Partial<Inj>) => setInjuries((xs) => xs.map((x, k) => (k === i ? { ...x, ...p } : x)));
@@ -891,11 +909,92 @@ function TrainingSetup({ data, onBack, onSaved }: { data: ProfileData; onBack: (
     setSaving(true); setErr(null);
     try {
       await profileSave("training_prefs_save", { training_days: days, preferred_time: ptime, max_session_strength_min: maxStrength, max_session_cardio_min: maxCardio, skip_build_phase: skip });
-      await profileSave("equipment_save", { selected });
       const today = new Date().toISOString().slice(0, 10);
       const d = await profileSave("injuries_save", { injuries: injuries.filter((x) => x.body_part.trim()).map((x) => ({ id: x.id, body_part: x.body_part.trim(), injury_type: x.injury_type.trim() || null, status: x.status, physio_note: x.note.trim() || null, date_resolved: x.status === "recovered" ? (x.date_resolved || today) : null })) });
       onSaved(d);
     } catch (e) { setErr((e as Error).message); } finally { setSaving(false); }
+  }
+
+  const eqCta: React.CSSProperties = { width: "100%", padding: 14, borderRadius: 14, border: "none", background: "var(--ember)", color: "#fff", fontWeight: 800, fontSize: 14.5, cursor: "pointer", boxShadow: "var(--shadow-pop)" };
+
+  /* ========== EQUIPMENT STEP 1 of 2: what can you train with? (14a) ========== */
+  if (eqStep === 1) {
+    return (
+      <>
+        <EdHead title="Equipment & access" onBack={() => setEqStep(0)} />
+        <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.4, lineHeight: 1.2, color: "var(--text)" }}>What can you train with?</div>
+        <div style={{ fontSize: 12.5, color: "var(--text-2)", marginTop: 6 }}>Step 1 of 2 {"\u00b7"} select all that apply</div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 9, marginTop: 18 }}>
+          {tops.map((t) => {
+            const on = selSet.has(t.item_key);
+            return (
+              <button key={t.item_key} onClick={() => toggleTop(t.item_key)} style={{ position: "relative", borderRadius: 16, padding: "16px 6px 12px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 84, cursor: "pointer", textAlign: "center", background: on ? "var(--ember-tint)" : "var(--surface)", border: on ? "1.5px solid var(--ember)" : "1px solid var(--line)" }}>
+                {on && <span style={{ position: "absolute", top: 6, right: 6, width: 15, height: 15, borderRadius: 999, background: "var(--ember)", display: "flex", alignItems: "center", justifyContent: "center" }}><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg></span>}
+                <span style={{ fontSize: 11.5, fontWeight: on ? 800 : 700, color: on ? "var(--ember-strong)" : "var(--text)", lineHeight: 1.25 }}>{t.label}</span>
+                {hasFollowUp(t.item_key) && <span style={{ fontSize: 9, color: on ? "var(--ember-strong)" : "var(--muted)", opacity: 0.85 }}>{t.item_key === "other" ? "tell us next" : "details next"} {"\u203a"}</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        {err && <div style={{ color: "var(--danger)", fontSize: 13, marginTop: 14 }}>{err}</div>}
+        <div style={{ marginTop: 22 }}>
+          <button onClick={() => (followUpTops.length ? setEqStep(2) : saveEquip())} disabled={!chosenTops.length || saving}
+            style={{ ...eqCta, opacity: chosenTops.length && !saving ? 1 : 0.5, cursor: chosenTops.length && !saving ? "pointer" : "default" }}>
+            {saving ? "Saving\u2026" : followUpTops.length ? `Continue \u00b7 ${chosenTops.length} selected` : `Save equipment \u00b7 ${chosenTops.length} selected`}
+          </button>
+          <div style={{ textAlign: "center", fontSize: 10.5, color: "var(--muted)", marginTop: 10 }}>You can change this later</div>
+        </div>
+      </>
+    );
+  }
+
+  /* ========== EQUIPMENT STEP 2 of 2: follow-ups (14b) ========== */
+  if (eqStep === 2) {
+    return (
+      <>
+        <EdHead title="Equipment & access" onBack={() => setEqStep(1)} />
+        <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.4, lineHeight: 1.2, color: "var(--text)" }}>A few details</div>
+        <div style={{ fontSize: 12.5, color: "var(--text-2)", marginTop: 6 }}>Step 2 of 2 {"\u00b7"} only for what you picked</div>
+
+        <div style={{ ...S.card, padding: 16, marginTop: 18, display: "flex", flexDirection: "column", gap: 18 }}>
+          {followUpTops.map((t) => {
+            const single = t.select_mode === "single";
+            const kids = kidsOf(t.item_key);
+            return (
+              <div key={t.item_key}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>{t.label}</span>
+                  <span style={{ fontSize: 10.5, color: "var(--muted)" }}>{t.item_key === "other" ? "" : single ? "\u00b7 lap length" : "\u00b7 select all you have"}</span>
+                </div>
+                {t.item_key === "other" ? (
+                  <input style={S.input} value={eqOther} onChange={(e) => setEqOther(e.target.value)} placeholder="Anything else? e.g. kettlebells, rowing erg, climbing wall" />
+                ) : (
+                  <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+                    {kids.map((k) => {
+                      const on = selSet.has(k.item_key);
+                      return (
+                        <button key={k.item_key} onClick={() => toggleChild(t.item_key, k.item_key, single)}
+                          style={{ fontSize: 11.5, fontWeight: on ? 800 : 600, padding: "9px 13px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (on ? "var(--ember)" : "var(--line)"), background: on ? "var(--ember-tint)" : "var(--surface-2)", color: on ? "var(--ember-strong)" : "var(--text-2)" }}>
+                          {k.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {err && <div style={{ color: "var(--danger)", fontSize: 13, marginTop: 14 }}>{err}</div>}
+        <div style={{ marginTop: 20 }}>
+          <button onClick={saveEquip} disabled={saving} style={{ ...eqCta, opacity: saving ? 0.7 : 1 }}>{saving ? "Saving\u2026" : "Save equipment"}</button>
+          <div style={{ textAlign: "center", fontSize: 10.5, color: "var(--muted)", marginTop: 10 }}>You can change this later</div>
+        </div>
+      </>
+    );
   }
 
   return (
@@ -947,24 +1046,26 @@ function TrainingSetup({ data, onBack, onSaved }: { data: ProfileData; onBack: (
         </div>
       </div>
 
-      <div style={{ ...(S.secLabel as React.CSSProperties), marginTop: 22 }}>Equipment & access</div>
-      <div style={{ height: 10 }} />
-      <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
-        {cats.map((cat, ci) => { const sel = groupSummary(cat); return (
-          <button key={cat} onClick={() => setSheetCat(cat)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "13px 14px", background: "transparent", border: "none", borderBottom: ci === cats.length - 1 ? "none" : "1px solid var(--line)", cursor: "pointer", textAlign: "left" }}>
-            <span style={{ width: 32, height: 32, borderRadius: 10, flex: "none", background: "var(--ember-tint)", display: "flex", alignItems: "center", justifyContent: "center" }}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--ember-strong)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={CAT_ICON[cat]} /></svg></span>
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{CAT_LABEL[cat]}</span>
-              <span style={{ display: "block", fontSize: 11, color: "var(--text-2)", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sel.length ? sel.join(" \u00b7 ") : "None selected"}</span>
-            </span>
-            <span style={{ display: "flex", alignItems: "center", gap: 8, flex: "none" }}>
-              {sel.length > 0 && <span style={{ fontSize: 10.5, fontWeight: 800, color: "var(--success)" }}>{sel.length}</span>}
-              <Chevron />
-            </span>
-          </button>
-        ); })}
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "22px 2px 0" }}>
+        <span style={S.secLabel as React.CSSProperties}>Equipment & access</span>
+        <button onClick={() => setEqStep(1)} style={{ fontSize: 12, fontWeight: 800, color: "var(--ember-strong)", background: "none", border: "none", cursor: "pointer" }}>{chosenTops.length ? "Edit" : "+ Set up"}</button>
       </div>
-      <div style={{ fontSize: 10.5, color: "var(--muted)", margin: "8px 2px 0" }}>Tap a group to pick items in a sheet.</div>
+      <div style={{ height: 10 }} />
+      {chosenTops.length ? (
+        <button onClick={() => setEqStep(1)} style={{ ...S.card, width: "100%", textAlign: "left", padding: "14px 15px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{chosenTops.length} {chosenTops.length === 1 ? "facility" : "facilities"}</span>
+            <span style={{ display: "block", fontSize: 11.5, color: "var(--text-2)", marginTop: 2, lineHeight: 1.4 }}>{eqSummary}</span>
+            {selSet.has("other") && eqOther.trim() && <span style={{ display: "block", fontSize: 11, color: "var(--muted)", marginTop: 3 }}>Also: {eqOther.trim()}</span>}
+          </span>
+          <Chevron />
+        </button>
+      ) : (
+        <div style={{ ...S.card, padding: "18px 16px", textAlign: "center" }}>
+          <div style={{ fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.5, marginBottom: 12 }}>Tell Kai what you can train with so it only prescribes sessions you can actually do.</div>
+          <button onClick={() => setEqStep(1)} style={{ ...eqCta, width: "auto", padding: "11px 20px" }}>Set up equipment</button>
+        </div>
+      )}
 
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "22px 2px 0" }}>
         <span style={S.secLabel as React.CSSProperties}>Injuries</span>
@@ -1010,26 +1111,6 @@ function TrainingSetup({ data, onBack, onSaved }: { data: ProfileData; onBack: (
       {err && <div style={{ color: "var(--danger)", fontSize: 13, marginTop: 14 }}>{err}</div>}
       <button onClick={save} disabled={saving} style={{ width: "100%", margin: "18px 0 4px", padding: 14, borderRadius: 13, border: "none", background: "var(--ember)", color: "#fff", fontWeight: 800, fontSize: 15, cursor: saving ? "default" : "pointer", opacity: saving ? 0.7 : 1 }}>{saving ? "Saving\u2026" : "Save Training Setup"}</button>
 
-      {sheetCat && (
-        <div className="sheet-back" onClick={() => setSheetCat(null)}>
-          <div className="sheet-panel" onClick={(e) => e.stopPropagation()}>
-            <div className="sheet-handle" />
-            <div className="sheet-head">
-              <span className="sheet-title">{CAT_LABEL[sheetCat]}</span>
-              <button className="sheet-x" onClick={() => setSheetCat(null)}>{"\u00d7"}</button>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingBottom: 4 }}>
-              {byCat(sheetCat).map((e) => { const on = selSet.has(e.item_key); return (
-                <button key={e.item_key} onClick={() => toggleItem(e.item_key)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "12px 14px", borderRadius: 12, border: "1px solid " + (on ? "var(--ember)" : "var(--line)"), background: on ? "var(--ember-tint)" : "var(--surface)", cursor: "pointer", textAlign: "left" }}>
-                  <span style={{ fontSize: 13.5, fontWeight: 600, color: on ? "var(--ember-strong)" : "var(--text)" }}>{e.label}</span>
-                  <span style={{ width: 20, height: 20, borderRadius: "50%", flex: "none", display: "flex", alignItems: "center", justifyContent: "center", background: on ? "var(--ember)" : "transparent", border: on ? "none" : "1.5px solid var(--line-2)" }}>{on ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg> : null}</span>
-                </button>
-              ); })}
-            </div>
-            <button onClick={() => setSheetCat(null)} style={{ width: "100%", marginTop: 12, padding: 13, borderRadius: 12, border: "none", background: "var(--ember)", color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer" }}>Done</button>
-          </div>
-        </div>
-      )}
     </>
   );
 }
@@ -1267,7 +1348,7 @@ export default function ProfilePage() {
       {data && view === "hub" && <Hub data={data} onOpen={setView} onPickPhoto={pickPhoto} uploading={uploading} />}
       {data && view === "basics" && <BasicsEditor data={data} onBack={() => setView("hub")} onSaved={(d) => { setData(d); setView("hub"); }} onPickPhoto={pickPhoto} uploading={uploading} />}
       {data && view === "health" && <HealthSetup data={data} onBack={() => setView("hub")} onSaved={(d) => { setData(d); setView("hub"); }} onData={setData} />}
-      {data && view === "training" && <TrainingSetup data={data} onBack={() => setView("hub")} onSaved={(d) => { setData(d); setView("hub"); }} />}
+      {data && view === "training" && <TrainingSetup data={data} onBack={() => setView("hub")} onSaved={(d) => { setData(d); setView("hub"); }} onData={setData} />}
       {data && view === "appprefs" && <AppPrefsEditor data={data} onBack={() => setView("hub")} onSaved={(d) => { setData(d); setView("hub"); }} />}
     </Screen>
   );
