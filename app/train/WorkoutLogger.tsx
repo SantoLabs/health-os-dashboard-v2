@@ -55,6 +55,19 @@ function setHasData(tt: string | undefined, v: { kg: string; reps: string; secs:
   if (tt === "distance") return Number(v.dist) > 0;
   return Number(v.reps) > 0;
 }
+// Ticking a set whose boxes are empty used to raise the "Empty set" dialog even
+// when the greyed previous-session numbers were sitting right there as
+// placeholders. Adopt those for whichever fields are still blank.
+function prevFill(
+  v: { kg: string; reps: string; secs: string; dist: string },
+  pv: WkPrevSet | undefined,
+): { kg?: string; reps?: string; secs?: string; dist?: string } | null {
+  if (!pv) return null;
+  const o: { kg?: string; reps?: string; secs?: string; dist?: string } = {};
+  if (!v.kg && pv.weight_kg != null) o.kg = String(pv.weight_kg);
+  if (!v.reps && pv.reps != null) o.reps = String(pv.reps);
+  return Object.keys(o).length ? o : null;
+}
 function setMetricLabel(tt: string | undefined): string {
   if (tt === "time") return "duration";
   if (tt === "distance") return "distance";
@@ -1051,7 +1064,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
                         })() : (
                           <input inputMode="decimal" value={v.dist} placeholder="m" onChange={(e) => setInputs((m) => ({ ...m, [s.id]: { ...v, dist: e.target.value } }))} onBlur={() => commitEdit(s)} style={{ ...inp, width: 80, fontWeight: v.dist ? 700 : 400, background: s.completed ? "color-mix(in srgb, var(--success) 10%, transparent)" : (inp.background as string) }} />
                         )}
-                        <button aria-label="complete set" onClick={() => toggleComplete(s)} disabled={temp}
+                        <button aria-label="complete set" onClick={() => { const cur = inputs[s.id] || emptyInput(); let fill = s.completed ? null : prevFill(cur, pv); if (fill && !setHasData(s.tracking_type, { ...cur, ...fill })) fill = null; toggleComplete(s, fill || undefined); }} disabled={temp}
                           style={{ marginLeft: "auto", width: 30, height: 30, borderRadius: 8, cursor: temp ? "default" : "pointer", flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 15, color: s.completed ? "#04110a" : "var(--muted)", background: s.completed ? "var(--success)" : "var(--surface-2)", border: s.completed ? "none" : "1px solid var(--line)" }}>
                           {s.completed ? "✓" : ""}
                         </button>
