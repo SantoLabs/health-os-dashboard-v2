@@ -1,4 +1,5 @@
 "use client";
+import Icon from "../components/Icon";
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -643,7 +644,7 @@ export default function CardioBuilder({ sportHint = "running", onExit, intent = 
   const describeBlock = () => (
     <div style={{ marginTop: 8 }}>
       {!showDescribe ? (
-        <button onClick={() => setShowDescribe(true)} style={dashBtn("color-mix(in srgb, var(--ember) 50%, transparent)")}>✎ Describe it · Kai</button>
+        <button onClick={() => setShowDescribe(true)} style={dashBtn("color-mix(in srgb, var(--ember) 50%, transparent)")}><Icon name="edit" size={12} /> Describe it · Kai</button>
       ) : (
         <div style={{ padding: 10, borderRadius: 10, background: "color-mix(in srgb, var(--ember) 6%, transparent)", border: "1px solid color-mix(in srgb, var(--ember) 20%, transparent)" }}>
           <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder="e.g. 10 min warmup, then 1 km hard + 2 min easy jog ×5, 10 min cooldown" style={field} />
