@@ -237,6 +237,19 @@ const catLabel = (k: string | null) => (k && CAT_BY_KEY[k] ? CAT_BY_KEY[k].label
 const MAX_MAIN = 3;
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
+const EQ_ICON: Record<string, { d: string; tint: string }> = {
+  full_gym:        { d: "M6.5 8v8M17.5 8v8M3.5 10v4M20.5 10v4M6.5 12h11", tint: "#8A7F73" },
+  home_gym:        { d: "M4 21V9l8-6 8 6v12M9 15h6M8.5 13v4M15.5 13v4", tint: "#C9704E" },
+  cardio_machines: { d: "M4 17h14a3 3 0 0 0 0-6H8l-4 6ZM4 17v3M18 20v-3M14 7l3-3", tint: "#4E90A8" },
+  pool:            { d: "M3 10c2-2 4 2 6 0s4 2 6 0 4 2 6 0M3 16c2-2 4 2 6 0s4 2 6 0 4 2 6 0", tint: "#3F8FB5" },
+  open_water:      { d: "M2 17c2-2 4 2 6 0s4 2 6 0 4 2 6 0M2 21c2-2 4 2 6 0s4 2 6 0 4 2 6 0M7 11l4-2 4 2M17 6.5a1.5 1.5 0 1 0 .01 0", tint: "#2E8B87" },
+  bike_trainer:    { d: "M5.5 17.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M18.5 17.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M5.5 14l4-6h5l4 6M9.5 8h4", tint: "#C9704E" },
+  sauna_steam:     { d: "M12 3v3M5.6 5.6l2.1 2.1M3 12h3M18 12h3M16.3 7.7l2.1-2.1M7 20a5 5 0 0 1 10 0Z", tint: "#C9922E" },
+  foam_roller:     { d: "M4.5 13.5a3 3 0 0 1 3-3h9a3 3 0 0 1 0 6h-9a3 3 0 0 1-3-3M9 10.8v5.4M13 10.8v5.4", tint: "#7A6BB5" },
+  other:           { d: "M12 6v12M6 12h12", tint: "#8A7F73" },
+};
+
+
 /* Per-category detail fields (spec step 3). "target_date" is the ONE key that writes
    to the goals_user column - everything else lands in the goal's details jsonb. */
 type FKind = "chips" | "seg" | "text" | "num" | "date";
@@ -929,8 +942,11 @@ function TrainingSetup({ data, onBack, onSaved, onData }: { data: ProfileData; o
           {tops.map((t) => {
             const on = selSet.has(t.item_key);
             return (
-              <button key={t.item_key} onClick={() => toggleTop(t.item_key)} style={{ position: "relative", borderRadius: 16, padding: "16px 6px 12px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 84, cursor: "pointer", textAlign: "center", background: on ? "var(--ember-tint)" : "var(--surface)", border: on ? "1.5px solid var(--ember)" : "1px solid var(--line)" }}>
+              <button key={t.item_key} onClick={() => toggleTop(t.item_key)} style={{ position: "relative", borderRadius: 16, padding: "16px 6px 12px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 7, minHeight: 100, cursor: "pointer", textAlign: "center", background: on ? "var(--ember-tint)" : "var(--surface)", border: on ? "1.5px solid var(--ember)" : "1px solid var(--line)" }}>
                 {on && <span style={{ position: "absolute", top: 6, right: 6, width: 15, height: 15, borderRadius: 999, background: "var(--ember)", display: "flex", alignItems: "center", justifyContent: "center" }}><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg></span>}
+                <span style={{ width: 34, height: 34, borderRadius: 999, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", background: on ? "var(--surface)" : (EQ_ICON[t.item_key]?.tint || "#8A7F73") + "22" }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={on ? "var(--ember-strong)" : (EQ_ICON[t.item_key]?.tint || "var(--text-2)")} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={EQ_ICON[t.item_key]?.d || "M12 6v12M6 12h12"} /></svg>
+                </span>
                 <span style={{ fontSize: 11.5, fontWeight: on ? 800 : 700, color: on ? "var(--ember-strong)" : "var(--text)", lineHeight: 1.25 }}>{t.label}</span>
                 {hasFollowUp(t.item_key) && <span style={{ fontSize: 9, color: on ? "var(--ember-strong)" : "var(--muted)", opacity: 0.85 }}>{t.item_key === "other" ? "tell us next" : "details next"} {"\u203a"}</span>}
               </button>
@@ -964,7 +980,10 @@ function TrainingSetup({ data, onBack, onSaved, onData }: { data: ProfileData; o
             const kids = kidsOf(t.item_key);
             return (
               <div key={t.item_key}>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <span style={{ width: 26, height: 26, borderRadius: 999, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", background: (EQ_ICON[t.item_key]?.tint || "#8A7F73") + "22" }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={EQ_ICON[t.item_key]?.tint || "var(--text-2)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={EQ_ICON[t.item_key]?.d || "M12 6v12M6 12h12"} /></svg>
+                  </span>
                   <span style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>{t.label}</span>
                   <span style={{ fontSize: 10.5, color: "var(--muted)" }}>{t.item_key === "other" ? "" : single ? "\u00b7 lap length" : "\u00b7 select all you have"}</span>
                 </div>
