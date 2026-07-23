@@ -1,4 +1,5 @@
 "use client";
+import Icon from "../../components/Icon";
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Screen } from "../../components/Screen";
@@ -67,7 +68,7 @@ export default function AskPage() {
     const text = q.trim(); if ((!text && !img) || busy) return;
     setErr(null); setInput("");
     const staged = img; setImg(null);
-    setMessages((m) => [...m, { id: "tmp-" + Date.now(), role: "user", text: staged ? (text || "📷 Photo") : text }]);
+    setMessages((m) => [...m, { id: "tmp-" + Date.now(), role: "user", text: staged ? (text || "Photo") : text }]);
     setBusy(true);
     try {
       const r = staged
@@ -114,7 +115,7 @@ export default function AskPage() {
 
         {pinned.length > 0 && (
           <>
-            <div style={lblStyle}>📌 Pinned</div>
+            <div style={lblStyle}><Icon name="pin" size={10} /> Pinned</div>
             {pinned.map((t) => <ThreadRow key={t.id} t={t} swiped={swiped === t.id} onSwipe={() => setSwiped(swiped === t.id ? null : t.id)} onOpen={() => openThread(t.id)} onPin={() => pin(t)} onDel={() => del(t)} onRename={() => rename(t)} />)}
           </>
         )}
@@ -206,7 +207,7 @@ function ThreadRow({ t, swiped, onSwipe, onOpen, onPin, onDel, onRename }: { t: 
     <div style={{ position: "relative", marginBottom: 8 }}>
       <div onClick={onOpen} style={{ background: t.pinned ? "#13203a" : SURF, border: "1px solid " + (t.pinned ? BORDER_ACCENT : BORDER), borderRadius: 13, padding: "12px 13px", cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: H, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.pinned ? "📌 " : ""}{t.title}</div>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: H, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.pinned ? <><Icon name="pin" size={10} />{" "}</> : null}{t.title}</div>
           {t.last_message ? <div style={{ fontSize: 11.5, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: 2 }}>{t.last_message}</div> : null}
         </div>
         <span style={{ fontSize: 10.5, color: FAINT }}>{relTime(t.updated_at)}</span>
