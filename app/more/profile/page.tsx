@@ -851,7 +851,22 @@ const TIME_OPTS = [{ k: "morning", l: "Morning" }, { k: "midday", l: "Midday" },
 const STRENGTH_OPTS = [30, 45, 60, 75, 90, 120];
 const CARDIO_OPTS = [30, 45, 60, 90, 120, 150, 180, 240];
 const fmtSession = (m: number): string => (m < 60 ? m + " min" : m % 60 === 0 ? m / 60 + (m === 60 ? " hr" : " hrs") : Math.floor(m / 60) + "h " + (m % 60) + "m");
-const STATUS_LABEL: Record<string, string> = { active: "Active", managing: "Managing", recovered: "Recovered" };
+/* ---------- injuries & limitations (turn 16) ---------- */
+const INJ_AREAS: { key: string; label: string; d: string; tint: string }[] = [
+  { key: "neck",       label: "Neck",          tint: "#8A7F73", d: "M9 3v3.5c0 1.2-.6 1.8-2 2.3C4.6 9.7 4 11 4 13v8M15 3v3.5c0 1.2.6 1.8 2 2.3 2.4.9 3 2.2 3 4.2v8M9.5 8.5h5" },
+  { key: "shoulder",   label: "Shoulder",      tint: "#C9704E", d: "M12 4.5a2.4 2.4 0 1 0 .01 0M6 21v-6c0-3 2.5-5.5 6-5.5s6 2.5 6 5.5v6M6 13.5C4 14 3 15.5 3 17.5" },
+  { key: "elbow_wrist",label: "Elbow / Wrist", tint: "#B07A3C", d: "M7 3v6a4 4 0 0 0 4 4h1a4 4 0 0 1 4 4v4M12 13a1.6 1.6 0 1 0 .01 0M17 21h4" },
+  { key: "back",       label: "Back",          tint: "#4E7FA8", d: "M12 3a2.2 2.2 0 1 0 .01 0M12 7.5v13M9 10h6M9 14h6M9 18h6" },
+  { key: "hip_glute",  label: "Hip / Glute",   tint: "#7A6BB5", d: "M5 5v5c0 2.5 1.5 4 4 4h6c2.5 0 4 1.5 4 4v3M9 14v7M15 18v3" },
+  { key: "knee",       label: "Knee",          tint: "#C9704E", d: "M9 3v6.5c0 1.5.6 2.3 1.6 3.1 1.4 1.1 2 2 2 3.6V21M12.6 12.5a2.3 2.3 0 1 0 .01 0" },
+  { key: "ankle_foot", label: "Ankle / Foot",  tint: "#2E8B87", d: "M10 3v9.5c0 1.6-.5 2.4-1.4 3.3-.9.9-1.6 1.6-1.6 3V21h11M9 15.5a1.8 1.8 0 1 0 .01 0" },
+  { key: "muscle_strain", label: "Muscle strain", tint: "#C9922E", d: "M6.5 5.5c3 1 4.5 3.5 5 6.5.5 3 2 5.5 5 6.5M8.5 3.5c3.5 1.2 5.3 4 6 7.5M4.5 7.5c2.5 1 3.8 3 4.3 5.5" },
+  { key: "soreness",   label: "General soreness", tint: "#8A9A8F", d: "M12 20s-7-4.3-7-9a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 4.7-7 9-7 9z" },
+  { key: "other",      label: "Other",         tint: "#8A7F73", d: "M12 6v12M6 12h12" },
+];
+const INJ_BY_KEY: Record<string, { key: string; label: string; d: string; tint: string }> = Object.fromEntries(INJ_AREAS.map((a) => [a.key, a]));
+const injLabel = (k: string | null) => (k && INJ_BY_KEY[k] ? INJ_BY_KEY[k].label : "Limitation");
+const INJ_STATUS_LABEL: Record<string, string> = { current: "Current", previous: "Previous", recurring: "Recurring" };
 
 function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
   return (
@@ -872,9 +887,14 @@ function TrainingSetup({ data, onBack, onSaved, onData }: { data: ProfileData; o
   const [selected, setSelected] = useState<string[]>(data.equipment.selected || []);
   const [eqStep, setEqStep] = useState(0);
   const [eqOther, setEqOther] = useState<string>(data.equipment.other || "");
-  type Inj = { id?: string; body_part: string; injury_type: string; status: string; note: string; date_resolved?: string | null };
-  const [injuries, setInjuries] = useState<Inj[]>((data.injuries || []).map((x) => ({ id: x.id, body_part: x.body_part, injury_type: x.injury_type || "", status: x.status || "active", note: x.physio_note || "", date_resolved: x.date_resolved })));
-  const [injEdit, setInjEdit] = useState(-1);
+  type Inj = { id?: string; area: string; body_part: string; status: string; side: string | null; severity_0_10: number | null; training_impact: string | null; started_bucket: string | null; started_on: string | null; physio_note: string; details: Record<string, unknown> };
+  const [injuries, setInjuries] = useState<Inj[]>((data.injuries || []).map((x) => ({
+    id: x.id, area: x.area || "other", body_part: x.body_part, status: x.status || "current",
+    side: x.side, severity_0_10: x.severity_0_10, training_impact: x.training_impact,
+    started_bucket: x.started_bucket, started_on: x.started_on,
+    physio_note: x.physio_note || "", details: (x.details || {}) as Record<string, unknown>,
+  })));
+  const [injStep, setInjStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -911,9 +931,22 @@ function TrainingSetup({ data, onBack, onSaved, onData }: { data: ProfileData; o
 
   const toggleDay = (d: number) => setDays((ds) => (ds.includes(d) ? ds.filter((x) => x !== d) : [...ds, d].sort((a, b) => a - b)));
 
-  const setInj = (i: number, p: Partial<Inj>) => setInjuries((xs) => xs.map((x, k) => (k === i ? { ...x, ...p } : x)));
-  const delInj = (i: number) => { setInjEdit(-1); setInjuries((xs) => xs.filter((_, k) => k !== i)); };
-  const addInj = () => { setInjuries((xs) => [...xs, { body_part: "", injury_type: "", status: "active", note: "" }]); setInjEdit(injuries.length); };
+  const injSet = new Set(injuries.map((x) => x.area));
+  const toggleArea = (k: string) => setInjuries((xs) => (xs.some((x) => x.area === k)
+    ? xs.filter((x) => x.area !== k)
+    : [...xs, { area: k, body_part: injLabel(k), status: "current", side: null, severity_0_10: null, training_impact: null, started_bucket: null, started_on: null, physio_note: "", details: {} }]));
+  const injSummary = (x: Inj) => [INJ_STATUS_LABEL[x.status] || x.status, x.side && x.side !== "na" ? x.side.charAt(0).toUpperCase() + x.side.slice(1) : null, x.severity_0_10 != null ? x.severity_0_10 + "/10" : null].filter(Boolean).join(" \u00b7 ");
+  const injDone = (x: Inj) => !!(x.status && x.training_impact);
+
+  // Saving with an empty list is meaningful: it records "asked, none reported".
+  async function saveLimitations() {
+    setSaving(true); setErr(null);
+    try {
+      const payload = injuries.map((x) => ({ id: x.id, area: x.area, body_part: x.body_part || injLabel(x.area), status: x.status, side: x.side, severity_0_10: x.severity_0_10, training_impact: x.training_impact, started_bucket: x.started_bucket, started_on: x.started_on, physio_note: x.physio_note.trim() || null, details: x.details }));
+      const d = await profileSave("limitations_save", { injuries: payload, reviewed: true });
+      onData(d); setInjStep(0);
+    } catch (e) { setErr((e as Error).message); } finally { setSaving(false); }
+  }
 
   const smallBtn: React.CSSProperties = { width: 28, height: 28, borderRadius: 8, border: "1px solid var(--line)", background: "var(--surface)", color: "var(--text-2)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flex: "none", fontSize: 14, lineHeight: 1 };
   const seg = (on: boolean, tinted = true): React.CSSProperties => ({ flex: 1, padding: "9px 0", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer", textAlign: "center", border: "1px solid " + (on ? "var(--ember)" : "var(--line)"), background: on ? (tinted ? "var(--ember-tint)" : "var(--ember)") : "var(--surface-2)", color: on ? (tinted ? "var(--ember-strong)" : "#fff") : "var(--text-2)" });
@@ -921,14 +954,90 @@ function TrainingSetup({ data, onBack, onSaved, onData }: { data: ProfileData; o
   async function save() {
     setSaving(true); setErr(null);
     try {
-      await profileSave("training_prefs_save", { training_days: days, preferred_time: ptime, max_session_strength_min: maxStrength, max_session_cardio_min: maxCardio, skip_build_phase: skip });
-      const today = new Date().toISOString().slice(0, 10);
-      const d = await profileSave("injuries_save", { injuries: injuries.filter((x) => x.body_part.trim()).map((x) => ({ id: x.id, body_part: x.body_part.trim(), injury_type: x.injury_type.trim() || null, status: x.status, physio_note: x.note.trim() || null, date_resolved: x.status === "recovered" ? (x.date_resolved || today) : null })) });
+      const d = await profileSave("training_prefs_save", { training_days: days, preferred_time: ptime, max_session_strength_min: maxStrength, max_session_cardio_min: maxCardio, skip_build_phase: skip });
       onSaved(d);
     } catch (e) { setErr((e as Error).message); } finally { setSaving(false); }
   }
 
   const eqCta: React.CSSProperties = { width: "100%", padding: 14, borderRadius: 14, border: "none", background: "var(--ember)", color: "#fff", fontWeight: 800, fontSize: 14.5, cursor: "pointer", boxShadow: "var(--shadow-pop)" };
+
+  /* ========== LIMITATIONS STEP 1 of 2: pick the areas (16a/16b) ========== */
+  if (injStep === 1) {
+    return (
+      <>
+        <EdHead title="Injuries & limitations" onBack={() => setInjStep(0)} />
+        <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.4, lineHeight: 1.2, color: "var(--text)" }}>Any injuries or limitations?</div>
+        <div style={{ fontSize: 12.5, color: "var(--text-2)", marginTop: 6 }}>Step 1 of 2 {"\u00b7"} select all that apply</div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 9, marginTop: 18 }}>
+          {INJ_AREAS.map((a) => {
+            const on = injSet.has(a.key);
+            const isOther = a.key === "other";
+            return (
+              <button key={a.key} onClick={() => toggleArea(a.key)} style={{ position: "relative", borderRadius: 16, padding: "14px 12px", display: "flex", alignItems: "center", gap: 11, minHeight: 64, cursor: "pointer", textAlign: "left", background: on ? "var(--ember-tint)" : isOther ? "transparent" : "var(--surface)", border: on ? "1.5px solid var(--ember)" : isOther ? "1px dashed var(--line-2)" : "1px solid var(--line)" }}>
+                {on && <span style={{ position: "absolute", top: 6, right: 6, width: 15, height: 15, borderRadius: 999, background: "var(--ember)", display: "flex", alignItems: "center", justifyContent: "center" }}><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg></span>}
+                <span style={{ width: 32, height: 32, borderRadius: 999, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", background: on ? "var(--surface)" : a.tint + "22" }}>
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={on ? "var(--ember-strong)" : a.tint} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={a.d} /></svg>
+                </span>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: "block", fontSize: 12.5, fontWeight: on ? 800 : 700, color: on ? "var(--ember-strong)" : isOther ? "var(--muted)" : "var(--text)", lineHeight: 1.2 }}>{a.label}</span>
+                  <span style={{ display: "block", fontSize: 9, color: on ? "var(--ember-strong)" : "var(--muted)", opacity: 0.85, marginTop: 2 }}>{isOther ? "tell us next" : "details next"} {"\u203a"}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{ fontSize: 11, color: "var(--muted)", margin: "12px 2px 0", lineHeight: 1.45 }}>Kai uses this to adjust workouts and reduce injury risk.</div>
+
+        {err && <div style={{ color: "var(--danger)", fontSize: 13, marginTop: 14 }}>{err}</div>}
+        <div style={{ marginTop: 20 }}>
+          <button onClick={() => (injuries.length ? setInjStep(2) : saveLimitations())} disabled={saving} style={{ ...eqCta, opacity: saving ? 0.7 : 1 }}>
+            {saving ? "Saving\u2026" : injuries.length ? `Continue \u00b7 ${injuries.length} selected` : `No injuries \u00b7 Continue`}
+          </button>
+          <div style={{ textAlign: "center", fontSize: 10.5, color: "var(--muted)", marginTop: 10 }}>You can change this later</div>
+        </div>
+      </>
+    );
+  }
+
+  /* ========== LIMITATIONS STEP 2 of 2: quick details (16c shell; fields land next unit) ========== */
+  if (injStep === 2) {
+    return (
+      <>
+        <EdHead title="Injuries & limitations" onBack={() => setInjStep(1)} />
+        <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.4, lineHeight: 1.2, color: "var(--text)" }}>Tell Kai what to avoid</div>
+        <div style={{ fontSize: 12.5, color: "var(--text-2)", marginTop: 6 }}>Step 2 of 2 {"\u00b7"} quick details for selected areas</div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 9, marginTop: 18 }}>
+          {injuries.map((x) => {
+            const a = INJ_BY_KEY[x.area] || INJ_BY_KEY.other;
+            const done = injDone(x);
+            return (
+              <div key={x.area} style={{ ...S.card, display: "flex", alignItems: "center", gap: 11, padding: "13px 14px" }}>
+                <span style={{ width: 30, height: 30, borderRadius: 999, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", background: a.tint + "22" }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={a.tint} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={a.d} /></svg>
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{a.label}</span>
+                  <span style={{ display: "block", fontSize: 11, color: "var(--text-2)", marginTop: 1 }}>{done ? injSummary(x) : "Add details"}</span>
+                </span>
+                <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 0.4, padding: "3px 8px", borderRadius: 999, flex: "none", background: done ? "var(--success-tint)" : "var(--surface-2)", color: done ? "var(--success)" : "var(--muted)" }}>{done ? "SET" : "1 LEFT"}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ fontSize: 10.5, color: "var(--muted)", margin: "14px 2px 0", lineHeight: 1.5 }}>Kai uses this to adjust training suggestions. StriveOS does not diagnose or treat injuries.</div>
+
+        {err && <div style={{ color: "var(--danger)", fontSize: 13, marginTop: 14 }}>{err}</div>}
+        <div style={{ marginTop: 20 }}>
+          <button onClick={saveLimitations} disabled={saving} style={{ ...eqCta, opacity: saving ? 0.7 : 1 }}>{saving ? "Saving\u2026" : "Save limitations"}</button>
+          <button onClick={() => setInjStep(0)} style={{ width: "100%", marginTop: 10, padding: 12, borderRadius: 12, border: "none", background: "transparent", color: "var(--text-2)", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>Skip for now</button>
+        </div>
+      </>
+    );
+  }
 
   /* ========== EQUIPMENT STEP 1 of 2: what can you train with? (14a) ========== */
   if (eqStep === 1) {
@@ -1087,40 +1196,24 @@ function TrainingSetup({ data, onBack, onSaved, onData }: { data: ProfileData; o
       )}
 
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "22px 2px 0" }}>
-        <span style={S.secLabel as React.CSSProperties}>Injuries</span>
-        <button onClick={addInj} style={{ fontSize: 12, fontWeight: 800, color: "var(--ember-strong)", background: "none", border: "none", cursor: "pointer" }}>+ Add</button>
+        <span style={S.secLabel as React.CSSProperties}>Injuries & limitations</span>
+        <button onClick={() => setInjStep(1)} style={{ fontSize: 12, fontWeight: 800, color: "var(--ember-strong)", background: "none", border: "none", cursor: "pointer" }}>{injuries.length ? "Edit" : "+ Set up"}</button>
       </div>
       <div style={{ height: 10 }} />
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {injuries.map((x, i) => (
-          <div key={i} style={{ ...S.card, padding: "12px 13px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-              <span style={{ width: 30, height: 30, borderRadius: 9, flex: "none", background: x.status === "recovered" ? "var(--success-tint)" : "var(--ember-tint)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={x.status === "recovered" ? "var(--success)" : "var(--ember-strong)"} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">{x.status === "recovered" ? <path d="M4 12l5 5 11-11" /> : <path d="M12 8v5M12 16v.01" />}</svg>
-              </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(x.body_part || "New injury") + (x.injury_type ? " - " + x.injury_type : "")}</div>
-                <div style={{ fontSize: 11, color: "var(--text-2)", marginTop: 1 }}>{STATUS_LABEL[x.status] || x.status}{x.note ? " \u00b7 " + x.note : ""}</div>
-              </div>
-              <button aria-label="Edit" onClick={() => setInjEdit(injEdit === i ? -1 : i)} style={smallBtn}>{"\u270e"}</button>
-              <button aria-label="Delete" onClick={() => delInj(i)} style={{ ...smallBtn, color: "var(--danger)" }}>{"\u00d7"}</button>
-            </div>
-            {injEdit === i && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
-                <input style={S.input} value={x.body_part} onChange={(e) => setInj(i, { body_part: e.target.value })} placeholder="Body part (e.g. Left knee)" />
-                <input style={S.input} value={x.injury_type} onChange={(e) => setInj(i, { injury_type: e.target.value })} placeholder="Type (e.g. runner's knee)" />
-                <div style={{ display: "flex", gap: 6 }}>
-                  {([["active", "Active"], ["managing", "Managing"], ["recovered", "Recovered"]] as [string, string][]).map(([k, l]) => (
-                    <button key={k} onClick={() => setInj(i, { status: k })} style={seg(x.status === k)}>{l}</button>
-                  ))}
-                </div>
-                <input style={S.input} value={x.note} onChange={(e) => setInj(i, { note: e.target.value })} placeholder="Note (optional)" />
-              </div>
-            )}
-          </div>
-        ))}
-        {!injuries.length && <div style={{ fontSize: 12.5, color: "var(--muted)", padding: "2px 2px 4px" }}>No injuries logged. Add one so Kai can plan around it.</div>}
-      </div>
+      {injuries.length ? (
+        <button onClick={() => setInjStep(1)} style={{ ...S.card, width: "100%", textAlign: "left", padding: "14px 15px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: "block", fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{injuries.length} {injuries.length === 1 ? "area" : "areas"} flagged</span>
+            <span style={{ display: "block", fontSize: 11.5, color: "var(--text-2)", marginTop: 2, lineHeight: 1.4 }}>{injuries.map((x) => injLabel(x.area)).join(" \u00b7 ")}</span>
+          </span>
+          <Chevron />
+        </button>
+      ) : (
+        <div style={{ ...S.card, padding: "18px 16px", textAlign: "center" }}>
+          <div style={{ fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.5, marginBottom: 12 }}>{data.injuries_reviewed_at ? "You told Kai there are no limitations to work around." : "Tell Kai what to work around so it can adjust sessions and reduce injury risk."}</div>
+          <button onClick={() => setInjStep(1)} style={{ ...eqCta, width: "auto", padding: "11px 20px" }}>{data.injuries_reviewed_at ? "Review" : "Set up limitations"}</button>
+        </div>
+      )}
 
       <div style={{ ...S.card, display: "flex", gap: 11, padding: "13px 14px", margin: "18px 0 0", background: "var(--ember-tint)" }}>
         <div style={{ width: 26, height: 26, borderRadius: "50%", background: "var(--ember)", color: "#fff", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>K</div>
