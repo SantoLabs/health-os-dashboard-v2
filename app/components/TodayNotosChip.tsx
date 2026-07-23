@@ -1,4 +1,5 @@
 "use client";
+import Icon from "./Icon";
 
 // Minimal "N due" chip for the Today page. Renders nothing when nothing is due,
 // so Today stays uncluttered; taps through to the Notification Center.
@@ -29,7 +30,7 @@ export default function TodayNotosChip() {
         textAlign: "left", fontFamily: "inherit",
       }}
     >
-      <span style={{ fontSize: 15 }}>🔔</span>
+      <Icon name="bell" size={14} />
       <span style={{ flex: 1, fontSize: 12.5, fontWeight: 700, color: "var(--ember-strong)" }}>
         {count} {count === 1 ? "reminder" : "reminders"} due now
       </span>
