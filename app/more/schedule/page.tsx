@@ -1,4 +1,5 @@
 "use client";
+import Icon, { type IconName } from "../../components/Icon";
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { planWeek, planRange, planPost, strengthSessions, cardioActivities, actualStarts, type StrengthSession, type CardioActivityLite } from "../../lib/api";
@@ -42,20 +43,20 @@ const EFFORTS = ["Easy", "Aerobic", "Tempo", "Threshold", "Intervals", "Drills"]
 const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 type TKey = "run" | "swim" | "strength" | "hiit" | "cycle" | "yoga" | "walk" | "rest" | "travel" | "race" | "social" | "meeting" | "custom";
-const T: Record<TKey, { label: string; emoji: string; color: string; cat: string }> = {
-  run: { label: "Run", emoji: "🏃", color: "#34D399", cat: "workout" },
-  swim: { label: "Swim", emoji: "🏊", color: "#38BDF8", cat: "workout" },
-  strength: { label: "Strength", emoji: "🏋️", color: "#FBBF24", cat: "workout" },
-  hiit: { label: "HIIT", emoji: "🔥", color: "#FB7185", cat: "workout" },
-  cycle: { label: "Cycle", emoji: "🚴", color: "#A78BFA", cat: "workout" },
-  yoga: { label: "Yoga", emoji: "🧘", color: "#F0ABFC", cat: "workout" },
-  walk: { label: "Walk", emoji: "🚶", color: "#2DD4BF", cat: "workout" },
-  rest: { label: "Rest", emoji: "😴", color: "#94A3B8", cat: "rest" },
-  travel: { label: "Travel", emoji: "✈️", color: "#93C5FD", cat: "travel" },
-  race: { label: "Race", emoji: "🏅", color: "#FACC15", cat: "race" },
-  social: { label: "Social", emoji: "🍻", color: "#F472B6", cat: "social" },
-  meeting: { label: "Event", emoji: "📅", color: "#6E7C96", cat: "meeting" },
-  custom: { label: "Custom", emoji: "✨", color: "#C4B5FD", cat: "workout" },
+const T: Record<TKey, { label: string; icon: IconName; color: string; cat: string }> = {
+  run: { label: "Run", icon: "run", color: "#34D399", cat: "workout" },
+  swim: { label: "Swim", icon: "swim", color: "#38BDF8", cat: "workout" },
+  strength: { label: "Strength", icon: "strength", color: "#FBBF24", cat: "workout" },
+  hiit: { label: "HIIT", icon: "hiit", color: "#FB7185", cat: "workout" },
+  cycle: { label: "Cycle", icon: "bike", color: "#A78BFA", cat: "workout" },
+  yoga: { label: "Yoga", icon: "yoga", color: "#F0ABFC", cat: "workout" },
+  walk: { label: "Walk", icon: "walk", color: "#2DD4BF", cat: "workout" },
+  rest: { label: "Rest", icon: "sleep", color: "#94A3B8", cat: "rest" },
+  travel: { label: "Travel", icon: "plane", color: "#93C5FD", cat: "travel" },
+  race: { label: "Race", icon: "medal", color: "#FACC15", cat: "race" },
+  social: { label: "Social", icon: "drink", color: "#F472B6", cat: "social" },
+  meeting: { label: "Event", icon: "calendar", color: "#6E7C96", cat: "meeting" },
+  custom: { label: "Custom", icon: "sparkle", color: "#C4B5FD", cat: "workout" },
 };
 const PICK_TYPES: TKey[] = ["run", "swim", "strength", "hiit", "cycle", "yoga", "walk", "rest", "travel", "race", "social", "custom"];
 const WORKOUT_TYPES: TKey[] = ["run", "swim", "strength", "hiit", "cycle", "yoga", "walk", "rest", "custom"];
@@ -474,7 +475,7 @@ export default function SchedulePage() {
             <div style={{ fontSize: 11, color: T3, marginBottom: 7 }}>Unscheduled — tap to set a time</div>
             <div className="hscroll">
               {unscheduled.map((b) => { const t = T[b.tkey]; return (
-                <button key={b.id} onClick={() => openPeek(b)} style={{ display: "inline-flex", alignItems: "center", gap: 6, flex: "none", background: hexA(t.color, .14), border: "1px solid " + hexA(t.color, .3), borderRadius: 999, padding: "6px 12px", cursor: "pointer", font: "inherit", color: chipTxt(t.color), fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}>{t.emoji} {b.title}</button>
+                <button key={b.id} onClick={() => openPeek(b)} style={{ display: "inline-flex", alignItems: "center", gap: 6, flex: "none", background: hexA(t.color, .14), border: "1px solid " + hexA(t.color, .3), borderRadius: 999, padding: "6px 12px", cursor: "pointer", font: "inherit", color: chipTxt(t.color), fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}><Icon name={t.icon} size={11} /> {b.title}</button>
               ); })}
             </div>
           </div>
@@ -490,7 +491,7 @@ export default function SchedulePage() {
               <div style={{ flex: 1, minWidth: 0, display: "flex", gap: 7, flexWrap: "wrap", alignItems: "center" }}>
                 {items.map((b) => { const t = T[b.tkey]; const done = b.status === "done"; const skip = b.status === "skipped"; const meta = b.dist ? km(b.dist) : b.allDay ? "" : b.hour != null ? fmtT(b.hour, b.min) : ""; return (
                   <button key={b.id} onClick={() => openPeek(b)} style={{ display: "inline-flex", alignItems: "center", gap: 6, maxWidth: "100%", background: hexA(t.color, .14), border: "1px solid " + hexA(t.color, .3), borderRadius: 999, padding: "6px 12px", cursor: "pointer", font: "inherit", opacity: skip ? .6 : 1 }}>
-                    <span style={{ fontSize: 11.5, fontWeight: 700, color: chipTxt(t.color), whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textDecoration: skip ? "line-through" : "none" }}>{done ? "🎉 " : t.emoji + " "}{b.title}</span>
+                    <span style={{ fontSize: 11.5, fontWeight: 700, color: chipTxt(t.color), whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textDecoration: skip ? "line-through" : "none" }}>{done ? <Icon name="celebrate" size={12} /> : <Icon name={t.icon} size={12} />}{" "}{b.title}</span>
                     {meta && <span style={{ fontSize: 10.5, fontWeight: 600, color: T3, flex: "none" }}>{meta}</span>}
                   </button>
                 ); })}
@@ -534,7 +535,7 @@ export default function SchedulePage() {
           <div style={{ ...SS.card, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 14px" }}>
             <div style={{ fontSize: 10.5, fontWeight: 700, color: T3, letterSpacing: ".05em" }}>ALL DAY</div>
             {allDay.map((b) => { const t = T[b.tkey]; return (
-              <button key={b.id} onClick={() => openPeek(b)} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: hexA(t.color, .14), border: "1px solid " + hexA(t.color, .3), borderRadius: 999, padding: "6px 12px", cursor: "pointer", font: "inherit", color: chipTxt(t.color), fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}>{t.emoji} {b.title}</button>
+              <button key={b.id} onClick={() => openPeek(b)} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: hexA(t.color, .14), border: "1px solid " + hexA(t.color, .3), borderRadius: 999, padding: "6px 12px", cursor: "pointer", font: "inherit", color: chipTxt(t.color), fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}><Icon name={t.icon} size={11} /> {b.title}</button>
             ); })}
           </div>
         )}
@@ -544,7 +545,7 @@ export default function SchedulePage() {
             <div style={{ fontSize: 11, color: T3, marginBottom: 7 }}>Unscheduled — tap to set a time</div>
             <div className="hscroll">
               {unscheduled.map((b) => { const t = T[b.tkey]; return (
-                <button key={b.id} onClick={() => openPeek(b)} style={{ display: "inline-flex", alignItems: "center", gap: 6, flex: "none", background: hexA(t.color, .14), border: "1px solid " + hexA(t.color, .3), borderRadius: 999, padding: "6px 12px", cursor: "pointer", font: "inherit", color: chipTxt(t.color), fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}>{t.emoji} {b.title}</button>
+                <button key={b.id} onClick={() => openPeek(b)} style={{ display: "inline-flex", alignItems: "center", gap: 6, flex: "none", background: hexA(t.color, .14), border: "1px solid " + hexA(t.color, .3), borderRadius: 999, padding: "6px 12px", cursor: "pointer", font: "inherit", color: chipTxt(t.color), fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}><Icon name={t.icon} size={11} /> {b.title}</button>
               ); })}
             </div>
           </div>
@@ -562,7 +563,7 @@ export default function SchedulePage() {
             ))}
             {timed.map((b) => { const t = T[b.tkey]; const isMeet = b.cat === "meeting"; const done = b.status === "done"; const skip = b.status === "skipped"; const top = 8 + ((b.hour ?? 0) - H0) * hourH + ((b.min ?? 0) / 60) * hourH; const ht = Math.max(((b.dur ?? 45) / 60) * hourH, 34); const em = (b.hour ?? 0) * 60 + (b.min ?? 0) + (b.dur ?? 0); const col = isMeet ? "var(--muted)" : t.color; return (
               <div key={b.id} onClick={() => openPeek(b)} style={{ position: "absolute", left: 62, right: 12, top, height: ht, background: isMeet ? "var(--surface-2)" : hexA(t.color, .14), border: "1px solid " + (isMeet ? "var(--line-2)" : hexA(t.color, .3)), borderLeft: "3px solid " + col, borderRadius: 10, padding: "6px 12px", cursor: "pointer", overflow: "hidden", opacity: skip ? .6 : 1, zIndex: 5 }}>
-                <div style={{ fontSize: 12, fontWeight: 800, color: isMeet ? "var(--text-2)" : chipTxt(t.color), whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textDecoration: skip ? "line-through" : "none" }}>{done ? "🎉 " : t.emoji + " "}{b.title}</div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: isMeet ? "var(--text-2)" : chipTxt(t.color), whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textDecoration: skip ? "line-through" : "none" }}>{done ? <Icon name="celebrate" size={12} /> : <Icon name={t.icon} size={12} />}{" "}{b.title}</div>
                 <div style={{ fontSize: 10.5, color: T3, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtT(b.hour ?? 0, b.min ?? 0)}{b.dur ? " – " + fmtT(Math.floor(em / 60) % 24, em % 60) : ""}{b.dist ? " · " + km(b.dist) : ""}{isMeet ? " · Google" : ""}</div>
               </div>
             ); })}
@@ -609,7 +610,7 @@ export default function SchedulePage() {
                 <button key={d} onClick={() => { setSelDate(d); if (evs.length === 0) openAdd(d); else setDayCard(d); }} style={{ minHeight: 52, borderRadius: 9, padding: "4px 3px 0", overflow: "hidden", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "stretch", background: isSel ? "color-mix(in srgb, var(--ember) 16%, transparent)" : isToday ? "var(--surface-2)" : "var(--surface-2)", border: isSel ? "1px solid " + "color-mix(in srgb, var(--ember) 60%, transparent)" : isToday ? "1px solid " + "color-mix(in srgb, var(--ember) 45%, transparent)" : "1px solid transparent", opacity: inMonth ? 1 : .4 }}>
                   <div style={{ fontSize: 11, fontWeight: isToday ? 800 : 600, color: isToday ? A : T2, textAlign: "center", marginBottom: 1 }}>{num(d)}</div>
                   {evs.slice(0, 2).map((x) => { const c = T[x.tkey].color; const done = x.status === "done", skip = x.status === "skipped"; return (
-                    <div key={x.id} style={{ background: hexA(c, .9), color: "#0A0A0F", fontSize: 8, fontWeight: 700, padding: "1px 4px", borderRadius: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 1, opacity: skip ? .45 : done ? .7 : 1, textDecoration: skip ? "line-through" : "none" }}>{T[x.tkey].emoji} {x.title}</div>
+                    <div key={x.id} style={{ background: hexA(c, .9), color: "#0A0A0F", fontSize: 8, fontWeight: 700, padding: "1px 4px", borderRadius: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 1, opacity: skip ? .45 : done ? .7 : 1, textDecoration: skip ? "line-through" : "none" }}><Icon name={T[x.tkey].icon} size={11} /> {x.title}</div>
                   ); })}
                   {evs.length > 2 && <div style={{ fontSize: 8, color: T3, textAlign: "center" }}>+{evs.length - 2}</div>}
                 </button>
@@ -628,9 +629,9 @@ export default function SchedulePage() {
     const meta = [x.hour != null && !x.allDay ? fmtT(x.hour, x.min) : x.allDay ? "All day" : "", x.dur && x.cat === "workout" ? x.dur + "m" : "", km(x.dist)].filter(Boolean).join(" · ");
     return (
       <div key={x.id} onClick={() => openPeek(x)} style={{ display: "flex", alignItems: "center", gap: 11, padding: "8px 0", cursor: "pointer" }}>
-        <div style={{ width: 38, height: 38, flex: "none", borderRadius: 11, background: hexA(t.color, .13), border: "1px solid " + hexA(t.color, .28), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{t.emoji}</div>
+        <div style={{ width: 38, height: 38, flex: "none", borderRadius: 11, background: hexA(t.color, .13), border: "1px solid " + hexA(t.color, .28), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}><Icon name={t.icon} size={17} /></div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: skip ? T4 : T1, textDecoration: skip ? "line-through" : "none" }}>{x.title}{done ? " 🎉" : ""}</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: skip ? T4 : T1, textDecoration: skip ? "line-through" : "none" }}>{x.title}{done ? <> <Icon name="celebrate" size={11} /></> : null}</div>
           {meta && <div style={{ color: T3, fontSize: 11.5, marginTop: 1 }}>{meta}</div>}
         </div>
         <span style={{ fontSize: 10, fontWeight: 700, color: tc[0], background: hexA(tc[0], tc[1]), padding: "3px 9px", borderRadius: 7, textTransform: "capitalize", flex: "none" }}>{tag}</span>
@@ -677,7 +678,7 @@ export default function SchedulePage() {
     return (
       <>
         <button onClick={() => openAdd(today)} style={{ width: "100%", padding: 12, borderRadius: 14, border: "none", background: A, color: "#fff", fontWeight: 700, fontSize: 13.5, cursor: "pointer", marginBottom: 12 }}>＋ Add to calendar</button>
-        {gKeys.length === 0 && <div style={{ ...SS.card, textAlign: "center", padding: 24 }}><div style={{ fontSize: 28 }}>📭</div><div style={{ fontWeight: 700, margin: "6px 0 4px" }}>Nothing on your calendar</div><div style={{ color: T3, fontSize: 12 }}>Add an activity or event here, or send a session from Kai in the Coach tab.</div></div>}
+        {gKeys.length === 0 && <div style={{ ...SS.card, textAlign: "center", padding: 24 }}><div style={{ color: "var(--muted)" }}><Icon name="inbox" size={27} /></div><div style={{ fontWeight: 700, margin: "6px 0 4px" }}>Nothing on your calendar</div><div style={{ color: T3, fontSize: 12 }}>Add an activity or event here, or send a session from Kai in the Coach tab.</div></div>}
         {gKeys.map((gk) => {
           const end = addDays(gk, 6); const sameM = monShort(gk) === monShort(end);
           const range = sameM ? `${num(gk)}–${num(end)} ${monShort(gk)}` : `${num(gk)} ${monShort(gk)} – ${num(end)} ${monShort(end)}`;
@@ -696,7 +697,7 @@ export default function SchedulePage() {
                   <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
                     {byDay.get(dk)!.sort((a, b) => (a.hour ?? 99) - (b.hour ?? 99)).map((x) => { const c = T[x.tkey].color; const done = x.status === "done", skip = x.status === "skipped"; const time = x.allDay ? "All day" : x.hour != null ? fmtT(x.hour, x.min) : ""; return (
                       <div key={x.id} onClick={() => openPeek(x)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, background: done ? hexA(c, .5) : c, borderRadius: 10, padding: "9px 12px", opacity: skip ? .55 : 1, cursor: "pointer" }}>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: x.cat === "meeting" ? "#fff" : "#0E0E14", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textDecoration: skip ? "line-through" : "none" }}>{done ? "🎉 " : T[x.tkey].emoji + " "}{x.title}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: x.cat === "meeting" ? "#fff" : "#0E0E14", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textDecoration: skip ? "line-through" : "none" }}>{done ? <Icon name="celebrate" size={12} /> : <Icon name={T[x.tkey].icon} size={12} />}{" "}{x.title}</span>
                         <span style={{ fontSize: 11, fontWeight: 600, color: x.cat === "meeting" ? "rgba(255,255,255,.8)" : "rgba(14,14,20,.7)", flex: "none" }}>{time}</span>
                       </div>
                     ); })}
@@ -734,7 +735,7 @@ export default function SchedulePage() {
           ) : (
           <>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 12, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, background: hexA(t.color, .16), border: "1px solid " + hexA(t.color, .3) }}>{done ? "🎉" : t.emoji}</div>
+            <div style={{ width: 40, height: 40, borderRadius: 12, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, background: hexA(t.color, .16), border: "1px solid " + hexA(t.color, .3) }}>{done ? <Icon name="celebrate" size={13} /> : <Icon name={t.icon} size={13} />}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 16, fontWeight: 800, textDecoration: skip ? "line-through" : "none" }}>{it.title}</div>
               <div style={{ fontSize: 12, color: T3, marginTop: 2 }}>{meta}</div>
@@ -759,12 +760,12 @@ export default function SchedulePage() {
           ) : (
             <>
               <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-                <button onClick={() => { setPeek(null); openEdit(it); }} style={{ flex: 1, padding: "11px 8px", borderRadius: 12, cursor: "pointer", fontWeight: 700, fontSize: 13, border: "none", background: A, color: "#fff" }}>✏️ Edit</button>
-                <button onClick={() => fire(() => deleteItem(it))} style={{ flex: 1, padding: "11px 8px", borderRadius: 12, cursor: "pointer", fontWeight: 700, fontSize: 13, border: "1px solid color-mix(in srgb, var(--danger) 40%, transparent)", background: "color-mix(in srgb, var(--danger) 12%, transparent)", color: "var(--danger)", whiteSpace: "nowrap" }}>🗑 Delete</button>
+                <button onClick={() => { setPeek(null); openEdit(it); }} style={{ flex: 1, padding: "11px 8px", borderRadius: 12, cursor: "pointer", fontWeight: 700, fontSize: 13, border: "none", background: A, color: "#fff" }}><Icon name="edit" size={12} /> Edit</button>
+                <button onClick={() => fire(() => deleteItem(it))} style={{ flex: 1, padding: "11px 8px", borderRadius: 12, cursor: "pointer", fontWeight: 700, fontSize: 13, border: "1px solid color-mix(in srgb, var(--danger) 40%, transparent)", background: "color-mix(in srgb, var(--danger) 12%, transparent)", color: "var(--danger)", whiteSpace: "nowrap" }}><Icon name="trash" size={12} /> Delete</button>
               </div>
               {!isEvent && (
                 <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                  <button onClick={() => fire(() => toggleDone(it), done ? "Marked not done" : "Marked done 🎉")} style={nBtn}>{done ? "↺ Undo" : "✓ Done"}</button>
+                  <button onClick={() => fire(() => toggleDone(it), done ? "Marked not done" : "Marked done")} style={nBtn}>{done ? "↺ Undo" : "✓ Done"}</button>
                   <button onClick={() => fire(() => skipItem(it), skip ? "Restored" : "Skipped")} style={nBtn}>{skip ? "↩ Restore" : "⤼ Skip"}</button>
                 </div>
               )}
