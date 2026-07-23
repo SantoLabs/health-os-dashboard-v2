@@ -1,4 +1,5 @@
 "use client";
+import Icon from "../components/Icon";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import TodaySuggestion from "./TodaySuggestion";
@@ -620,7 +621,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
     const s = celebrate.summary;
     return (
       <div className="card" style={{ background: "linear-gradient(160deg,color-mix(in srgb, var(--ember) 12%, transparent),color-mix(in srgb, var(--ember) 6%, transparent))", border: "1px solid color-mix(in srgb, var(--ember) 25%, transparent)" }}>
-        <div style={{ fontSize: 22, fontWeight: 800 }}>Workout complete 💪</div>
+        <div style={{ fontSize: 22, fontWeight: 800 }}>Workout complete <Icon name="strength" size={20} /></div>
         <div className="subtle tiny" style={{ marginTop: 2 }}>{celebrate.title || "Session logged"}</div>
         <div className="trn-statgrid" style={{ gridTemplateColumns: "repeat(4,1fr)", marginTop: 12 }}>
           <div className="trn-cell"><div className="v tnum">{s.duration_mins ?? "—"}<span style={{ fontSize: 11 }}>m</span></div><div className="l">time</div></div>
@@ -632,7 +633,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
           <div style={{ marginTop: 12 }}>
             {celebrate.prs.map((p, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", borderRadius: 12, background: "color-mix(in srgb, var(--gold) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--gold) 30%, transparent)", marginBottom: 6 }}>
-                <span style={{ fontSize: 18 }}>🏆</span>
+                <Icon name="trophy" size={17} color="var(--gold)" />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: 13 }}>New {p.type} PR — {p.exercise}</div>
                   <div className="tiny subtle">{p.value}{p.unit}{p.prev != null ? ` · beat ${p.prev}${p.unit}` : ""}</div>
@@ -792,7 +793,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
               ) : gMedia?.thumbnail_url ? (
                 <img src={gMedia.thumbnail_url} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
               ) : (
-                <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted)", fontSize: 30 }}>🎬</div>
+                <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--muted)", fontSize: 30 }}><Icon name="video" size={29} /></div>
               )
             ) : (
               <div style={{ position: "absolute", inset: 0, overflowY: "auto", padding: "58px 18px 18px", background: "var(--surface)" }}>
@@ -890,7 +891,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
             {titleEdit !== null ? (
               <input autoFocus value={titleEdit} onChange={(e) => setTitleEdit(e.target.value)} onBlur={saveTitle} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} style={{ flex: 1, minWidth: 0, background: "var(--surface-2)", color: "inherit", border: "1px solid var(--line)", borderRadius: 8, padding: "7px 10px", fontSize: 15, fontWeight: 800, fontFamily: "inherit" }} />
             ) : (
-              <button onClick={() => setTitleEdit(sessTitle)} style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", cursor: "text", color: "inherit", fontSize: 15, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", padding: 0 }}>{sessTitle}<span className="subtle" style={{ fontSize: 12, marginLeft: 6, fontWeight: 400 }}>✎</span></button>
+              <button onClick={() => setTitleEdit(sessTitle)} style={{ flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", cursor: "text", color: "inherit", fontSize: 15, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", padding: 0 }}>{sessTitle}<span className="subtle" style={{ fontSize: 12, marginLeft: 6, fontWeight: 400 }}><Icon name="edit" size={11} /></span></button>
             )}
             <button onClick={() => { if (editSessionId) { doDone(); return; } const un = (bundle.sets || []).filter((x) => !x.completed && !isTemp(x.id)).length; if (done === 0) { setFinishConfirm({ type: "empty", n: 0 }); } else if (un > 0) { setFinishConfirm({ type: "partial", n: un }); } else { setFinishing(true); } }} style={btn("color-mix(in srgb, var(--success) 90%, transparent)")} disabled={busy}>{editSessionId ? "Done" : "Finish"}</button>
             <div style={{ position: "relative", flex: "0 0 auto" }}>
@@ -1082,9 +1083,9 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
           ) : (
             <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
               <div className="tiny" style={{ minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "var(--muted)" }}>
-                {upNext ? <span>Up next · <span style={{ color: "var(--text-2)", fontWeight: 700 }}>{upNext.name}</span> · set {upNext.n}</span> : "Last set — nice work 💪"}
+                {upNext ? <span>Up next · <span style={{ color: "var(--text-2)", fontWeight: 700 }}>{upNext.name}</span> · set {upNext.n}</span> : <>Last set — nice work <Icon name="strength" size={13} /></>}
               </div>
-              <button onClick={() => setRestPickerOpen(true)} className="subtle tiny tnum" style={{ flex: "0 0 auto", background: "none", border: "none", cursor: "pointer", color: "inherit", padding: 0 }}>rest {restLen > 0 ? fmtSecs(restLen) : "off"} ✎</button>
+              <button onClick={() => setRestPickerOpen(true)} className="subtle tiny tnum" style={{ flex: "0 0 auto", background: "none", border: "none", cursor: "pointer", color: "inherit", padding: 0 }}>rest {restLen > 0 ? fmtSecs(restLen) : "off"} <Icon name="edit" size={11} /></button>
             </div>
           )}
         </div>
