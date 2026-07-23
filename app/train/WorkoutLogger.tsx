@@ -70,6 +70,37 @@ function DetailOverlay({ title, onClose, media }: { title: string; onClose: () =
   );
 }
 
+// Unsaved set inputs are typed into local state; if the PWA is backgrounded the
+// component can unmount and lose them. Mirror the hos_rest_map pattern and keep a
+// per-session draft in localStorage so typed-but-uncommitted values survive.
+const DRAFT_KEY = (sid: string) => `hos_set_draft:${sid}`;
+type DraftInputs = Record<string, { kg: string; reps: string; secs: string; dist: string }>;
+function draftLoad(sid: string): DraftInputs {
+  try { const o = JSON.parse(localStorage.getItem(DRAFT_KEY(sid)) || "{}"); return o && typeof o === "object" ? o as DraftInputs : {}; } catch { return {}; }
+}
+function draftSave(sid: string, v: DraftInputs) {
+  // Only keep rows that actually hold something — no point storing empty shells.
+  try {
+    const keep: DraftInputs = {};
+    for (const k in v) { const x = v[k]; if (x && (x.kg || x.reps || x.secs || x.dist)) keep[k] = x; }
+    if (Object.keys(keep).length) localStorage.setItem(DRAFT_KEY(sid), JSON.stringify(keep));
+    else localStorage.removeItem(DRAFT_KEY(sid));
+  } catch { /* ignore */ }
+}
+function draftClear(sid: string) { try { localStorage.removeItem(DRAFT_KEY(sid)); } catch { /* ignore */ } }
+// Sessions abandoned without finish/discard would otherwise leave their draft
+// behind forever; drop every draft that isn't the session we're now in.
+function draftPrune(keepSid: string) {
+  try {
+    const stale: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith("hos_set_draft:") && k !== DRAFT_KEY(keepSid)) stale.push(k);
+    }
+    for (const k of stale) localStorage.removeItem(k);
+  } catch { /* ignore */ }
+}
+
 const REX_KEY = "hos_ex_recents";
 const TT_KEY = "hos_tt_cache";
 // name -> tracking_type, persisted so a newly-added exercise renders the right inputs
@@ -256,6 +287,22 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
     });
   }, []);
 
+  // Re-apply a saved draft on top of the server seed. Only for sets that still
+  // exist, and never over a value the server already has — the server wins for
+  // committed sets, the draft only fills in what was never saved.
+  const restoreDraft = useCallback((sid: string, sets: WkSet[]) => {
+    draftPrune(sid);
+    const d = draftLoad(sid);
+    if (!Object.keys(d).length) return;
+    const live = new Set(sets.map((x) => x.id));
+    const completed = new Set(sets.filter((x) => x.completed).map((x) => x.id));
+    setInputs((prev) => {
+      const m = { ...prev };
+      for (const id in d) if (live.has(id) && !completed.has(id)) m[id] = d[id];
+      return m;
+    });
+  }, []);
+
   const loadHome = useCallback(async () => {
     setLoading(true);
     try {
@@ -271,9 +318,25 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
       const t = todayISO();
       // Manual "start" is only for strength — cardio (Swim/Run/Cycle) is auto-detected from the tracker.
       setPlanToday(((wk?.sessions) || []).filter((s) => s.session_date === t && s.committed && !s.completed && !s.skipped && !s.is_rest_day && isStrength(s.session_type)));
-      if (b.session) { seedInputs(b.sets); try { const rm = JSON.parse(localStorage.getItem(`hos_rest_map:${b.session.id}`) || "{}"); if (rm && typeof rm === "object") setRestMap(rm as Record<string, number>); } catch { /* ignore */ } }
+      if (b.session) { seedInputs(b.sets); restoreDraft(b.session.id, b.sets); try { const rm = JSON.parse(localStorage.getItem(`hos_rest_map:${b.session.id}`) || "{}"); if (rm && typeof rm === "object") setRestMap(rm as Record<string, number>); } catch { /* ignore */ } }
     } finally { setLoading(false); }
   }, [seedInputs]);
+
+  // Persist the draft on every keystroke (cheap: one small JSON write) and again
+  // on pagehide/visibilitychange, which is the moment Android actually tears the
+  // page down when you leave the PWA.
+  const sessId = bundle?.session?.id ?? null;
+  useEffect(() => {
+    if (!sessId || editSessionId) return;
+    draftSave(sessId, inputs);
+  }, [inputs, sessId, editSessionId]);
+  useEffect(() => {
+    if (!sessId || editSessionId) return;
+    const flush = () => draftSave(sessId, inputs);
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", flush);
+    return () => { window.removeEventListener("pagehide", flush); document.removeEventListener("visibilitychange", flush); };
+  }, [inputs, sessId, editSessionId]);
 
   const loadEditSession = useCallback(async () => {
     if (!editSessionId) return;
@@ -477,6 +540,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
     setBusy(true);
     try {
       const r = await wkFinish({ session_id: sess.id, session_rpe: rpe });
+      draftClear(sess.id);
       setCelebrate(r); setFinishing(false); setView("celebrate"); setPromptBusy(false);
       const origin = sess.origin_routine_id || null;
       if (!origin) { setPromptOriginId(null); setRoutineName((r.title || sess.title || "My routine").slice(0, 60)); setRoutinePrompt({ kind: "save" }); }
@@ -519,7 +583,8 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
   async function doDiscard() {
     if (!bundle?.session) return;
     setBusy(true);
-    try { await wkDiscard(bundle.session.id); setDiscarding(false); if (editSessionId) { onExitEdit?.(); } else if (onExit) { onExit(); } else { setView("home"); await loadHome(); } } finally { setBusy(false); }
+    const discardSid = bundle.session.id;
+    try { await wkDiscard(discardSid); draftClear(discardSid); setDiscarding(false); if (editSessionId) { onExitEdit?.(); } else if (onExit) { onExit(); } else { setView("home"); await loadHome(); } } finally { setBusy(false); }
   }
   async function saveTitle() {
     const t = (titleEdit || "").trim();
