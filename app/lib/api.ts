@@ -514,7 +514,7 @@ export async function nutriPicksSet<T>(picks: unknown): Promise<T> {
 }
 
 // ---- profile (brain configuration layer; dedicated service-role fn) ----
-export type EquipItem = { item_key: string; category: string; label: string; discipline: string | null; sort: number };
+export type EquipItem = { item_key: string; category: string; label: string; discipline: string | null; sort: number; parent_key: string | null; select_mode: string };
 export type ProfileGoal = { id?: string; title: string; kind: string; target_json: Record<string, unknown>; priority: number };
 export type ProfileInjury = { id?: string; body_part: string; injury_type: string | null; severity_1_5: number | null; status: string; affects_activities: unknown; physio_note: string | null; date_logged?: string; date_resolved?: string | null };
 export type ProfileData = {
@@ -531,7 +531,7 @@ export type ProfileData = {
     weekly_volume_min: number | null; weekly_volume_max: number | null; sports: string[];
     training_phase: string | null; skip_build_phase: boolean; pain_threshold: number | null; avoid_rules: string[];
   };
-  equipment: { default_location: string | null; travel_fallback: string | null; catalog: EquipItem[]; selected: string[] };
+  equipment: { default_location: string | null; travel_fallback: string | null; catalog: EquipItem[]; selected: string[]; other: string | null };
   goals: ProfileGoal[];
   injuries: ProfileInjury[];
   app_prefs: Record<string, unknown>;
