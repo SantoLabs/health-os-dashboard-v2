@@ -1,4 +1,5 @@
 "use client";
+import Icon, { type IconName } from "../../components/Icon";
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { mindGet, mindPost } from "../../lib/api";
@@ -11,7 +12,7 @@ type Summary = {
   recent: Sess[];
 };
 
-const KIND_ICON: Record<string, string> = { meditation: "🧘", breathwork: "🌬️", focus: "🎯" };
+const KIND_ICON: Record<string, IconName> = { meditation: "yoga", breathwork: "wind", focus: "target" };
 
 function fmtClock(sec: number): string {
   const m = Math.floor(sec / 60), s = sec % 60;
@@ -82,8 +83,8 @@ export default function MindPage() {
               ))}
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-              <button disabled={saving} style={btn(false)} onClick={() => log("breathwork", 5)}>🌬️ Breathwork 5m</button>
-              <button disabled={saving} style={btn(false)} onClick={() => log("breathwork", 10)}>🌬️ 10m</button>
+              <button disabled={saving} style={btn(false)} onClick={() => log("breathwork", 5)}><Icon name="wind" size={12} /> Breathwork 5m</button>
+              <button disabled={saving} style={btn(false)} onClick={() => log("breathwork", 10)}><Icon name="wind" size={12} /> 10m</button>
             </div>
           </section>
 
