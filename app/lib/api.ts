@@ -689,6 +689,31 @@ export type StrengthStats = { windows: StatWindow[]; radar: Record<string, Radar
 export async function strengthStats(): Promise<StrengthStats> { const res = await authedFetch(`/functions/v1/strength_stats`); if (!res.ok) throw new Error(`Couldn't load strength stats (${res.status})`); return res.json(); }
 export type SessionExercise = { title: string; muscle_group: string; sets: number; volume: number | null };
 export type StrengthSession = { id: string; date: string; name: string; source: string; sets: number; volume: number; exercises: SessionExercise[] };
+// Per-set detail for one strength session. Reads the v_session_sets view, which
+// unions hevy_sets (imported) and workout_sets (app-logged) into one shape — the
+// sessions API only returns aggregates, and wkSession() covers app sessions only.
+export type SessionSetRow = { exercise_index: number; exercise_name: string; muscle_group: string | null; set_index: number; weight_kg: number | string | null; reps: number | null; duration_s: number | null; distance_m: number | null; set_type: string | null };
+export type SessionExerciseSets = { title: string; muscle_group: string | null; sets: { weight_kg: number | null; reps: number | null; duration_s: number | null; distance_m: number | null }[] };
+export async function sessionSets(sessionId: string): Promise<SessionExerciseSets[]> {
+  const q = `/rest/v1/v_session_sets?select=exercise_index,exercise_name,muscle_group,set_index,weight_kg,reps,duration_s,distance_m,set_type&session_id=eq.${encodeURIComponent(sessionId)}&order=exercise_index.asc,set_index.asc`;
+  const res = await authedFetch(q);
+  if (!res.ok) throw new Error(`Couldn't load sets (${res.status})`);
+  const rows: SessionSetRow[] = await res.json();
+  const out: SessionExerciseSets[] = [];
+  const byIdx = new Map<number, SessionExerciseSets>();
+  for (const r of rows) {
+    let g = byIdx.get(r.exercise_index);
+    if (!g || g.title !== r.exercise_name) {
+      g = { title: r.exercise_name, muscle_group: r.muscle_group, sets: [] };
+      byIdx.set(r.exercise_index, g); out.push(g);
+    }
+    // weight_kg is numeric in Postgres, so it can arrive as "60.00"
+    const w = r.weight_kg == null ? null : Number(r.weight_kg);
+    g.sets.push({ weight_kg: Number.isFinite(w as number) ? (w as number) : null, reps: r.reps, duration_s: r.duration_s, distance_m: r.distance_m });
+  }
+  return out;
+}
+
 export async function strengthSessions(): Promise<StrengthSession[]> { const res = await authedFetch(`/functions/v1/strength_stats?api=sessions`); if (!res.ok) throw new Error(`Couldn't load sessions (${res.status})`); return res.json(); }
 export type CardioActivityLite = { activity_id: string; date: string; sport: string; name: string | null; distance_km: number | null; duration_mins: number | null; pace_min_km: number | null; avg_hr: number | null; elevation_gain_m: number | null; calories: number | null; avg_swolf: number | null };
 export async function cardioActivities(): Promise<CardioActivityLite[]> { const res = await authedFetch(`/functions/v1/cardio_stats?api=list`); if (!res.ok) throw new Error(`Couldn't load cardio (${res.status})`); return res.json(); }
