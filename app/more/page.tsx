@@ -12,7 +12,7 @@ const SECTIONS: { title: string; items: { href: string; icon: string; label: str
     items: [
       { href: "/trends", icon: "📈", label: "Trends", desc: "Long-term charts" },
       { href: "/sleep", icon: "😴", label: "Sleep", desc: "Recovery & rest" },
-      { href: "/more/goals", icon: "🫀", label: "Body", desc: "Body composition" },
+      { href: "/more/body", icon: "🫀", label: "Body", desc: "Weight, body fat & lean mass" },
       { href: "/more/medical", icon: "🩺", label: "Medical", desc: "Bloodwork & markers" },
       { href: "/more/mind", icon: "🧘", label: "Mind", desc: "Meditation & focus" },
     ],
