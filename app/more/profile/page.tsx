@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { actionGet, actionPost, profileGet, profileSave, uploadAvatar, type ProfileData } from "../../lib/api";
+import { actionGet, actionPost, profileGet, profileSave, uploadAvatar, type ProfileData, type HierGoal } from "../../lib/api";
 import { Screen } from "../../components/Screen";
 
 type View = "hub" | "basics" | "health" | "training" | "appprefs";
@@ -235,7 +235,92 @@ const CAT_BY_KEY: Record<string, { key: string; label: string; d: string }> = Ob
 const catLabel = (k: string | null) => (k && CAT_BY_KEY[k] ? CAT_BY_KEY[k].label : "Goal");
 const MAX_MAIN = 3;
 
-type Chosen = { goalId: string | null; category: string; label: string };
+/* Per-category detail fields (spec step 3). "target_date" is the ONE key that writes
+   to the goals_user column - everything else lands in the goal's details jsonb. */
+type FKind = "chips" | "seg" | "text" | "num" | "date";
+type FDef = { k: string; label: string; kind: FKind; opts?: string[]; opt?: boolean; ph?: string };
+const GOAL_FIELDS: Record<string, FDef[]> = {
+  run: [
+    { k: "target", label: "Target", kind: "chips", opts: ["Couch to 5K", "5K", "10K", "Half marathon", "Marathon", "Ultra", "Trail run", "Improve pace", "Build consistency"] },
+    { k: "target_date", label: "Target date", kind: "date", opt: true },
+    { k: "target_time", label: "Target time", kind: "text", opt: true, ph: "e.g. 1:45:00" },
+  ],
+  swim: [
+    { k: "target", label: "Target", kind: "chips", opts: ["Learn to swim", "Improve technique", "500m continuous", "1K continuous", "1.5K", "1.9K", "3.8K", "Open-water confidence", "Improve pace"] },
+    { k: "pool_access", label: "Pool access", kind: "seg", opts: ["Yes", "No"] },
+    { k: "pool_length", label: "Pool length", kind: "seg", opts: ["25m", "50m", "25 yd", "Not sure"] },
+    { k: "open_water", label: "Open-water access", kind: "seg", opts: ["Yes", "No"], opt: true },
+  ],
+  bike: [
+    { k: "target", label: "Target", kind: "chips", opts: ["Beginner cycling", "Ride 25K", "Ride 50K", "Ride 100K", "Build Zone 2 base", "Improve FTP", "Indoor trainer consistency", "Climbing", "Long ride endurance"] },
+    { k: "setup", label: "Setup", kind: "seg", opts: ["Outdoor", "Trainer", "Both"] },
+    { k: "power_meter", label: "Power meter", kind: "seg", opts: ["Yes", "No"], opt: true },
+    { k: "target_date", label: "Target date", kind: "date", opt: true },
+  ],
+  triathlon: [
+    { k: "target", label: "Target", kind: "chips", opts: ["First triathlon", "Sprint", "Olympic", "70.3", "Full Ironman", "Improve swim", "Improve bike", "Improve run", "Build brick confidence"] },
+    { k: "race_distance", label: "Race distance", kind: "seg", opts: ["Olympic", "70.3", "Full"] },
+    { k: "target_date", label: "Event date", kind: "date" },
+    { k: "first_tri", label: "First triathlon?", kind: "seg", opts: ["Yes", "No"], opt: true },
+  ],
+  strength: [
+    { k: "target", label: "Target", kind: "chips", opts: ["Build general strength", "Muscle gain", "Hypertrophy", "Improve bench", "Improve squat", "Improve deadlift", "Pull-up goal", "Strength maintenance"] },
+    { k: "experience", label: "Experience level", kind: "seg", opts: ["Beginner", "Intermediate", "Advanced"] },
+    { k: "key_lift", label: "Key lift target", kind: "text", opt: true, ph: "e.g. 100 kg bench" },
+  ],
+  hyrox: [
+    { k: "target", label: "Target", kind: "chips", opts: ["First Hyrox", "Hyrox Open", "Hyrox Pro", "Hyrox Doubles", "Improve running", "Improve sled push-pull", "Improve wall balls", "Improve compromised running"] },
+    { k: "hyrox_category", label: "Category", kind: "seg", opts: ["Open", "Pro", "Doubles", "Relay"] },
+    { k: "target_date", label: "Event date", kind: "date" },
+  ],
+  body_comp: [
+    { k: "target", label: "Target", kind: "chips", opts: ["Lose fat", "Gain muscle", "Recomposition", "Reduce waist", "Maintain weight, improve shape", "Improve lean mass"] },
+    { k: "current_weight", label: "Current weight (kg)", kind: "num", ph: "74.5" },
+    { k: "target_value", label: "Target weight or body fat", kind: "text", ph: "e.g. 70 kg or 12%" },
+    { k: "timeline", label: "Timeline", kind: "seg", opts: ["3 months", "6 months", "12 months"] },
+    { k: "priority", label: "Priority", kind: "seg", opts: ["Fat loss", "Muscle gain", "Recomp"] },
+  ],
+  weight_loss: [
+    { k: "target", label: "Target", kind: "chips", opts: ["Lose 2-3 kg", "Lose 5 kg", "Lose 10 kg", "Slow sustainable loss", "Improve eating consistency", "Restart after break"] },
+    { k: "current_weight", label: "Current weight (kg)", kind: "num", ph: "74.5" },
+    { k: "target_weight", label: "Target weight (kg)", kind: "num", ph: "70" },
+    { k: "timeline", label: "Timeline", kind: "seg", opts: ["3 months", "6 months", "12 months"] },
+  ],
+  vo2max: [
+    { k: "target", label: "Target", kind: "chips", opts: ["Improve VO2 max", "Improve aerobic base", "Improve threshold", "Improve speed endurance", "Improve fitness age"] },
+    { k: "current_vo2", label: "Current VO2 max", kind: "num", ph: "48" },
+    { k: "target_vo2", label: "Target VO2 max", kind: "num", opt: true, ph: "54" },
+    { k: "primary_sport", label: "Primary sport", kind: "seg", opts: ["Run", "Bike", "Swim"] },
+    { k: "target_date", label: "Target date", kind: "date", opt: true },
+  ],
+  lifestyle: [
+    { k: "target", label: "What matters most?", kind: "chips", opts: ["Build consistency", "Walk more", "Sleep better", "Eat better", "Reduce stress", "Improve energy", "Start exercising", "General fitness"] },
+    { k: "coaching", label: "How should Kai coach you?", kind: "seg", opts: ["Gentle", "Balanced", "Direct"] },
+  ],
+  recovery: [
+    { k: "target", label: "Target", kind: "chips", opts: ["Return to running", "Return to strength", "Reduce knee pain risk", "Reduce back pain risk", "Improve mobility", "Rehab consistency", "Avoid overtraining"] },
+    { k: "area", label: "Area", kind: "text", ph: "e.g. left knee" },
+    { k: "pain_level", label: "Pain level (1-10)", kind: "num", ph: "3", opt: true },
+    { k: "plan_note", label: "Physio / doctor plan", kind: "text", opt: true, ph: "Optional" },
+    { k: "avoid", label: "Activities to avoid", kind: "text", opt: true, ph: "Optional" },
+  ],
+  medical: [
+    { k: "target", label: "Target", kind: "chips", opts: ["Improve cholesterol / ApoB", "Improve HbA1c / glucose", "Improve Vitamin D", "Improve blood pressure", "Thyroid tracking", "Track follow-ups", "Preventive health"] },
+    { k: "marker", label: "Marker", kind: "text", ph: "e.g. ApoB" },
+    { k: "current_value", label: "Current value", kind: "text", ph: "e.g. 95 mg/dL" },
+    { k: "target_value", label: "Target", kind: "text", ph: "e.g. under 80" },
+    { k: "target_date", label: "Retest date", kind: "date", opt: true },
+  ],
+  custom: [
+    { k: "target", label: "Goal name", kind: "text", ph: "What are you working toward?" },
+    { k: "detail", label: "Target", kind: "text", opt: true, ph: "What does done look like?" },
+    { k: "target_date", label: "Deadline", kind: "date", opt: true },
+    { k: "notes", label: "Notes", kind: "text", opt: true, ph: "Optional" },
+  ],
+};
+const fieldsFor = (cat: string) => GOAL_FIELDS[cat] || GOAL_FIELDS.custom;
+
+type Chosen = { goalId: string | null; category: string; label: string; details: Record<string, unknown>; target_date: string | null };
 
 function CatIcon({ d, color }: { d: string; color: string }) {
   return <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>;
@@ -254,7 +339,8 @@ function HealthSetup({ data, onBack, onSaved, onData }: { data: ProfileData; onB
   const hier = data.goal_hierarchy || [];
   const tiered = hier.filter((g) => g.tier).slice().sort((a, b) => (a.rank ?? 9) - (b.rank ?? 9));
 
-  const [step, setStep] = useState<"home" | "select" | "rank" | "saved">("home");
+  const [step, setStep] = useState<"home" | "select" | "rank" | "details" | "saved">("home");
+  const [openIdx, setOpenIdx] = useState(0);
   const [chosen, setChosen] = useState<Chosen[]>([]);
   const [pickCat, setPickCat] = useState<string | null>(null);
   const [limitHit, setLimitHit] = useState(false);
@@ -276,7 +362,8 @@ function HealthSetup({ data, onBack, onSaved, onData }: { data: ProfileData; onB
 
   /* ---- step 1: select ---- */
   const startFlow = () => {
-    setChosen(tiered.map((g) => ({ goalId: g.id, category: g.category || "custom", label: g.label })));
+    setChosen(tiered.map((g) => ({ goalId: g.id, category: g.category || "custom", label: g.label, details: (g.details || {}) as Record<string, unknown>, target_date: g.target_date })));
+    setOpenIdx(0);
     setLimitHit(false); setStep("select");
   };
   const isChosen = (cat: string) => chosen.some((c) => c.category === cat);
@@ -288,12 +375,23 @@ function HealthSetup({ data, onBack, onSaved, onData }: { data: ProfileData; onB
     if (chosen.length >= MAX_MAIN) { setLimitHit(true); return; }
     const existing = freeGoalsIn(cat);
     if (existing.length) { setPickCat(cat); return; }
-    setChosen((cs) => [...cs, { goalId: null, category: cat, label: catLabel(cat) }]);
+    setChosen((cs) => [...cs, { goalId: null, category: cat, label: catLabel(cat), details: {}, target_date: null }]);
   }
-  const attach = (cat: string, g: { id: string; label: string } | null) => {
-    setChosen((cs) => [...cs, g ? { goalId: g.id, category: cat, label: g.label } : { goalId: null, category: cat, label: catLabel(cat) }]);
+  const attach = (cat: string, g: HierGoal | null) => {
+    setChosen((cs) => [...cs, g
+      ? { goalId: g.id, category: cat, label: g.label, details: (g.details || {}) as Record<string, unknown>, target_date: g.target_date }
+      : { goalId: null, category: cat, label: catLabel(cat), details: {}, target_date: null }]);
     setPickCat(null);
   };
+  const setField = (i: number, k: string, v: string) => setChosen((cs) => cs.map((c, idx) => {
+    if (idx !== i) return c;
+    if (k === "target_date") return { ...c, target_date: v || null };
+    const d = { ...c.details }; if (v) d[k] = v; else delete d[k];
+    return { ...c, details: d };
+  }));
+  const valOf = (c: Chosen, k: string) => (k === "target_date" ? (c.target_date || "") : String(c.details[k] ?? ""));
+  const missingIn = (c: Chosen) => fieldsFor(c.category).filter((fd) => !fd.opt && !valOf(c, fd.k)).length;
+  const summaryOf = (c: Chosen) => fieldsFor(c.category).map((fd) => valOf(c, fd.k)).filter(Boolean).join(" \u00b7 ");
 
   /* ---- step 2: rank ---- */
   const move = (i: number, dir: number) => setChosen((cs) => { const j = i + dir; if (j < 0 || j >= cs.length) return cs; const c = cs.slice(); const t = c[i]; c[i] = c[j]; c[j] = t; return c; });
@@ -301,7 +399,10 @@ function HealthSetup({ data, onBack, onSaved, onData }: { data: ProfileData; onB
   async function saveGoals() {
     setSaving(true); setErr(null);
     try {
-      const payload = chosen.map((c, i) => ({ id: c.goalId ?? undefined, label: c.label, category: c.category, tier: i === 0 ? "primary" : "secondary", rank: i + 1 }));
+      const payload = chosen.map((c, i) => {
+        const t = String(c.details.target ?? "").trim();
+        return { id: c.goalId ?? undefined, label: c.goalId ? c.label : (t || c.label), category: c.category, tier: i === 0 ? "primary" : "secondary", rank: i + 1, details: c.details, target_date: c.target_date };
+      });
       const d = await profileSave("goal_tiers_save", { goals: payload });
       onData(d); setStep("saved");
     } catch (e) { setErr((e as Error).message); } finally { setSaving(false); }
@@ -381,7 +482,7 @@ function HealthSetup({ data, onBack, onSaved, onData }: { data: ProfileData; onB
               <div style={{ fontSize: 12, color: "var(--text-2)", margin: "0 0 12px", lineHeight: 1.45 }}>You already have goals here. Pick one so Kai builds on it instead of starting a duplicate.</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {freeGoalsIn(pickCat).map((g) => (
-                  <button key={g.id} onClick={() => attach(pickCat, { id: g.id, label: g.label })} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: 12, border: "1px solid var(--line)", background: "var(--surface)", cursor: "pointer", textAlign: "left" }}>
+                  <button key={g.id} onClick={() => attach(pickCat, g)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderRadius: 12, border: "1px solid var(--line)", background: "var(--surface)", cursor: "pointer", textAlign: "left" }}>
                     <span style={{ flex: 1, minWidth: 0 }}>
                       <span style={{ display: "block", fontSize: 13.5, fontWeight: 700, color: "var(--text)" }}>{g.label}</span>
                       <span style={{ display: "block", fontSize: 11, color: "var(--muted)", marginTop: 1 }}>{g.target_date ? new Date(g.target_date + "T00:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "No date"}</span>
@@ -432,8 +533,88 @@ function HealthSetup({ data, onBack, onSaved, onData }: { data: ProfileData; onB
 
         {err && <div style={{ color: "var(--danger)", fontSize: 13, marginTop: 14 }}>{err}</div>}
         <div style={{ marginTop: 22 }}>
-          <button onClick={saveGoals} disabled={saving} style={{ ...cta, opacity: saving ? 0.7 : 1 }}>{saving ? "Saving\u2026" : "Save goals"}</button>
+          <button onClick={() => { setOpenIdx(0); setStep("details"); }} style={cta}>Continue {"\u00b7"} add details</button>
           <div style={hint}>Use the arrows to reorder {"\u00b7"} change anytime</div>
+        </div>
+      </>
+    );
+  }
+
+  /* ================= STEP: DETAILS ================= */
+  if (step === "details") {
+    return (
+      <>
+        <EdHead title="" onBack={() => setStep("rank")} />
+        <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: -0.5, lineHeight: 1.15, color: "var(--text)" }}>Add goal details</div>
+        <div style={{ fontSize: 12.5, color: "var(--text-2)", marginTop: 6 }}>Give Kai enough context to guide you.</div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 18 }}>
+          {chosen.map((c, i) => {
+            const open = openIdx === i;
+            const left = missingIn(c);
+            const sum = summaryOf(c);
+            return (
+              <div key={c.category} style={{ ...S.card, padding: 0, overflow: "hidden", border: open && i === 0 ? "1.5px solid var(--ember)" : "1px solid var(--line)" }}>
+                <button onClick={() => setOpenIdx(open ? -1 : i)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 11, padding: "13px 14px", background: i === 0 ? "var(--ember-tint)" : "transparent", border: "none", cursor: "pointer", textAlign: "left" }}>
+                  <CatIcon d={CAT_BY_KEY[c.category]?.d || ""} color={i === 0 ? "var(--ember-strong)" : "var(--muted)"} />
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                      <span style={{ fontSize: 13.5, fontWeight: 800, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.label}</span>
+                      <TierPill rank={i + 1} />
+                    </span>
+                    {!open && sum && <span style={{ display: "block", fontSize: 11, color: "var(--text-2)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sum}</span>}
+                  </span>
+                  <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 0.4, padding: "3px 8px", borderRadius: 999, flex: "none", background: left ? "var(--surface-2)" : "var(--success-tint)", color: left ? "var(--muted)" : "var(--success)" }}>{left ? left + " LEFT" : "SET"}</span>
+                </button>
+
+                {open && (
+                  <div style={{ padding: "4px 14px 15px", display: "flex", flexDirection: "column", gap: 14 }}>
+                    {fieldsFor(c.category).map((fd) => {
+                      const v = valOf(c, fd.k);
+                      return (
+                        <div key={fd.k}>
+                          <label style={S.fieldLabel}>{fd.label}{fd.opt ? " (optional)" : ""}</label>
+                          {fd.kind === "chips" && (
+                            <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+                              {(fd.opts || []).map((o) => {
+                                const on = v === o;
+                                return <button key={o} onClick={() => setField(i, fd.k, on ? "" : o)} style={{ fontSize: 11.5, fontWeight: on ? 800 : 600, padding: "8px 12px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (on ? "var(--ember)" : "var(--line)"), background: on ? "var(--ember-tint)" : "var(--surface-2)", color: on ? "var(--ember-strong)" : "var(--text-2)" }}>{o}</button>;
+                              })}
+                            </div>
+                          )}
+                          {fd.kind === "seg" && (
+                            <div style={{ display: "flex", gap: 6 }}>
+                              {(fd.opts || []).map((o) => {
+                                const on = v === o;
+                                return <button key={o} onClick={() => setField(i, fd.k, on ? "" : o)} style={{ flex: 1, padding: "9px 0", borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer", textAlign: "center", border: "1px solid " + (on ? "var(--ember)" : "var(--line)"), background: on ? "var(--ember-tint)" : "var(--surface-2)", color: on ? "var(--ember-strong)" : "var(--text-2)" }}>{o}</button>;
+                              })}
+                            </div>
+                          )}
+                          {fd.kind === "date" && <input type="date" value={v} onChange={(e) => setField(i, fd.k, e.target.value)} style={{ ...S.input, fontSize: 14 }} />}
+                          {fd.kind === "num" && <input inputMode="decimal" value={v} placeholder={fd.ph} onChange={(e) => setField(i, fd.k, e.target.value)} style={S.input} />}
+                          {fd.kind === "text" && <input value={v} placeholder={fd.ph} onChange={(e) => setField(i, fd.k, e.target.value)} style={S.input} />}
+                        </div>
+                      );
+                    })}
+                    {c.category === "medical" && (
+                      <div style={{ fontSize: 10.5, color: "var(--muted)", lineHeight: 1.45 }}>StriveOS tracks patterns and reminders. It does not diagnose or prescribe.</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ ...S.card, display: "flex", gap: 11, padding: "13px 14px", marginTop: 16, background: "var(--surface-2)" }}>
+          <div style={{ width: 26, height: 26, borderRadius: "50%", background: "var(--ember)", color: "#fff", fontWeight: 800, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>K</div>
+          <div style={{ fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.45 }}>Only the essentials here {"\u2014"} Kai fills the rest in from your training history. Anything you skip you can add later.</div>
+        </div>
+
+        {err && <div style={{ color: "var(--danger)", fontSize: 13, marginTop: 14 }}>{err}</div>}
+        <div style={{ marginTop: 20 }}>
+          <button onClick={saveGoals} disabled={saving} style={{ ...cta, opacity: saving ? 0.7 : 1 }}>{saving ? "Saving\u2026" : "Save goals"}</button>
+          <div style={hint}>You can change this later</div>
         </div>
       </>
     );
