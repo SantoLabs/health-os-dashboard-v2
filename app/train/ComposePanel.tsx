@@ -1,4 +1,5 @@
 "use client";
+import Icon from "../components/Icon";
 
 import { useEffect, useState, useCallback } from "react";
 import {
@@ -163,7 +164,7 @@ export default function ComposePanel() {
           {why ? <div className="subtle tiny" style={{ marginTop: 10, lineHeight: 1.5, fontStyle: "italic" }}>“{why}”</div> : null}
 
           {repairs.map((r, j) => <div key={"r" + j} className="tiny" style={{ marginTop: 6, color: "var(--ember)" }}>↺ Kai adjusted: {r}</div>)}
-          {warnings.map((w, j) => <div key={"w" + j} className="tiny" style={{ marginTop: 6, color: "var(--gold)" }}>⚠ {w}</div>)}
+          {warnings.map((w, j) => <div key={"w" + j} className="tiny" style={{ marginTop: 6, color: "var(--gold)" }}><Icon name="warning" size={11} /> {w}</div>)}
           {invalid ? <div className="tiny" style={{ marginTop: 6, color: "var(--danger)" }}>This one didn&apos;t fully validate — try rephrasing.</div> : null}
 
           {done ? (
