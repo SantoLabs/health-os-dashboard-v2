@@ -177,10 +177,10 @@ export default function GoalsPage() {
   );
 
   return (
-    <Screen title="Goals & Body" back="/more" error={error} loading={!data && !error}>
+    <Screen title="Goals" back="/more" error={error} loading={!data && !error}>
       {bc && (
         <>
-          <h2 className="section-title">Body composition</h2>
+          <h2 className="section-title">Body-fat goal</h2>
           <section className="card">
             <div className="lever-top">
               <span>Body fat <strong>{bc.bia_bf}%</strong> <span className="subtle tiny">BIA · DEXA {bc.dexa_bf}%</span></span>
