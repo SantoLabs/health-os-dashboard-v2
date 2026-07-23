@@ -1,4 +1,5 @@
 "use client";
+import Icon from "../../components/Icon";
 
 import { useEffect, useState, type CSSProperties } from "react";
 import { nutriAdherence } from "../../lib/api";
@@ -72,7 +73,7 @@ export default function Adherence({ onClose }: { onClose: () => void }) {
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 12.5, color: MUTED }}>You averaged <span style={{ color: H, fontWeight: 800 }}>{prot ? prot.avg : 0}g</span> protein/day vs your <span style={{ color: H, fontWeight: 800 }}>{prot ? prot.target : 0}g</span> goal.</div>
                     <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: ON, background: "color-mix(in srgb, var(--success) 12%, transparent)", border: "1px solid color-mix(in srgb, var(--success) 35%, transparent)", borderRadius: 999, padding: "4px 9px" }}>🔥 {data.streak}-day streak</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: ON, background: "color-mix(in srgb, var(--success) 12%, transparent)", border: "1px solid color-mix(in srgb, var(--success) 35%, transparent)", borderRadius: 999, padding: "4px 9px" }}><Icon name="fire" size={11} /> {data.streak}-day streak</span>
                       <span style={{ fontSize: 11, fontWeight: 700, color: ACCENT_LT, background: CHIP_SEL, border: "1px solid " + CHIP_SEL_B, borderRadius: 999, padding: "4px 9px" }}>{prot ? prot.days_on_target : 0}/{data.days_total} days on target</span>
                     </div>
                     <div style={{ fontSize: 11, color: FAINT, marginTop: 8 }}>Logged {data.days_logged} of {data.days_total} days</div>
