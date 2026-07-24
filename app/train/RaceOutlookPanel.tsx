@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { raceList, raceOutlook, fuelRace } from "../lib/api";
 import type { RaceGoal, RaceOutlookResp, PredLeg, PacingLeg, RaceFuel } from "../lib/api";
+import Loader from "../components/Loader";
 
 // Race outlook (Phase 4 · U3): a deterministic model predicts a realistic finish time from your fitness —
 // run legs via a Riegel fit on your best efforts, bike from recent outdoor ride speed, swim from CSS
@@ -85,7 +86,7 @@ export default function RaceOutlookPanel() {
         A realistic finish time from your current fitness, with a pacing plan. Effort-based splits — not course-graded.
       </div>
 
-      {loading ? <div className="subtle tiny" style={{ marginTop: 12 }}>Loading your races…</div> : null}
+      {loading ? <Loader compact /> : null}
       {!loading && races.length === 0 ? <div className="subtle tiny" style={{ marginTop: 12 }}>No upcoming races found. Add a race goal with a date and Kai can forecast it.</div> : null}
 
       {races.length > 0 ? (
