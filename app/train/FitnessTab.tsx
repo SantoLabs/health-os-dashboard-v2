@@ -4,6 +4,7 @@ import Icon, { type IconName } from "../components/Icon";
 import { useEffect, useMemo, useState } from "react";
 import { SubPills } from "./ui";
 import { trainingLoad, type TrnLoadPoint, type TrnThreshold } from "../lib/api";
+import Loader from "../components/Loader";
 
 const RANGES = ["6W", "3M", "6M"] as const;
 type Range = (typeof RANGES)[number];
@@ -69,7 +70,7 @@ export default function FitnessTab() {
   const pts = useMemo(() => (resp ? resp.load.slice(-RANGE_DAYS[range]) : []), [resp, range]);
 
   if (error) return <div className="card error"><strong>Couldn&apos;t load</strong><div className="subtle">{error}</div></div>;
-  if (!resp) return <div className="muted center pad">Loading…</div>;
+  if (!resp) return <Loader />;
 
   const last = resp.load[resp.load.length - 1];
   const ctl = last?.ctl ?? 0, atl = last?.atl ?? 0, tsb = last?.tsb ?? 0;
