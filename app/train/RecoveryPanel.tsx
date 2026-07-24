@@ -4,6 +4,7 @@ import Icon from "../components/Icon";
 import { useEffect, useState } from "react";
 import { recoveryGet, planWeek, wkStart, type RecMuscle, type RecMobility, type RecRoutine } from "../lib/api";
 import MuscleFigure from "./MuscleFigure";
+import Loader from "../components/Loader";
 
 type Mode = "recovery" | "load";
 type Ctx = { readiness: number | null; readiness_label: string | null; acwr: number | null } | null;
@@ -136,7 +137,7 @@ export default function RecoveryPanel({ onGoWorkouts }: { onGoWorkouts?: () => v
           </div>
         </div>
         {err ? <div className="subtle tiny" style={{ color: "var(--danger)" }}>{err}</div> : null}
-        {loading ? <div className="muted center pad">Loading…</div> : (
+        {loading ? <Loader /> : (
           <>
             <div style={{ display: "flex", justifyContent: "space-evenly" }}>
               <div style={{ width: 150, height: 285 }}><MuscleFigure view="front" states={states} palette={palette} base="var(--muted)" selected={sel?.fig ?? null} onSelect={pickFig} /></div>
