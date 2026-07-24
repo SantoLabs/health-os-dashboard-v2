@@ -7,6 +7,7 @@ import { nutriDay, nutriWeek, nutriGaps, nutriLoggedDays, nutriPost } from "../.
 import AddFlow, { type MealLite } from "./AddFlow";
 import Adherence from "./Adherence";
 import Setup from "./Setup";
+import Loader from "../../components/Loader";
 
 /* ---- design tokens (mapped from the Nutrition spec) ---- */
 const CARD = "var(--surface)", INSET = "var(--bg)", CB = "var(--line)", IB = "var(--line-2)";
@@ -209,7 +210,7 @@ export default function NutritionPage() {
       )}
 
       {!day ? (
-        <div style={{ color: FAINT, fontSize: 12.5, textAlign: "center", padding: 20 }}>Loading…</div>
+        <Loader />
       ) : (
         <div style={{ position: "relative", paddingLeft: 18 }}>
           <div style={{ position: "absolute", left: 5, top: 6, bottom: 20, width: 2, background: CB }} />
@@ -253,7 +254,7 @@ export default function NutritionPage() {
               <button onClick={() => setCopyOpen(false)} aria-label="Close" style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid " + CB, background: CHIP_IDLE, color: MUTED, fontSize: 15, cursor: "pointer" }}>✕</button>
             </div>
             <div style={{ fontSize: 11.5, color: FAINT, marginBottom: 12 }}>Clones every entry from the day you pick. You can tweak afterwards.</div>
-            {pickDays === null && <div style={{ fontSize: 12, color: FAINT, padding: 10 }}>Loading…</div>}
+            {pickDays === null && <Loader compact />}
             {pickDays && pickDays.length === 0 && <div style={{ fontSize: 12, color: FAINT, padding: 10 }}>No other logged days yet to copy from.</div>}
             <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
               {pickDays && pickDays.map((d) => (
