@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useApi, actionGet, actionPost } from "../../lib/api";
 import { Screen } from "../../components/Screen";
 import Icon, { type IconName } from "../../components/Icon";
+import Loader from "../../components/Loader";
 
 type Goals = {
   body_comp: {
@@ -222,7 +223,7 @@ export default function GoalsPage() {
       {editing === "new" && <section className="card goal-card"><div className="goal-form" style={{ padding: "14px 16px" }}>{EditForm}</div></section>}
 
       <section className="list">
-        {goals == null && <div className="subtle tiny" style={{ padding: 12, textAlign: "center" }}>Loading goals…</div>}
+        {goals == null && <Loader compact />}
         {goals?.length === 0 && editing !== "new" && <div className="subtle tiny" style={{ padding: "4px 4px 8px" }}>No goals yet — add your first one.</div>}
         {sorted.map((g) => (
           <div key={g.id} className="card goal-card">{editing === g.id ? EditForm : GoalRow(g)}</div>
