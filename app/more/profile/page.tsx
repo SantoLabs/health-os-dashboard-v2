@@ -867,64 +867,57 @@ const INJ_AREAS: { key: string; label: string; d: string; tint: string }[] = [
 const INJ_BY_KEY: Record<string, { key: string; label: string; d: string; tint: string }> = Object.fromEntries(INJ_AREAS.map((a) => [a.key, a]));
 const injLabel = (k: string | null) => (k && INJ_BY_KEY[k] ? INJ_BY_KEY[k].label : "Limitation");
 const INJ_STATUS_LABEL: Record<string, string> = { current: "Current", previous: "Previous", recurring: "Recurring" };
-type InjField = { sub?: { label: string; opts: string[] }; hurts: string[]; avoid: string[] };
+type InjField = { sub?: { label: string; opts: string[] }; side?: boolean; workouts: string[] };
 const INJ_FIELDS: Record<string, InjField> = {
-  neck: { hurts: ["Overhead lifts", "Long cycling posture", "Swimming", "Desk work", "Heavy carries"],
-          avoid: ["Heavy overhead press", "Long aero position", "Heavy shrugs", "Long swim sets", "Heavy carries"] },
-  shoulder: { hurts: ["Overhead press", "Bench / push-ups", "Pulling", "Swimming", "Daily movement"],
-              avoid: ["Overhead pressing", "Dips", "Heavy bench", "Pull-ups", "Long swim sets"] },
-  elbow_wrist: { hurts: ["Push-ups", "Bench press", "Pull-ups", "Curls", "Cycling grip"],
-                 avoid: ["Heavy pressing", "Push-ups", "Heavy curls", "Long cycling grip", "Wrist-loaded barbell work"] },
-  back: { sub: { label: "Area", opts: ["Upper back", "Lower back", "General"] },
-          hurts: ["Deadlifts", "Squats", "Running impact", "Long sitting", "Bending"],
-          avoid: ["Heavy deadlifts", "Heavy squats", "Loaded carries", "High-impact running", "Long sitting"] },
-  hip_glute: { hurts: ["Running", "Cycling", "Squats", "Lunges", "Sitting"],
-               avoid: ["Hill running", "Heavy squats", "Deep lunges", "Long rides", "Speed work"] },
-  knee: { hurts: ["Running", "Squats", "Stairs", "Cycling", "Long walks"],
-          avoid: ["Running intervals", "Heavy squats", "Lunges", "Downhill running", "Jumping"] },
-  ankle_foot: { sub: { label: "Area", opts: ["Ankle", "Heel", "Arch / plantar fascia", "Toes"] },
-                hurts: ["Running", "Walking", "Jumping", "Cycling", "Standing long"],
-                avoid: ["Speed work", "Long runs", "Jumping", "Hills", "Barefoot work"] },
+  neck: { sub: { label: "Area", opts: ["Neck", "Traps", "Both"] }, side: false,
+          workouts: ["Overhead press", "Shrugs", "Farmer's carry", "Deadlift", "Bench press"] },
+  shoulder: { side: true,
+              workouts: ["Overhead press", "Bench press", "Push-ups", "Pull-ups", "Lateral raises", "Dips"] },
+  elbow_wrist: { side: true,
+                 workouts: ["Push-ups", "Bench press", "Bicep curls", "Pull-ups", "Front rack holds"] },
+  back: { sub: { label: "Area", opts: ["Upper back", "Lower back", "General"] }, side: false,
+          workouts: ["Deadlift", "Barbell row", "Back squat", "Loaded carries", "Good mornings"] },
+  hip_glute: { side: true,
+               workouts: ["Back squat", "Deadlift", "Lunges", "Hip thrust", "Step-ups"] },
+  knee: { side: true,
+          workouts: ["Back squat", "Lunges", "Leg press", "Step-ups", "Box jumps"] },
+  ankle_foot: { sub: { label: "Area", opts: ["Ankle", "Heel", "Arch / plantar fascia", "Toes"] }, side: true,
+                workouts: ["Calf raises", "Box jumps", "Skipping", "Lunges", "Sprint drills"] },
+};
+// one shared list - the user reports what hurts; Kai decides what to change
+const HURTS_WITH = ["Running", "Cycling", "Swimming", "Long desk hours", "Heavy carries", "Workouts"];
+const STRAIN_WORKOUTS: Record<string, string[]> = {
+  Calf: ["Calf raises", "Skipping", "Box jumps", "Sprint drills"],
+  Hamstring: ["Deadlift", "Romanian deadlift", "Hamstring curl", "Sprint drills"],
+  Quad: ["Back squat", "Leg press", "Lunges", "Step-ups"],
+  Groin: ["Adductor machine", "Lateral lunges", "Back squat", "Breaststroke kick"],
+  Chest: ["Bench press", "Push-ups", "Dips", "Chest fly"],
+  Other: ["Squat", "Deadlift", "Bench press", "Overhead press"],
 };
 const STRAIN_WHERE = ["Calf", "Hamstring", "Quad", "Groin", "Chest", "Other"];
-// avoid chips adapt to where the strain is (the mock shows the hamstring case)
-const STRAIN_AVOID: Record<string, string[]> = {
-  Calf: ["Speed work", "Hill running", "Jumping", "Long runs"],
-  Hamstring: ["Sprints", "Heavy deadlifts", "Hill running", "Deep lunges"],
-  Quad: ["Heavy squats", "Downhill running", "Jumping", "Deep lunges"],
-  Groin: ["Lateral work", "Deep squats", "Breaststroke kick", "Wide lunges"],
-  Chest: ["Heavy bench", "Push-ups", "Dips", "Heavy pressing"],
-  Other: ["Heavy lifting", "Speed work", "Jumping"],
-};
 const SORE_WHERE = ["Full body", "Upper body", "Lower body", "Legs", "Back", "Shoulders"];
 const SORE_LEVEL = ["Mild", "Moderate", "Severe"];
 const YNU = ["Yes", "No", "Not sure"];
 const INJ_STARTED = ["Recently", "Last 7 days", "2-3 weeks", "Last month"];
-const INJ_IMPACT = ["No restriction", "Modify workouts", "Avoid movements", "Rest / skip intense"];
+const INJ_IMPACT = ["No restriction", "Modify workouts", "Avoid certain movements", "Reduce intensity", "Rest"];
 const sevWord = (n: number) => (n <= 0 ? "none" : n <= 3 ? "mild" : n <= 5 ? "mild-moderate" : n <= 7 ? "moderate" : "severe");
 
 // Deterministic echo, not a model call - it can't drift into diagnostic language,
 // and the flow promises StriveOS does not diagnose or treat.
-function injKaiNote(area: string, status: string, impact: string | null, avoid: string[], feels: string | null, sub: string | null, easeToday: string | null): string {
+function injKaiNote(area: string, status: string, impact: string | null, sub: string | null, easeToday: string | null): string {
   const name = (sub || injLabel(area)).toLowerCase();
-  const a = avoid.slice(0, 2).join(" and ").toLowerCase();
   if (area === "soreness") {
     return easeToday === "Yes"
       ? "Noted - Kai will pull today's intensity back and keep the week's shape intact."
-      : `Soreness noted - Kai will watch how you respond${a ? ` and go easy on ${a}` : ""}.`;
+      : "Soreness noted - Kai will watch how you respond before adding load.";
   }
-  if (area === "other") return a ? `Kai will work around this and keep ${a} off the plan.` : "Kai will factor this into the sessions it plans for you.";
-  if (status === "previous") {
-    return feels === "Flares up"
-      ? `Healed but still flaring - Kai will rebuild ${name} work gradually${a ? ` and keep an eye on ${a}` : ""}.`
-      : `Healed - Kai will keep ${name} loading progressive${a ? ` and stay light on ${a} at first` : ""}.`;
-  }
-  if (status === "recurring") {
-    return `Recurring ${name} noted - Kai will add prep work before sessions${a ? ` and hold back ${a}` : ""}.`;
-  }
-  if (impact === "Rest / skip intense") return `Kai will keep intensity off the plan until your ${name} settles.`;
+  if (area === "other") return "Kai will factor this into the sessions it plans for you.";
+  if (status === "previous") return `Healed - Kai will rebuild ${name} loading gradually and watch how it responds.`;
+  if (status === "recurring") return `Recurring ${name} noted - Kai will add prep work and keep an eye on the pattern.`;
+  if (impact === "Rest") return `Kai will keep training off the plan until your ${name} settles.`;
+  if (impact === "Reduce intensity") return `Kai will hold intensity down while your ${name} settles.`;
   if (impact === "No restriction") return `Noted - Kai will train as normal but watch how your ${name} responds.`;
-  return a ? `Kai will keep ${a} off your plan while your ${name} settles.` : `Kai will adapt sessions around your ${name}.`;
+  return `Kai will work around your ${name} and pick alternatives where it needs to.`;
 }
 
 function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
@@ -1001,6 +994,14 @@ function TrainingSetup({ data, onBack, onSaved, onData }: { data: ProfileData; o
   const setDet = (i: number, k: string, v: string) => setInjuries((xs) => xs.map((x, idx) => {
     if (idx !== i) return x;
     const d = { ...x.details }; if (v) d[k] = v; else delete d[k];
+    return { ...x, details: d };
+  }));
+  const detCsv = (x: Inj, k: string) => (x.details[k] == null ? [] : String(x.details[k]).split(", ").filter(Boolean));
+  const toggleCsv = (i: number, k: string, v: string) => setInjuries((xs) => xs.map((x, idx) => {
+    if (idx !== i) return x;
+    const cur = x.details[k] == null ? [] : String(x.details[k]).split(", ").filter(Boolean);
+    const next = cur.includes(v) ? cur.filter((y) => y !== v) : [...cur, v];
+    const d = { ...x.details }; if (next.length) d[k] = next.join(", "); else delete d[k];
     return { ...x, details: d };
   }));
   const toggleDet = (i: number, k: string, v: string) => setInjuries((xs) => xs.map((x, idx) => {
@@ -1100,8 +1101,10 @@ function TrainingSetup({ data, onBack, onSaved, onData }: { data: ProfileData; o
             const open = openInj === i;
             const done = injDone(x);
             const prev = x.status === "previous";
-            const avoid = detArr(x, "avoid");
-            const impacts = (prev && x.area !== "soreness") ? INJ_IMPACT.slice(0, 3) : INJ_IMPACT;
+            const impacts = (prev && x.area !== "soreness") ? INJ_IMPACT.slice(0, 4) : INJ_IMPACT;
+            const showSide = injKind(x.area) === "strain" || (injKind(x.area) === "standard" && f?.side !== false);
+            const hurts = detCsv(x, "triggers");
+            const wk = injKind(x.area) === "strain" ? (STRAIN_WORKOUTS[detStr(x, "sub_area")] || STRAIN_WORKOUTS.Other) : (f?.workouts || []);
             return (
               <div key={x.area} style={{ ...S.card, padding: 0, overflow: "hidden", border: open ? "1.5px solid var(--ember)" : "1px solid var(--line)" }}>
                 <button onClick={() => setOpenInj(open ? -1 : i)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 11, padding: "13px 14px", background: open ? "var(--ember-tint)" : "transparent", border: "none", cursor: "pointer", textAlign: "left" }}>
@@ -1178,7 +1181,7 @@ function TrainingSetup({ data, onBack, onSaved, onData }: { data: ProfileData; o
                           </div>
                         </div>
 
-                        {injKind(x.area) === "standard" && (
+                        {showSide && (
                           <div>
                             <label style={fieldLbl}>SIDE</label>
                             <div style={{ display: "flex", gap: 7 }}>
@@ -1223,30 +1226,23 @@ function TrainingSetup({ data, onBack, onSaved, onData }: { data: ProfileData; o
                       </div>
                     </div>
 
-                    {f && (
+                    {injKind(x.area) !== "soreness" && (
                       <>
                         <div>
                           <label style={fieldLbl}>HURTS WITH</label>
                           <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-                            {f.hurts.map((o) => <button key={o} onClick={() => toggleDet(i, "triggers", o)} style={chip(detArr(x, "triggers").includes(o))}>{o}</button>)}
+                            {HURTS_WITH.map((o) => <button key={o} onClick={() => toggleCsv(i, "triggers", o)} style={chip(hurts.includes(o))}>{o}</button>)}
                           </div>
                         </div>
-                        <div>
-                          <label style={fieldLbl}>{prev ? "KAI WILL WATCH" : "KAI WILL AVOID"}</label>
-                          <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-                            {f.avoid.map((o) => { const on = avoid.includes(o); return <button key={o} onClick={() => toggleDet(i, "avoid", o)} style={chip(on)}>{on ? "\u2713 " : ""}{o}</button>; })}
+                        {hurts.includes("Workouts") && wk.length > 0 && (
+                          <div>
+                            <label style={fieldLbl}>WHICH WORKOUTS?</label>
+                            <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+                              {wk.map((o) => <button key={o} onClick={() => toggleCsv(i, "workouts", o)} style={chip(detCsv(x, "workouts").includes(o))}>{o}</button>)}
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </>
-                    )}
-
-                    {injKind(x.area) === "strain" && detStr(x, "sub_area") && (
-                      <div>
-                        <label style={fieldLbl}>KAI WILL AVOID</label>
-                        <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-                          {(STRAIN_AVOID[detStr(x, "sub_area")] || STRAIN_AVOID.Other).map((o) => { const on = avoid.includes(o); return <button key={o} onClick={() => toggleDet(i, "avoid", o)} style={chip(on)}>{on ? "\u2713 " : ""}{o}</button>; })}
-                        </div>
-                      </div>
                     )}
 
                     <input style={S.input} value={x.physio_note} onChange={(e) => setIx(i, { physio_note: e.target.value })} placeholder="Add a note (optional)" />
@@ -1254,7 +1250,7 @@ function TrainingSetup({ data, onBack, onSaved, onData }: { data: ProfileData; o
                     {x.training_impact && (
                       <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                         <span style={{ width: 22, height: 22, borderRadius: "50%", background: "var(--ember)", color: "#fff", fontWeight: 800, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", flex: "none" }}>K</span>
-                        <span style={{ fontSize: 11.5, color: "var(--text-2)", lineHeight: 1.45 }}>{injKaiNote(x.area, x.status, x.training_impact, avoid, detStr(x, "feels_now") || null, detStr(x, "sub_area") || null, detStr(x, "reduce_today") || null)}</span>
+                        <span style={{ fontSize: 11.5, color: "var(--text-2)", lineHeight: 1.45 }}>{injKaiNote(x.area, x.status, x.training_impact, detStr(x, "sub_area") || null, detStr(x, "reduce_today") || null)}</span>
                       </div>
                     )}
                   </div>
@@ -1290,8 +1286,7 @@ function TrainingSetup({ data, onBack, onSaved, onData }: { data: ProfileData; o
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 18 }}>
           {injuries.map((x) => {
             const a = INJ_BY_KEY[x.area] || INJ_BY_KEY.other;
-            const av = detArr(x, "avoid");
-            const line = [injSummary(x), av.length ? (x.status === "previous" ? "Watch " : "Avoid ") + av[0].toLowerCase() : null].filter(Boolean).join(" \u00b7 ");
+            const line = [injSummary(x), x.training_impact].filter(Boolean).join(" \u00b7 ");
             return (
               <div key={x.area} style={{ ...S.card, display: "flex", alignItems: "center", gap: 11, padding: "12px 13px" }}>
                 <span style={{ width: 28, height: 28, borderRadius: 999, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", background: a.tint + "22" }}>
