@@ -157,7 +157,7 @@ export default function RecoveryPanel({ onGoWorkouts }: { onGoWorkouts?: () => v
                   <div className="subtle tiny">
                     {selM && selM.days_ago != null ? `Last trained ${selM.days_ago === 0 ? "today" : selM.days_ago + "d ago"}${selState ? " · " + HINTS[selState] : ""}` : "Never trained — no recent volume."}
                   </div>
-                  {selM ? <div className="subtle tiny" style={{ opacity: 0.8 }}>{selM.sets_14d} sets · {Math.round(selM.vol_14d).toLocaleString("en-US")} kg / 14d</div> : null}
+                  {selM ? <div className="subtle tiny" style={{ opacity: 0.8 }}>{selM.sets_14d} sets · {Math.round(selM.vol_14d).toLocaleString("en-US")} kg{(selM.cardio_mins_14d ?? 0) > 0 ? ` · ${(selM.cardio_mins_14d as number) >= 60 ? Math.round((selM.cardio_mins_14d as number) / 60) + "h" : selM.cardio_mins_14d + "m"} cardio` : ""} / 14d</div> : null}
                   <div style={{ height: 5, borderRadius: 999, background: "var(--line-2)", overflow: "hidden", marginTop: 2 }}>
                     <div style={{ height: "100%", borderRadius: 999, background: selColor, width: selPct + "%" }} />
                   </div>
@@ -181,7 +181,7 @@ export default function RecoveryPanel({ onGoWorkouts }: { onGoWorkouts?: () => v
                 <span key={t} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: c, display: "inline-block" }} />{t}</span>
               ))}
             </div>
-            <div className="subtle tiny" style={{ textAlign: "center", opacity: 0.7, lineHeight: 1.5 }}>Tap a muscle for detail. Derived from your training recency and volume — not soreness sensors.</div>
+            <div className="subtle tiny" style={{ textAlign: "center", opacity: 0.7, lineHeight: 1.5 }}>Tap a muscle for detail. Derived from your lifting and your run/bike/swim volume — not soreness sensors.</div>
           </>
         )}
       </div>
