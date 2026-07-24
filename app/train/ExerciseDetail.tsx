@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useTrain, wkExercises, type TrnLift, type WkExercise, type WkMedia } from "../lib/api";
 import { Spark, Delta, BackHead, kg, dShort } from "./ui";
+import Loader from "../components/Loader";
 
 const RANGES = [
   { k: "6W", days: 42 }, { k: "3M", days: 92 }, { k: "1Y", days: 366 },
@@ -79,7 +80,7 @@ export default function ExerciseDetail({ title, onBack, media, embedded }: { tit
     : <BackHead title={title} sub={sub} onBack={onBack} />;
 
   if (error) return (<>{head()}<div className="card error"><strong>Couldn&apos;t load</strong><div className="subtle">{error}</div></div></>);
-  if (!data) return (<>{head()}<div className="muted center pad">Loading…</div></>);
+  if (!data) return (<>{head()}<Loader /></>);
 
   const s = data.summary;
   if (!s) {
