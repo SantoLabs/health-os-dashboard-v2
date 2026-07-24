@@ -3,6 +3,7 @@ import Icon from "../../components/Icon";
 
 import { useEffect, useState, useRef, type CSSProperties } from "react";
 import { nutriPost, nutriFoods, nutriTemplates, nutriHistory, nutriPantry, nutriProfile } from "../../lib/api";
+import Loader from "../../components/Loader";
 
 const CARD = "var(--surface)", INSET = "var(--bg)", CB = "var(--line)", IB = "var(--line-2)";
 const H = "var(--text)", BODY = "var(--text)", MUTED = "var(--text-2)", FAINT = "var(--muted)", FAINTER = "var(--faint)", DIS = "var(--faint)";
@@ -470,7 +471,7 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
         {/* TEMPLATES */}
         {view === "templates" && (
           <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 7 }}>
-            {tmpls === null && <div style={{ ...sub, padding: 10 }}>Loading…</div>}
+            {tmpls === null && <Loader compact />}
             {tmpls && tmpls.length === 0 && <div style={{ ...sub, padding: 10 }}>Log a food a few times and it shows up here as a one-tap quick-add.</div>}
             {tmpls && tmpls.map((t) => (
               <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, background: CARD, border: "1px solid " + CB, borderRadius: 12, padding: "9px 11px" }}>
@@ -488,7 +489,7 @@ export default function AddFlow({ date, editMeal, onClose, onSaved }: { date: st
         {/* HISTORY */}
         {view === "history" && (
           <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 7 }}>
-            {hist === null && <div style={{ ...sub, padding: 10 }}>Loading…</div>}
+            {hist === null && <Loader compact />}
             {hist && hist.length === 0 && <div style={{ ...sub, padding: 10 }}>Nothing logged yet.</div>}
             {hist && hist.map((h) => (
               <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 8, background: CARD, border: "1px solid " + CB, borderRadius: 12, padding: "9px 11px" }}>
