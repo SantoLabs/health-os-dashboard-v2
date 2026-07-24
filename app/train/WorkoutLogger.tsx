@@ -10,6 +10,7 @@ import {
 } from "../lib/api";
 import type { WkBundle, WkSession, WkSet, WkFinish, WkRoutineSummary, WkRoutineItem, WkExercise, WkFacets, WkPrevSet, WkMedia, CardioRoutine } from "../lib/api";
 import ExerciseDetail from "./ExerciseDetail";
+import Loader from "../components/Loader";
 
 type View = "home" | "log" | "celebrate" | "build";
 type PlanToday = { id: string; session_type: string; activity: string; session_date: string; committed: boolean; completed: boolean; skipped: boolean; is_rest_day: boolean };
@@ -691,7 +692,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
   }
 
   if (editSessionId && (loading || !bundle?.session)) {
-    return <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center" }}><div className="muted">Loading&hellip;</div></div>;
+    return <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center" }}><Loader /></div>;
   }
 
   // ---------------- CELEBRATE ----------------
@@ -1231,7 +1232,7 @@ export default function WorkoutLogger({ editSessionId, onExitEdit, onOpenCardio,
   // ---------------- HOME ----------------
   return (
     <div>
-      {loading ? <div className="muted center pad">Loading…</div> : (
+      {loading ? <Loader /> : (
         <>
           {bundle?.session ? (
             <button className="trn-continue" type="button" onClick={() => setView("log")}>
@@ -1432,7 +1433,7 @@ export function RoutineBuilder({ routineId, onExit, preset }: { routineId: strin
     } catch { setParseErr("Something went wrong reading that."); } finally { setParsing(false); }
   }
 
-  if (loading) return <div className="muted center pad">Loading…</div>;
+  if (loading) return <Loader />;
   const field: React.CSSProperties = { background: "var(--surface-2)", color: "inherit", border: "1px solid var(--line)", borderRadius: 14, padding: "12px 15px", fontSize: 13, fontFamily: "inherit", width: "100%" };
   const pill: React.CSSProperties = { background: "var(--bg)", border: "1px solid var(--line)", borderRadius: 9, padding: "7px 6px", fontSize: 12.5, fontWeight: 800, color: "var(--text)", textAlign: "center", fontVariantNumeric: "tabular-nums" };
   const SS_COLORS = ["var(--ember-strong)", "var(--gold)", "var(--success)", "var(--kai)", "#c2544a", "#a07a4a"];
