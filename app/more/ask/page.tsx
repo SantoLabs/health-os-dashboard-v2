@@ -3,6 +3,7 @@ import Icon from "../../components/Icon";
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Screen } from "../../components/Screen";
+import Loader from "../../components/Loader";
 import {
   coachThreads, coachThread, coachSend, coachVision, coachThreadOp,
   type KaiThread, type KaiMessage,
@@ -103,7 +104,7 @@ export default function AskPage() {
           <button onClick={newChat} aria-label="New chat" style={{ width: 38, height: 38, borderRadius: 12, border: "none", background: ACCENT, color: "#fff", fontSize: 20, cursor: "pointer", boxShadow: "0 6px 16px rgba(79,156,249,.4)" }}>+</button>
         </div>
 
-        {loadingThreads && <div style={{ color: FAINT, fontSize: 13, textAlign: "center", padding: 24 }}>Loading…</div>}
+        {loadingThreads && <Loader compact />}
         {err && <div style={{ color: FAT, fontSize: 12, marginBottom: 10 }}>{err}</div>}
 
         {!loadingThreads && threads.length === 0 && (
