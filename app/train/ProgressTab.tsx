@@ -11,6 +11,7 @@ import Icon, { emojiIcon, type IconName } from "../components/Icon";
 import { useRouter } from "next/navigation";
 import InsightsTab from "./InsightsTab";
 import ActivitiesTab from "./ActivitiesTab";
+import Loader from "../components/Loader";
 
 /* Goals (Chunk 8) full CRUD, ported from /more/goals */
 type UGoal = { id: string; label: string; when_text?: string; target_date: string | null; goal_type: string; status: string; focus: string; deleted: boolean; created_at: string; updated_at: string; days_away: number | null; source?: string; completed_at?: string | null; early_days?: number | null };
@@ -211,7 +212,7 @@ function GoalsTab() {
       {editing === "new" && <section className="card goal-card"><div className="goal-form" style={{ padding: "14px 16px" }}>{EditForm}</div></section>}
 
       <section className="list">
-        {goals == null && !error && <div className="subtle tiny" style={{ padding: 12, textAlign: "center" }}>Loading goals…</div>}
+        {goals == null && !error && <Loader compact />}
         {error && <div className="card error"><strong>Couldn&apos;t load goals</strong><div className="subtle">{error}</div></div>}
         {goals?.length === 0 && editing !== "new" && <div className="subtle tiny" style={{ padding: "4px 4px 8px" }}>No goals yet — add your first one.</div>}
         {sorted.map((g) => (
@@ -358,7 +359,7 @@ function Badges() {
   const { data, error } = useBadges();
   useEffect(() => { if (data && data.counts.unseen > 0) markBadgesSeen(); }, [data]);
   if (error) return <div className="card"><div className="subtle tiny">Couldn&apos;t load badges. {error}</div></div>;
-  if (!data) return <div className="muted center pad">Loading…</div>;
+  if (!data) return <Loader />;
   const list = tab === "Earned" ? data.earned : data.available;
   return (
     <div>
@@ -833,7 +834,7 @@ function Summary() {
         </div>
       </div>
 
-      {loading ? <div className="muted center pad">Loading…</div> : (
+      {loading ? <Loader /> : (
         <>
           {stats.length > 0 ? (
             <div className="card" style={{ display: "flex", alignItems: "stretch", padding: "10px 0", marginBottom: 8 }}>
@@ -960,7 +961,7 @@ function OverviewFitness() {
           <span style={{ fontSize: 12, fontWeight: 900 }}>Fitness &amp; Form</span>
           <SubPills items={OVR_RANGES} value={range} onChange={(r) => { setRange(r); setCur(null); }} />
         </div>
-        {resp == null ? <div className="muted center pad">Loading…</div> : (
+        {resp == null ? <Loader /> : (
           <>
             <div style={{ display: "flex", marginBottom: 8 }}>
               <div style={{ flex: 1, textAlign: "center", borderRight: "1px solid var(--line)" }}><div className="tnum" style={{ fontWeight: 900, fontSize: 16, color: FC.ctl }}>{ctl.toFixed(0)}</div><div className="subtle" style={{ fontSize: 9, fontWeight: 700 }}>Fitness · CTL 42d</div></div>
@@ -1031,7 +1032,7 @@ export default function ProgressTab() {
       ) : error ? (
         <div className="card error"><strong>Couldn&apos;t load</strong><div className="subtle">{error}</div></div>
       ) : (
-        prs ? <History prs={prs} /> : <div className="muted center pad">Loading…</div>
+        prs ? <History prs={prs} /> : <Loader />
       )}
     </div>
   );
