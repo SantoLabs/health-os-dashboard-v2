@@ -942,7 +942,7 @@ export function raceOutlook(id: string) { return composePost<RaceOutlookResp>({ 
 
 
 // ---- recovery (Slice C: body map + mobility) ----
-export type RecMuscle = { muscle_group: string; last_trained: string | null; days_ago: number | null; vol_14d: number; sets_14d: number; freshness: number; load_pct: number };
+export type RecMuscle = { muscle_group: string; last_trained: string | null; days_ago: number | null; vol_14d: number; sets_14d: number; freshness: number; load_pct: number; cardio_mins_14d?: number };
 export type RecMobility = { name: string; primary_muscle: string | null; secondary_muscles: string | null; body_region: string | null; type: string | null; default_prescription: string | null };
 export type RecRoutine = { id: string; name: string; focus: string | null; est_duration_mins: number | null; item_count: number; recommend_after: string | null; recommended: boolean };
 export type RecoveryResp = { ok: boolean; muscles: RecMuscle[]; mobility: RecMobility[]; routines?: RecRoutine[]; recommended_id?: string | null; recent_sport?: string | null; generated_at?: string };
