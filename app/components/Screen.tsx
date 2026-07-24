@@ -5,6 +5,7 @@ import RefreshButton from "./RefreshButton";
 import NotificationBell from "./NotificationBell";
 import StriveMark from "./StriveMark";
 import ThemeToggle from "./ThemeToggle";
+import Loader from "./Loader";
 
 export function Screen({
   title,
@@ -41,7 +42,7 @@ export function Screen({
         </h1>
       )}
 
-      {loading && <div className="muted center pad">Loading&hellip;</div>}
+      {loading && <Loader />}
       {error && (
         <div className="card error">
           <strong>Couldn&apos;t load data</strong>
