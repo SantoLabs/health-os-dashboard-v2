@@ -12,6 +12,7 @@ import FuelToday from "./FuelToday";
 import { CARDIO_PRESETS, STRENGTH_PRESETS, type CardioPreset, type PresetSport, type GlyphKey, type StrengthPreset } from "./presets";
 import { cardioList, cardioDelete, cardioPrescribe, cardioGet, wkRoutines, wkDeleteRoutine, wkActive } from "../lib/api";
 import type { CardioRoutine, WkRoutineSummary, WkBundle, WkRoutineItem } from "../lib/api";
+import Loader from "../components/Loader";
 
 /* ------------------------------------------------------------------ *
  * Workouts — four-zone home (Phase 1)
@@ -570,7 +571,7 @@ export default function WorkoutsTab({ onAskCoach }: { onAskCoach?: () => void })
       {/* zone 2 — Your routines */}
       <span className="eyebrow">Your routines</span>
       {(isCardio ? cardio : strength) === null ? (
-        <div className="muted center pad">Loading…</div>
+        <Loader />
       ) : groups.length === 0 ? (
         <EmptyRoutines label={isCardio ? "cardio" : "strength"} />
       ) : (
