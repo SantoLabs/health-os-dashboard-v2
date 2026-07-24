@@ -5,6 +5,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { planWeek, planRange, planPost, strengthSessions, cardioActivities, actualStarts, type StrengthSession, type CardioActivityLite } from "../../lib/api";
 import { CardioActivityDetail } from "../../train/CardioTab";
 import { Screen } from "../../components/Screen";
+import Loader from "../../components/Loader";
 
 /* ════════════════════ backend types (health-plan v4) ════════════════════ */
 type Actual = {
@@ -874,7 +875,7 @@ export default function SchedulePage() {
 }
 
 /* ════════════════════ small components ════════════════════ */
-function Loading() { return <div style={{ textAlign: "center", color: "var(--muted)", padding: "40px 0", fontSize: 13 }}>Loading…</div>; }
+function Loading() { return <Loader />; }
 function Stepper({ label, onUp, onDown }: { label: string; onUp: () => void; onDown: () => void }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", background: "var(--surface-3)", border: "1px solid var(--line)", borderRadius: 12, overflow: "hidden" }}>
