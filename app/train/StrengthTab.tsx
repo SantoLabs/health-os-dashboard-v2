@@ -8,6 +8,7 @@ import WorkoutLogger from "./WorkoutLogger";
 import Sheet from "../components/Sheet";
 import { workoutText, renderShareCard, shareImage, copyText } from "./shareCard";
 import Icon from "../components/Icon";
+import Loader from "../components/Loader";
 
 const WIN: [string, string][] = [["15d", "15d"], ["30d", "30d"], ["60d", "60d"], ["90d", "90d"], ["lifetime", "All"]];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -153,7 +154,7 @@ export default function StrengthTab() {
           </div>
         ) : null}
       </div>
-      {sessions == null ? <div className="muted center pad">Loading…</div> :
+      {sessions == null ? <Loader /> :
         serr ? <div className="subtle tiny" style={{ padding: "8px 2px" }}>Couldn&apos;t load sessions.</div> :
           monthSessions.length === 0 ? <div className="subtle tiny" style={{ padding: "8px 2px" }}>No sessions this month.</div> :
             <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
@@ -206,7 +207,7 @@ export default function StrengthTab() {
             ) : null}
 
             {sessErr ? <div className="subtle tiny" style={{ padding: "10px 0" }}>Couldn&apos;t load the set detail.</div> :
-             sessDetail == null ? <div className="muted center pad">Loading{"\u2026"}</div> :
+             sessDetail == null ? <Loader /> :
              sessDetail.length === 0 ? <div className="subtle tiny" style={{ padding: "10px 0" }}>No set detail recorded for this session.</div> : (
               <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
                 {sessDetail.map((ex, i) => (
