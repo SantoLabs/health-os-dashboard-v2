@@ -3,6 +3,7 @@ import Icon from "../../components/Icon";
 
 import { useEffect, useState, type CSSProperties } from "react";
 import { nutriAdherence } from "../../lib/api";
+import Loader from "../../components/Loader";
 
 const CARD = "var(--surface)", INSET = "var(--bg)", CB = "var(--line)", IB = "var(--line-2)";
 const H = "var(--text)", BODY = "var(--text)", MUTED = "var(--text-2)", FAINT = "var(--muted)", FAINTER = "var(--faint)";
@@ -53,7 +54,7 @@ export default function Adherence({ onClose }: { onClose: () => void }) {
         </div>
 
         {err && <div style={{ padding: 10, borderRadius: 10, border: "1px solid color-mix(in srgb, var(--danger) 40%, transparent)", background: "color-mix(in srgb, var(--danger) 10%, transparent)", color: "var(--danger)", fontSize: 12 }}>{err}</div>}
-        {!data && !err && <div style={{ color: FAINT, fontSize: 12.5, textAlign: "center", padding: 24 }}>Loading…</div>}
+        {!data && !err && <Loader />}
 
         {data && (
           <>
