@@ -5,6 +5,7 @@ import { cardioActivities, cardioDetail, cardioSources, cardioRenameActivity, ca
 import { fmtPace } from "./ui";
 import Icon, { sportIcon } from "../components/Icon";
 import Sheet from "../components/Sheet";
+import Loader from "../components/Loader";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -343,7 +344,7 @@ export function CardioActivityDetail({ id, sport, onBack, source, onChanged, onD
 
   const back = embedded ? null : <button onClick={onBack} style={{ background: "none", border: "none", color: "var(--ember)", cursor: "pointer", fontSize: 13, fontWeight: 600, padding: "4px 0" }}>{"‹"} Back</button>;
   if (err) return <div>{back}<div className="card error" style={{ marginTop: 8 }}><strong>Couldn&apos;t load</strong><div className="subtle">{err}</div></div></div>;
-  if (!d) return <div>{back}<div className="muted center pad">Loading{"…"}</div></div>;
+  if (!d) return <div>{back}<Loader /></div>;
   const a = d.activity;
   if (!a) return <div>{back}<div className="subtle center pad">Activity not found.</div></div>;
   const displayName = localName ?? a.name;
@@ -521,7 +522,7 @@ export default function CardioTab() {
   return (
     <div>
       {err ? <div className="card error"><strong>Couldn&apos;t load</strong><div className="subtle">{err}</div></div> : null}
-      {acts == null ? <div className="muted center pad">Loading…</div> : (
+      {acts == null ? <Loader /> : (
         <>
           <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
             <DropPill options={sports.map((s) => ({ key: s, label: cap(s), icon: <Icon name={sportIcon(s)} size={13} /> }))} value={sport} onChange={setSport} placeholder="Sport" />
